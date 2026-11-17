@@ -30,7 +30,8 @@ export const tools: Tool[] = [
     "tag": "PSV",
     "title": "PSV",
     "name": "Pressure Safety Valve",
-    "description": "Collects up to seven relief cases for one valve (external fire, blocked outlet …) with fluid properties, overpressure and back pressure for vapour and liquid relief.",
+    "description": "Vapor and liquid relief sized by API RP 520-1 (2000).",
+    "standard": "API RP 520-1 (2000)",
     "category": "relief",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/8cc3425a2dec03483d70b75b03d5a0f4cfcb1098276383c3205d1553329a0aad?type=grid&mode=embed"
   },
@@ -168,7 +169,7 @@ export const tools: Tool[] = [
     "category": "piping",
     "zoho": "https://sheet.zohopublic.eu/sheet/published/c6r1h72b876f046da470aa7985decaa85ff8f?sheetid=0&range=C2:I2&mode=embed",
     "credit": {
-      "name": "Ash Gratton",
+      "name": "LinkedIn",
       "url": "https://www.linkedin.com/in/ash-gratton-chemical-engineer/"
     }
   },
@@ -177,7 +178,7 @@ export const tools: Tool[] = [
     "tag": "K",
     "title": "Compressor",
     "name": "Compressor",
-    "description": "Compression ratio, mass and standard flows, and the number of stages needed to stay within discharge-temperature and ratio limits, assuming isentropic compression.",
+    "description": "Isentropic compression of a generic compressor (compression ratio, mass and standard flows), with dedicated sections for reciprocating compressors (number of stages within discharge-temperature and ratio limits) and centrifugal compressors.",
     "category": "equipment",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/436c80a66d2d7e9b3d3015559dcd8229f2ba0f73db159ef93c423272633b4460?type=grid&mode=embed"
   },
@@ -223,7 +224,7 @@ export const tools: Tool[] = [
     "title": "PED",
     "name": "PED Selection: European Pressure Equipment Directive 97/23/EG",
     "description": "Finds the PED category and the available conformity-assessment modules for vessels, boilers and piping.",
-    "standard": "Directive 97/23/EG",
+    "standard": "Directive 97/23/EC, superseded by Directive 2014/68/EU from 19 July 2016",
     "category": "equipment",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/c7abcf8d1578584c5b3ca9812e441b9365f50c713014664defbd85bb8cc46157?type=grid&mode=embed",
   },

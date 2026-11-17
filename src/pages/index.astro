@@ -33,6 +33,7 @@ import { url } from '../lib/url';
                     <span class="desc">{t.description ?? t.name}</span>
                   </span>
                 </a>
+                {t.credit && <p class="credit">Credits: <a href={t.credit.url} rel="noopener">{t.credit.name}</a></p>}
               </li>
             ))}
           </ul>
@@ -143,6 +144,8 @@ import { url } from '../lib/url';
   .txt { display: grid; min-width: 0; }
   .name { font-weight: 600; }
   .desc { font-size: 0.875rem; color: var(--muted); line-height: 1.35; }
+  .credit { margin: -0.25rem 0 0.5rem calc(2.75rem + 0.875rem); font-size: 0.8125rem; color: var(--muted); }
+  .credit a { display: inline; padding: 0; margin: 0; color: var(--line); text-decoration: underline; }
 
   .empty { margin: 1rem 0 0; padding: 1rem; border: 1px dashed var(--muted); max-width: 52rem; }
   .request { margin: 3rem 0 0; color: var(--muted); }
