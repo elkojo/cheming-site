@@ -76,7 +76,8 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
   .title p { margin: 0.25rem 0 0; max-width: 70ch; }
   .std { font: 400 0.9375rem/1.3 var(--font-drawing); letter-spacing: 0.02em; }
   .desc, .credit { color: var(--muted); font-size: 0.9375rem; }
-  .aside { display: grid; justify-items: end; gap: 0.625rem; }
+  .aside { display: grid; justify-items: end; gap: 0.625rem; max-width: 30rem; }
+  .aside :global(.legend) { justify-content: flex-end; }
   .open {
     display: inline-flex;
     align-items: center;
@@ -108,6 +109,11 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
   }
   @media (max-width: 40rem) {
     .sheetwrap { padding-inline: 0; }
-    h1 { font-size: 1.25rem; }
+    .head { gap: 0.625rem; padding-bottom: 0.75rem; }
+    .title { gap: 0.75rem; align-items: flex-start; }
+    .title :global(.bubble.lg) { --d: 3rem; }
+    h1 { font-size: 1.1875rem; }
+    .aside { max-width: none; }
+    .aside :global(.legend) { display: grid; grid-template-columns: 1fr 1fr; justify-content: start; }
   }
 </style>
