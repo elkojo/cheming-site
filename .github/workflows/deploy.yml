@@ -15,11 +15,11 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-# Preview phase: the site lives at https://elkojo.github.io/cheming-site/
-# After the domain switch (plan Phase 5) change these to SITE_BASE: / and SITE_URL: https://cheming.site
+# Live on the custom domain https://cheming.site (Phase 5, 2026-11-17).
+# For a preview under elkojo.github.io/cheming-site/ use SITE_BASE: /cheming-site and SITE_URL: https://elkojo.github.io
 env:
-  SITE_BASE: /cheming-site
-  SITE_URL: https://elkojo.github.io
+  SITE_BASE: /
+  SITE_URL: https://cheming.site
 
 jobs:
   build:
