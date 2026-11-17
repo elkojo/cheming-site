@@ -1,0 +1,108 @@
+---
+// Contact form delivered by Formspree. Works as a plain POST without JavaScript;
+// with JavaScript it submits in place and shows the result inline.
+const endpoint = 'https://formspree.io/f/xyewwkel';
+---
+<form class="cform" action={endpoint} method="POST" id="contact-form">
+  <div class="row">
+    <label for="cf-name">Name</label>
+    <input id="cf-name" name="name" type="text" autocomplete="name" required maxlength="120" />
+  </div>
+  <div class="row">
+    <label for="cf-email">Email</label>
+    <input id="cf-email" name="email" type="email" autocomplete="email" required maxlength="200" />
+    <p class="hint">Only used to reply to you.</p>
+  </div>
+  <div class="row">
+    <label for="cf-topic">Topic</label>
+    <select id="cf-topic" name="topic">
+      <option>Comment or question</option>
+      <option>Feature request / new tool</option>
+      <option>Error in a calculation</option>
+      <option>Partnership or professional work</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="cf-msg">Message</label>
+    <textarea id="cf-msg" name="message" rows="6" required maxlength="5000"></textarea>
+  </div>
+  <!-- Spam trap: real visitors never see or fill this field -->
+  <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" class="trap" aria-hidden="true" />
+  <input type="hidden" name="_subject" value="Cheming.Site contact form" />
+
+  <div class="actions">
+    <button type="submit">Send message</button>
+    <p class="status" role="status" aria-live="polite"></p>
+  </div>
+</form>
+
+<script>
+  const form = document.getElementById('contact-form') as HTMLFormElement;
+  const status = form.querySelector('.status') as HTMLElement;
+  const button = form.querySelector('button') as HTMLButtonElement;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    button.disabled = true;
+    button.textContent = 'Sending…';
+    status.className = 'status';
+    status.textContent = '';
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      form.reset();
+      status.classList.add('ok');
+      status.textContent = 'Thank you, your message was sent. I’ll reply by email.';
+    } catch {
+      status.classList.add('err');
+      status.textContent = 'The message could not be sent. Please try again, or use the email link above.';
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Send message';
+    }
+  });
+</script>
+
+<style>
+  .cform { display: grid; gap: 1rem; margin-top: 1.5rem; }
+  .row { display: grid; gap: 0.375rem; }
+  label { font: 400 0.8125rem/1 var(--font-drawing); letter-spacing: 0.08em; text-transform: uppercase; }
+  input, select, textarea {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--muted);
+    border-radius: 0;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+  }
+  input, select { height: 2.5rem; }
+  textarea { resize: vertical; min-height: 8rem; line-height: 1.5; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 0; border-color: var(--line); }
+  input:user-invalid, textarea:user-invalid { border-color: var(--markup); }
+  .hint { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+  .trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; }
+  button {
+    height: 2.5rem;
+    padding-inline: 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: 0;
+    background: var(--line);
+    color: var(--paper);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 150ms ease-out;
+  }
+  button:hover { background: #244a6f; }
+  button:disabled { opacity: 0.6; cursor: progress; }
+  .status { margin: 0; font-size: 0.9375rem; }
+  .status.ok { color: #1f6b3a; }
+  .status.err { color: var(--markup); }
+</style>
