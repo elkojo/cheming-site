@@ -1,0 +1,9 @@
+---
+interface Props { src: string; title: string }
+const { src, title } = Astro.props;
+---
+<iframe src={src} title={`${title} calculator`} loading="lazy" class="zoho"></iframe>
+
+<style>
+  .zoho { display: block; width: 100%; height: 100vh; border: 0; }
+</style>

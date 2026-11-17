@@ -1,0 +1,28 @@
+---
+// Generates one page per tool: /pump/, /kod/, …
+import Base from '../layouts/Base.astro';
+import ZohoEmbed from '../components/ZohoEmbed.astro';
+import { tools, categories } from '../data/tools';
+
+export function getStaticPaths() {
+  return tools.map((tool) => ({ params: { tool: tool.slug }, props: { tool } }));
+}
+const { tool } = Astro.props;
+const category = categories.find((c) => c.id === tool.category)!;
+---
+<Base title={tool.title} description={`${tool.name}. Free engineering calculator: ${category.title}.`} wide>
+  <div class="head">
+    <p class="cat">{category.title}</p>
+    <h1>{tool.title}</h1>
+    {tool.name !== tool.title && <p>{tool.name}</p>}
+    {tool.credit && <p>Credits: <a href={tool.credit.url} rel="noopener">{tool.credit.name}</a></p>}
+  </div>
+  <ZohoEmbed src={tool.zoho} title={tool.title} />
+</Base>
+
+<style>
+  .head { padding: 0 1rem 1rem; text-align: center; }
+  .cat { margin: 0; color: var(--muted); font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }
+  h1 { margin: .25rem 0; }
+  .head p { margin: .25rem 0; }
+</style>

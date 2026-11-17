@@ -1,0 +1,36 @@
+---
+import Base from '../layouts/Base.astro';
+import { categories, tools } from '../data/tools';
+import { site } from '../data/site';
+import { url } from '../lib/url';
+---
+<Base>
+  <h1>{site.name}</h1>
+  <p>{site.tagline}</p>
+
+  <h2>Usage guideline</h2>
+  <ul>
+    <li><mark class="in">Yellow cells</mark>: editable input</li>
+    <li>Unit selection: double-click</li>
+    <li><mark class="out">Green cells</mark>: calculated output</li>
+    <li>Reset: refresh the page; nothing is saved</li>
+    <li>Fit the screen: zoom in/out in your browser</li>
+  </ul>
+  <p>Comments, feature requests and offers are appreciated (<a href={url('about/')}>contact</a>).</p>
+
+  {categories.map((c) => (
+    <section>
+      <h2>{c.title}</h2>
+      <ul>
+        {tools.filter((t) => t.category === c.id).map((t) => (
+          <li><a href={url(`${t.slug}/`)}>{t.name}</a></li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</Base>
+
+<style>
+  mark.in { background: #ffff00; }
+  mark.out { background: #95eb70; }
+</style>

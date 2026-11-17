@@ -1,0 +1,77 @@
+---
+// Shared page frame: <head>, header with tool menu, footer with disclaimer.
+// Deliberately plain: the visual design is done in Phase 3 with the impeccable skill.
+import { site } from '../data/site';
+import { url } from '../lib/url';
+import ToolNav from '../components/ToolNav.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+  wide?: boolean; // tool pages: give the Zoho sheet the full width
+}
+const { title, description = site.tagline, wide = false } = Astro.props;
+const fullTitle = title ? `${title} · ${site.name}` : `${site.name} · Engineering Tools`;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/png" href={url('favicon.png')} />
+    <link rel="sitemap" href={url('sitemap-index.xml')} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(url('og-image.png'), Astro.site)} />
+    <meta property="og:type" content="website" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header>
+      <a class="brand" href={url()}>
+        <img src={url('logo.png')} alt="" width="40" height="40" />
+        <span>{site.name}</span>
+      </a>
+      <nav aria-label="Main">
+        <ToolNav />
+        <a href={url('about/')}>About</a>
+      </nav>
+    </header>
+
+    <main id="main" class:list={{ wide }}>
+      <slot />
+    </main>
+
+    <footer>
+      <ul class="social">
+        <li><a href={site.social[0].url} rel="noopener">{site.social[0].label}</a></li>
+        <li set:html={`<a href="${site.mailtoEncoded}">Email</a>`} />
+        {site.social.slice(1).map((s) => <li><a href={s.url} rel="noopener">{s.label}</a></li>)}
+      </ul>
+      <p class="disclaimer"><strong>Disclaimer:</strong> {site.disclaimer}</p>
+    </footer>
+
+    <style is:global>
+      :root { --ink: #1d2433; --muted: #5b6475; --line: #d8dce4; --brand: #33466c; --bg: #fff; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 16px/1.55 system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+      a { color: var(--brand); }
+      .skip { position: absolute; left: -999px; }
+      .skip:focus { left: 1rem; top: 1rem; background: #fff; padding: .5rem; }
+      header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;
+               padding: .75rem 1rem; border-bottom: 1px solid var(--line); }
+      .brand { display: flex; align-items: center; gap: .5rem; font-weight: 700; text-decoration: none; color: var(--ink); }
+      .brand img { border-radius: 6px; }
+      header nav { display: flex; gap: 1rem; align-items: center; }
+      main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1rem; }
+      main.wide { max-width: none; padding: 1rem 0 0; }
+      footer { border-top: 1px solid var(--line); padding: 1.5rem 1rem; color: var(--muted); font-size: .875rem; text-align: center; }
+      .social { list-style: none; display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; padding: 0; margin: 0 0 1rem; }
+      .disclaimer { max-width: 50rem; margin: 0 auto; }
+    </style>
+  </body>
+</html>
