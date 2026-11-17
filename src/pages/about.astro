@@ -1,11 +1,28 @@
 ---
 import Base from '../layouts/Base.astro';
+import { site } from '../data/site';
 ---
-<Base title="About" description="About Cheming.Site and its author.">
-  <h1>About</h1>
-  <p>Hello!</p>
-  <p>I’m a physical chemist by education and a chemical engineer by career. Throughout many projects I’ve created a suite of tools that have made me a better and faster process engineer. Now I’m sharing those tools with fellow engineers.</p>
-  <p>I’m still deciding what to do next: keep the tools freely available as they are, or refine the site and offer them on a professional basis. Either way, I’d love to hear your thoughts, suggestions, or partnership ideas. Please feel free to contact me.</p>
-  <p>All the best.</p>
-  <!-- Contact form (Formspree) is added in Phase 4. -->
+<Base title="About" description="About Cheming.Site and its author, and how to get in touch.">
+  <article class="page">
+    <h1>About</h1>
+    <p>Hello!</p>
+    <p>I’m a physical chemist by education and a chemical engineer by career. Throughout many projects I’ve created a suite of tools that have made me a better and faster process engineer. Now I’m sharing those tools with fellow engineers.</p>
+    <p>I’m still deciding what to do next: keep the tools freely available as they are, or refine the site and offer them on a professional basis. Either way, I’d love to hear your thoughts, suggestions, or partnership ideas. Please feel free to contact me.</p>
+    <p>All the best.</p>
+
+    <h2 id="contact">Contact</h2>
+    <p>Comments, feature requests and offers are welcome.</p>
+    <ul class="links">
+      <li set:html={`<a href="${site.mailtoEncoded}">Email</a>`} />
+      {site.social.map((s) => <li><a href={s.url} rel="noopener">{s.label}</a></li>)}
+    </ul>
+  </article>
 </Base>
+
+<style>
+  .page { max-width: 42rem; margin: 0 auto; padding: 2.5rem var(--gutter) 0; }
+  h1 { margin: 0 0 1rem; font-size: 1.75rem; font-weight: 650; letter-spacing: -0.015em; }
+  h2 { margin: 2.5rem 0 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--ink); font: 400 0.9375rem/1 var(--font-drawing); letter-spacing: 0.08em; text-transform: uppercase; scroll-margin-top: calc(var(--header-h) + 1rem); }
+  p { margin: 0 0 1rem; }
+  .links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+</style>

@@ -5,3 +5,6 @@ dist/
 .DS_Store
 # impeccable engine binary (18 MB) — the skill's launcher downloads it when missing
 .claude/skills/impeccable/scripts/bin/
+
+# impeccable review captures
+.impeccable/review/

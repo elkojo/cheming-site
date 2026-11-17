@@ -1,0 +1,124 @@
+{
+  "title": "Choose the visual world for Cheming.Site",
+  "question": "The roll assigned Pipe Marker. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Pipe Marker",
+      "kicker": "THE ROLL",
+      "lineage": "ASME A13.1 pipe-marking bands and plant safety signage",
+      "thesis": "Every tool is labelled like a line in the plant: a colour band, a tag and a flow arrow.",
+      "palette": ["#16181a", "#f1f2ef", "#c8102e", "#0057b8", "#e35205", "#6d2077", "#5b6670"],
+      "materials": ["colour-banded marker labels", "signage sans (Overpass) + mono tags", "flow arrows"],
+      "viewport": "Carbon header with the name and a tool search; below it, the 26 tools as marker labels in five colour bands (Relief & Flare red, Piping & Flow blue, Equipment orange, Properties purple, General grey). The usage legend shows input and output as yellow and green markers, the only place those colours appear outside the Zoho sheets.",
+      "risk": "Full-strength bands can tip into safety-poster kitsch; colour must stay inside the bands and never wash the page.",
+      "raised": [
+        {"from": "variable-font-specimen", "raise": "Tool abbreviations (PSV, KOD, CV, RO) are set at display scale against small labels; hierarchy comes from scale contrast."},
+        {"from": "pop-culture-shelf-streaming-title-card-wall", "raise": "Focusing a tool reveals its standard and one-line description in place, without moving its neighbours."},
+        {"from": "wayfinding-cartography-signage-midnight-transit-diagram", "raise": "Tool pages show related tools as upstream/downstream flow along a marker arrow (PSV → KOD → Flare Stack)."},
+        {"from": "crouwel-grid-specimen", "raise": "The index reflows by whole label cells, never by half-width cards."},
+        {"from": "rw-timetable-slide-rack", "raise": "The index runs at one type size; rank comes from weight, case and white-on-band reversal."}
+      ]
+    },
+    {
+      "id": "model-pick",
+      "label": "Drawing Sheet",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "P&ID drawing sheets: ISA instrument bubbles, line numbers, title blocks",
+      "thesis": "The site reads as a clean drawing sheet, with each tool tagged like an instrument.",
+      "palette": ["#fbfbf8", "#1b2433", "#2f5d8a", "#d0312d"],
+      "materials": ["hairline ruling", "ISA tag bubbles (PSV, KOD) for tools", "a title block carrying the disclaimer"],
+      "viewport": "A white sheet with a thin border and zone marks; tools grouped by category, each with a circular tag bubble and its full name; a title-block footer holds the name, disclaimer and contact.",
+      "risk": "This is the familiar 'engineering' look most sites in this space reach for; it can read as a blueprint costume."
+    },
+    {
+      "id": "challenger-lexicon",
+      "label": "Handbook Plate",
+      "verdict": "competitive",
+      "lineage": "19th-century lexicon pages, read as an engineering handbook (Perry's, GPSA)",
+      "thesis": "The site is a reference handbook: black text, a thumb index, and each calculator set as a colour plate.",
+      "palette": ["#141414", "#f4f2ec", "#b23a26", "#2b4f7a"],
+      "materials": ["fixed text measure", "guide words at the page head", "bordered plate around each Zoho sheet"],
+      "viewport": "Index page with guide words (Compressor … Unit Conversion), a thumb index by category in the margin, and entries ranked by apparatus (full name, standard, one line).",
+      "case": "Fuses cleanly: colour stays quarantined inside the plate, which suits the Zoho sheets; strong for students. Loses on audience identification for practising engineers.",
+      "risk": "Can turn bookish and slow for an engineer who just wants PSV now."
+    },
+    {
+      "id": "challenger-transit",
+      "label": "Transit Diagram",
+      "verdict": "declined",
+      "lineage": "metro line diagrams",
+      "thesis": "Tools as stations on coloured lines.",
+      "palette": ["#0f1f3d", "#f5f5f0", "#d7263d", "#2364aa", "#f2a541"],
+      "materials": ["45° lines", "interchange circles"],
+      "viewport": "A network map of the 26 tools.",
+      "case": "Fuses poorly: the map replaces a scannable list for 26 items, and the General tools have no natural line.",
+      "kept": "Related tools shown as an upstream/downstream flow.",
+      "risk": "Navigation by map hides tools."
+    },
+    {
+      "id": "challenger-specimen",
+      "label": "Type Specimen",
+      "verdict": "declined",
+      "lineage": "variable font specimens",
+      "thesis": "Giant glyphs, tiny labels.",
+      "palette": ["#fafafa", "#111111", "#ff4f00"],
+      "materials": ["display type", "mono readouts"],
+      "viewport": "One giant tool abbreviation per screen.",
+      "case": "Fuses poorly: no audience link; one tool per screen slows the finder.",
+      "kept": "Scale contrast: abbreviations at display size.",
+      "risk": "All style, no task."
+    },
+    {
+      "id": "challenger-wall",
+      "label": "Catalog Wall",
+      "verdict": "declined",
+      "lineage": "streaming title-card rows",
+      "thesis": "Rows of tiles per category.",
+      "palette": ["#121212", "#e5e5e5", "#e50914"],
+      "materials": ["poster tiles", "focus expansion"],
+      "viewport": "Horizontal rows of tool tiles.",
+      "case": "Fuses poorly: horizontal rows hide tools that should all be visible at once.",
+      "kept": "Focus reveals metadata in place.",
+      "risk": "Entertainment feel."
+    },
+    {
+      "id": "challenger-grid",
+      "label": "Grid Specimen",
+      "verdict": "declined",
+      "lineage": "Wim Crouwel grid posters",
+      "thesis": "A visible construction grid as the page's armature.",
+      "palette": ["#ffffff", "#1c1c1c", "#3a6df0"],
+      "materials": ["grid hairlines", "cell-built letterforms"],
+      "viewport": "Tools as cells on a visible grid.",
+      "case": "Fuses fairly: grids are engineering-adjacent, but the pipe-marker world is closer to the plant.",
+      "kept": "Reflow by whole cells.",
+      "risk": "Design-school poster feel."
+    },
+    {
+      "id": "challenger-timetable",
+      "label": "Timetable Rack",
+      "verdict": "declined",
+      "lineage": "1970s pocket airline timetables",
+      "thesis": "One type size; rank by weight and reversal.",
+      "palette": ["#d9a520", "#1d1d1d", "#f3efe2", "#c43b2b"],
+      "materials": ["raked glass slides", "single type size"],
+      "viewport": "The tool list as a raked timetable.",
+      "case": "Fuses poorly: raked containers fight the wide Zoho sheets.",
+      "kept": "One type size in the index, rank by weight, case and reversal.",
+      "risk": "Novelty over clarity."
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "code"},
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "A clean online-calculator directory, executed impeccably.",
+    "palette": ["#ffffff", "#111827", "#2563eb"],
+    "materials": ["card grid", "search box", "system UI type"],
+    "viewport": "Search at the top, tools as cards grouped by category, a simple header and footer.",
+    "risk": "Looks like every other calculator site by design."
+  },
+  "steer": true
+}

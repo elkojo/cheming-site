@@ -1,9 +1,55 @@
 ---
+// The Zoho sheet, set inside a drawing frame with zone marks (A–F across, 1–4 down).
 interface Props { src: string; title: string }
 const { src, title } = Astro.props;
+const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
+const rows = ['1', '2', '3', '4'];
 ---
-<iframe src={src} title={`${title} calculator`} loading="lazy" class="zoho"></iframe>
+<figure class="frame">
+  <div class="zones top" aria-hidden="true">{cols.map((c) => <span>{c}</span>)}</div>
+  <div class="zones bottom" aria-hidden="true">{cols.map((c) => <span>{c}</span>)}</div>
+  <div class="zones left" aria-hidden="true">{rows.map((r) => <span>{r}</span>)}</div>
+  <div class="zones right" aria-hidden="true">{rows.map((r) => <span>{r}</span>)}</div>
+  <iframe src={src} title={`${title} calculator (Zoho Sheet)`} loading="eager"></iframe>
+</figure>
 
 <style>
-  .zoho { display: block; width: 100%; height: 100vh; border: 0; }
+  .frame {
+    --m: 1.125rem; /* margin band that carries the zone marks */
+    position: relative;
+    margin: 0;
+    padding: var(--m);
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+  }
+  iframe {
+    display: block;
+    width: 100%;
+    height: max(36rem, calc(100dvh - var(--header-h) - 2 * var(--m) - 1.5rem));
+    border: 1px solid var(--ink);
+    background: #fff;
+  }
+  .zones {
+    position: absolute;
+    display: flex;
+    font: 400 0.625rem/1 var(--font-drawing);
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .zones span { flex: 1; display: grid; place-items: center; }
+  .top, .bottom { left: var(--m); right: var(--m); height: var(--m); }
+  .top { top: 0; }
+  .bottom { bottom: 0; }
+  .left, .right { top: var(--m); bottom: var(--m); width: var(--m); flex-direction: column; }
+  .left { left: 0; }
+  .right { right: 0; }
+  /* tick between zones */
+  .top span + span, .bottom span + span { border-left: 1px solid var(--rule); }
+  .left span + span, .right span + span { border-top: 1px solid var(--rule); }
+
+  @media (max-width: 40rem) {
+    .frame { --m: 0; border: 0; }
+    .zones { display: none; }
+    iframe { border-inline: 0; height: max(30rem, calc(100dvh - var(--header-h))); }
+  }
 </style>

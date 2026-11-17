@@ -1,18 +1,20 @@
 ---
-// Shared page frame: <head>, header with tool menu, footer with disclaimer.
-// Deliberately plain: the visual design is done in Phase 3 with the impeccable skill.
+// Shared page frame: <head>, ink header band, title-block footer, design tokens.
+import '@fontsource-variable/archivo/wdth.css';
 import { site } from '../data/site';
 import { url } from '../lib/url';
 import ToolNav from '../components/ToolNav.astro';
+import Bubble from '../components/Bubble.astro';
 
 interface Props {
   title?: string;
   description?: string;
-  wide?: boolean; // tool pages: give the Zoho sheet the full width
+  current?: string; // slug of the current tool, highlighted in the menu
 }
-const { title, description = site.tagline, wide = false } = Astro.props;
-const fullTitle = title ? `${title} · ${site.name}` : `${site.name} · Engineering Tools`;
+const { title, description = site.tagline, current } = Astro.props;
+const fullTitle = title ? `${title} · ${site.name}` : `${site.name} · Process engineering calculators`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
+const path = Astro.url.pathname.replace(import.meta.env.BASE_URL.replace(/\/$/, ''), '') || '/';
 ---
 <!doctype html>
 <html lang="en">
@@ -21,57 +23,185 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#1b2433" />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" type="image/png" href={url('favicon.png')} />
+    <link rel="icon" href={url('favicon.svg')} type="image/svg+xml" />
+    <link rel="icon" href={url('favicon.png')} type="image/png" sizes="32x32" />
     <link rel="sitemap" href={url('sitemap-index.xml')} />
+    <link rel="preload" href={url('fonts/osifont.woff')} as="font" type="font/woff" crossorigin />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={new URL(url('og-image.png'), Astro.site)} />
     <meta property="og:type" content="website" />
+    <style is:inline set:html={`@font-face{font-family:'Osifont';src:url('${url('fonts/osifont.woff')}') format('woff');font-display:swap}`}></style>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
-    <header>
-      <a class="brand" href={url()}>
-        <img src={url('logo.png')} alt="" width="40" height="40" />
+
+    <header class="band">
+      <a class="brand" href={url()} aria-label={`${site.name}, all tools`}>
+        <Bubble tag="CS" size="sm" tone="paper" />
         <span>{site.name}</span>
       </a>
       <nav aria-label="Main">
-        <ToolNav />
-        <a href={url('about/')}>About</a>
+        <ToolNav current={current} />
+        <a class="navlink" href={url('about/')} aria-current={path === '/about/' ? 'page' : undefined}>About</a>
+        <a class="navlink" href={url('about/#contact')}>Contact</a>
       </nav>
     </header>
 
-    <main id="main" class:list={{ wide }}>
+    <main id="main">
       <slot />
     </main>
 
-    <footer>
-      <ul class="social">
-        <li><a href={site.social[0].url} rel="noopener">{site.social[0].label}</a></li>
-        <li set:html={`<a href="${site.mailtoEncoded}">Email</a>`} />
-        {site.social.slice(1).map((s) => <li><a href={s.url} rel="noopener">{s.label}</a></li>)}
-      </ul>
-      <p class="disclaimer"><strong>Disclaimer:</strong> {site.disclaimer}</p>
+    <footer class="titleblock">
+      <div class="cell id">
+        <span class="lbl">Title</span>
+        <a class="brand" href={url()}>
+          <Bubble tag="CS" size="sm" />
+          <span>{site.name}</span>
+        </a>
+        <p>Process engineering calculators</p>
+      </div>
+      <div class="cell disc">
+        <span class="lbl">Disclaimer</span>
+        <p>{site.disclaimer}</p>
+      </div>
+      <div class="cell contact">
+        <span class="lbl">Contact</span>
+        <ul>
+          <li><a href={site.social[0].url} rel="noopener">LinkedIn</a></li>
+          <li set:html={`<a href="${site.mailtoEncoded}">Email</a>`} />
+          {site.social.slice(1).map((s) => <li><a href={s.url} rel="noopener">{s.label}</a></li>)}
+        </ul>
+      </div>
+      <div class="cell src">
+        <span class="lbl">Source</span>
+        <a href="https://github.com/elkojo/cheming-site" rel="noopener">github.com/elkojo/cheming-site</a>
+      </div>
     </footer>
 
     <style is:global>
-      :root { --ink: #1d2433; --muted: #5b6475; --line: #d8dce4; --brand: #33466c; --bg: #fff; }
-      * { box-sizing: border-box; }
-      body { margin: 0; font: 16px/1.55 system-ui, sans-serif; color: var(--ink); background: var(--bg); }
-      a { color: var(--brand); }
-      .skip { position: absolute; left: -999px; }
-      .skip:focus { left: 1rem; top: 1rem; background: #fff; padding: .5rem; }
-      header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;
-               padding: .75rem 1rem; border-bottom: 1px solid var(--line); }
-      .brand { display: flex; align-items: center; gap: .5rem; font-weight: 700; text-decoration: none; color: var(--ink); }
-      .brand img { border-radius: 6px; }
-      header nav { display: flex; gap: 1rem; align-items: center; }
-      main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1rem; }
-      main.wide { max-width: none; padding: 1rem 0 0; }
-      footer { border-top: 1px solid var(--line); padding: 1.5rem 1rem; color: var(--muted); font-size: .875rem; text-align: center; }
-      .social { list-style: none; display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; padding: 0; margin: 0 0 1rem; }
-      .disclaimer { max-width: 50rem; margin: 0 auto; }
+      :root {
+        --paper: #fbfbf8;
+        --wash: #eef1f4;
+        --ink: #1b2433;
+        --muted: #4f5a6b;
+        --rule: #c9ced6;
+        --line: #2f5d8a;
+        --markup: #d0312d;
+        --zoho-in: #ffff99;
+        --zoho-out: #ccffcc;
+        --font-ui: 'Archivo Variable', 'Archivo', system-ui, sans-serif;
+        --font-drawing: 'Osifont', 'Archivo Variable', sans-serif;
+        --header-h: 3.5rem;
+        --gutter: clamp(1rem, 3vw, 2rem);
+        color-scheme: light;
+        accent-color: var(--line);
+        scrollbar-color: var(--rule) var(--paper);
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        background: var(--paper);
+        color: var(--ink);
+        font: 400 1rem/1.55 var(--font-ui);
+        font-variant-numeric: tabular-nums;
+        caret-color: var(--line);
+      }
+      main { flex: 1; }
+      ::selection { background: #cfdcea; color: var(--ink); }
+      a { color: var(--line); text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
+      a:hover { text-decoration-thickness: 2px; }
+      :focus-visible { outline: 2px solid var(--line); outline-offset: 2px; }
+      h1, h2, h3 { text-wrap: balance; }
+
+      .skip { position: absolute; left: -999px; top: 0; z-index: 20; }
+      .skip:focus { left: 1rem; top: 0.5rem; padding: 0.5rem 0.75rem; background: var(--paper); color: var(--ink); }
+
+      /* Header band */
+      .band {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: var(--header-h);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-inline: var(--gutter);
+        background: var(--ink);
+        color: var(--paper);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.625rem;
+        color: inherit;
+        text-decoration: none;
+        font-weight: 650;
+        font-size: 1.0625rem;
+        letter-spacing: -0.005em;
+      }
+      .band nav { display: flex; align-items: center; gap: 0.25rem; }
+      .navlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        height: 2.25rem;
+        padding-inline: 0.75rem;
+        border: 0;
+        background: none;
+        color: var(--paper);
+        font: inherit;
+        font-size: 0.9375rem;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .navlink:hover, .navlink[aria-current='page'] { background: rgb(255 255 255 / 0.1); text-decoration: none; }
+      .navlink:focus-visible { outline-color: var(--paper); outline-offset: -2px; }
+      @media (max-width: 30rem) {
+        .band .brand > span:last-child { display: none; }
+        .navlink { padding-inline: 0.5rem; }
+      }
+
+      /* Title-block footer */
+      .titleblock {
+        display: grid;
+        grid-template-columns: minmax(12rem, 1fr) minmax(0, 2.4fr) minmax(9rem, 0.9fr);
+        grid-template-areas: 'id disc contact' 'id disc src';
+        margin: 3rem var(--gutter) var(--gutter);
+        border: 1.5px solid var(--ink);
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .cell { padding: 0.625rem 0.875rem 0.75rem; border-left: 1px solid var(--ink); }
+      .cell p { margin: 0.25rem 0 0; }
+      .id { grid-area: id; border-left: 0; }
+      .disc { grid-area: disc; line-height: 1.5; }
+      .contact { grid-area: contact; border-bottom: 1px solid var(--ink); }
+      .src { grid-area: src; }
+      .lbl {
+        display: block;
+        margin-bottom: 0.25rem;
+        font: 400 0.6875rem/1 var(--font-drawing);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .titleblock .brand { color: var(--ink); font-size: 1rem; }
+      .contact ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.125rem 0.875rem; }
+      .src a { word-break: break-all; }
+      @media (max-width: 50rem) {
+        .titleblock { grid-template-columns: 1fr 1fr; grid-template-areas: 'id id' 'disc disc' 'contact src'; }
+        .cell { border-left: 0; border-top: 1px solid var(--ink); }
+        .id { border-top: 0; }
+        .contact { border-bottom: 0; border-right: 1px solid var(--ink); }
+      }
     </style>
   </body>
 </html>

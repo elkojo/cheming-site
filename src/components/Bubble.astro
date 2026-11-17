@@ -1,0 +1,54 @@
+---
+// ISA-style instrument bubble: the identity mark of every tool.
+// `sub` splits the bubble with a hairline (top: tag, bottom: qualifier).
+interface Props {
+  tag: string;
+  sub?: string;
+  size?: 'sm' | 'md' | 'lg';
+  tone?: 'ink' | 'paper';
+}
+const { tag, sub, size = 'md', tone = 'ink' } = Astro.props;
+---
+<span class:list={['bubble', size, tone, { split: sub }]} data-len={tag.length} aria-hidden="true">
+  <span class="t">{tag}</span>
+  {sub && <span class="s">{sub}</span>}
+</span>
+
+<style>
+  .bubble {
+    --d: 2.75rem;
+    flex: none;
+    display: inline-grid;
+    place-content: center;
+    justify-items: center;
+    width: var(--d);
+    height: var(--d);
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
+    font-family: var(--font-drawing);
+    line-height: 1;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .sm { --d: 1.875rem; border-width: 1px; }
+  .lg { --d: 4.25rem; border-width: 2px; }
+  .paper { color: var(--paper); background: transparent; }
+
+  .t { font-size: calc(var(--d) * 0.36); letter-spacing: 0.02em; }
+  .bubble[data-len='1'] .t { font-size: calc(var(--d) * 0.46); }
+  .bubble[data-len='2'] .t { font-size: calc(var(--d) * 0.4); }
+
+  /* Split bubble: tag above a hairline, qualifier below */
+  .split { grid-template-rows: 1fr auto 1fr; align-items: center; padding-block: calc(var(--d) * 0.12); }
+  .split .t { font-size: calc(var(--d) * 0.25); align-self: end; }
+  .split::after {
+    content: '';
+    grid-row: 2;
+    grid-column: 1;
+    width: calc(var(--d) - 3px);
+    border-top: 1px solid currentColor;
+    margin-block: calc(var(--d) * 0.05);
+  }
+  .split .t { grid-row: 1; grid-column: 1; }
+  .split .s { grid-row: 3; grid-column: 1; align-self: start; font-size: calc(var(--d) * 0.22); }
+</style>

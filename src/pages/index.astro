@@ -1,36 +1,157 @@
 ---
 import Base from '../layouts/Base.astro';
+import Bubble from '../components/Bubble.astro';
+import Legend from '../components/Legend.astro';
 import { categories, tools } from '../data/tools';
-import { site } from '../data/site';
 import { url } from '../lib/url';
 ---
 <Base>
-  <h1>{site.name}</h1>
-  <p>{site.tagline}</p>
-
-  <h2>Usage guideline</h2>
-  <ul>
-    <li><mark class="in">Yellow cells</mark>: editable input</li>
-    <li>Unit selection: double-click</li>
-    <li><mark class="out">Green cells</mark>: calculated output</li>
-    <li>Reset: refresh the page; nothing is saved</li>
-    <li>Fit the screen: zoom in/out in your browser</li>
-  </ul>
-  <p>Comments, feature requests and offers are appreciated (<a href={url('about/')}>contact</a>).</p>
-
-  {categories.map((c) => (
-    <section>
-      <h2>{c.title}</h2>
-      <ul>
-        {tools.filter((t) => t.category === c.id).map((t) => (
-          <li><a href={url(`${t.slug}/`)}>{t.name}</a></li>
-        ))}
-      </ul>
+  <div class="sheet">
+    <section class="intro" aria-labelledby="intro-h">
+      <h1 id="intro-h">Engineering calculation tools for oil &amp; gas and petrochemical processes</h1>
+      <p>{tools.length} calculators, each with its references and equations. Free to use; check every result independently.</p>
+      <Legend />
     </section>
-  ))}
+
+    <div class="finder" role="search">
+      <label for="q">Find a tool</label>
+      <input id="q" type="search" placeholder="Tag or name: PSV, pump, steam…" autocomplete="off" spellcheck="false" />
+      <output id="count" for="q" aria-live="polite">{tools.length} tools</output>
+    </div>
+
+    <div class="index" id="index">
+      {categories.map((c) => (
+        <section class="cat" aria-labelledby={`cat-${c.id}`}>
+          <h2 id={`cat-${c.id}`}>{c.title}</h2>
+          <ul>
+            {tools.filter((t) => t.category === c.id).map((t) => (
+              <li data-search={[t.tag, t.sub, t.title, t.name, t.standard, t.slug].filter(Boolean).join(' ').toLowerCase()}>
+                <a href={url(`${t.slug}/`)}>
+                  <Bubble tag={t.tag} sub={t.sub} />
+                  <span class="txt">
+                    <span class="name">{t.title}</span>
+                    {t.name !== t.title && <span class="full">{t.name}</span>}
+                    {t.description && <span class="desc">{t.description}</span>}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+
+    <p class="empty" id="empty" hidden>
+      No tool matches “<span id="empty-q"></span>”. Try a tag such as PSV, CV or KOD, or
+      <a href={url('about/#contact')}>ask for the tool you need</a>.
+    </p>
+
+    <p class="request">Missing a calculation? Feature requests are welcome: <a href={url('about/#contact')}>get in touch</a>.</p>
+  </div>
 </Base>
 
+<script>
+  const q = document.getElementById('q') as HTMLInputElement;
+  const rows = [...document.querySelectorAll<HTMLLIElement>('#index li')];
+  const cats = [...document.querySelectorAll<HTMLElement>('#index .cat')];
+  const count = document.getElementById('count')!;
+  const empty = document.getElementById('empty')!;
+  const emptyQ = document.getElementById('empty-q')!;
+
+  function apply() {
+    const terms = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const li of rows) {
+      const hit = terms.every((t) => li.dataset.search!.includes(t));
+      li.hidden = !hit;
+      if (hit) shown++;
+    }
+    for (const c of cats) c.hidden = !c.querySelector('li:not([hidden])');
+    count.textContent = shown === rows.length ? `${rows.length} tools` : `${shown} of ${rows.length}`;
+    empty.hidden = shown > 0;
+    emptyQ.textContent = q.value.trim();
+  }
+  q.addEventListener('input', apply);
+  q.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const first = rows.find((li) => !li.hidden)?.querySelector('a');
+      if (first) first.click();
+    }
+    if (e.key === 'Escape') { q.value = ''; apply(); }
+  });
+  apply();
+</script>
+
 <style>
-  mark.in { background: #ffff00; }
-  mark.out { background: #95eb70; }
+  .sheet { max-width: 84rem; margin: 0 auto; padding: 2.5rem var(--gutter) 0; }
+
+  h1 { margin: 0; max-width: 40ch; font-size: 1.75rem; line-height: 1.2; font-weight: 650; letter-spacing: -0.015em; }
+  .intro > p { margin: 0.5rem 0 1.25rem; color: var(--muted); max-width: 65ch; }
+
+  .finder {
+    display: grid;
+    grid-template-columns: auto min(28rem, 60vw) auto;
+    align-items: center;
+    justify-content: start;
+    gap: 0.75rem 1rem;
+    margin: 2.25rem 0 1.5rem;
+    padding: 0.875rem 0;
+    border-block: 1.5px solid var(--ink);
+  }
+  .finder label { font: 400 0.8125rem/1 var(--font-drawing); letter-spacing: 0.08em; text-transform: uppercase; }
+  input[type='search'] {
+    width: 100%;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--muted);
+    border-radius: 0;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+  }
+  input[type='search']::placeholder { color: #6b7585; }
+  input[type='search']:focus-visible { outline-offset: 0; border-color: var(--line); }
+  output { color: var(--muted); font-size: 0.875rem; }
+
+  .index {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    gap: 2rem 2.5rem;
+    align-items: start;
+  }
+  .cat h2 {
+    margin: 0 0 0.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--ink);
+    font: 400 0.9375rem/1 var(--font-drawing);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li + li { border-top: 1px solid var(--rule); }
+  li a {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 0.5rem 0.5rem;
+    margin-inline: -0.5rem;
+    color: var(--ink);
+    text-decoration: none;
+    transition: background-color 150ms ease-out;
+  }
+  li a:hover { background: var(--wash); }
+  li a:hover :global(.bubble) { color: var(--line); }
+  .txt { display: grid; min-width: 0; }
+  .name { font-weight: 600; }
+  .full, .desc { font-size: 0.875rem; color: var(--muted); line-height: 1.35; }
+
+  .empty { margin: 1rem 0 0; padding: 1rem; border: 1px dashed var(--muted); max-width: 52rem; }
+  .request { margin: 3rem 0 0; color: var(--muted); }
+
+  @media (max-width: 40rem) {
+    .sheet { padding-top: 1.5rem; }
+    h1 { font-size: 1.375rem; }
+    .finder { grid-template-columns: 1fr auto; }
+    .finder label { grid-column: 1 / -1; }
+  }
 </style>

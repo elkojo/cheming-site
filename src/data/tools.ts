@@ -13,6 +13,9 @@ export const categories: { id: CategoryId; title: string }[] = [
 
 export interface Tool {
   slug: string;        // URL: https://cheming.site/<slug>/
+  tag: string;         // instrument-bubble tag, e.g. PSV (keep to 3 characters)
+  sub?: string;        // optional lower half of the bubble, e.g. G for gas
+  description?: string; // one or two lines: what it calculates and when to use it
   title: string;       // short name (menu)
   name: string;        // full descriptive name
   category: CategoryId;
@@ -24,6 +27,7 @@ export interface Tool {
 export const tools: Tool[] = [
   {
     "slug": "psv",
+    "tag": "PSV",
     "title": "PSV",
     "name": "Pressure Safety Valve",
     "category": "relief",
@@ -31,6 +35,8 @@ export const tools: Tool[] = [
   },
   {
     "slug": "psv-gas-filled-vessel",
+    "tag": "PSV",
+    "sub": "G",
     "title": "PSV: Gas Filled Vessel",
     "name": "PSV Sizing for Fire Case in a Vapor/Gas Filled Vessel",
     "category": "relief",
@@ -38,6 +44,8 @@ export const tools: Tool[] = [
   },
   {
     "slug": "psv-liquid-filled-vessel",
+    "tag": "PSV",
+    "sub": "L",
     "title": "PSV: Liquid Filled Vessel",
     "name": "PSV Sizing for Fire Case in a Liquid Filled Vessel",
     "category": "relief",
@@ -45,6 +53,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "flare-stack",
+    "tag": "FS",
     "title": "Flare Stack",
     "name": "Flare Stack Sizing by ANSI/API Standard 521/ ISO 23251",
     "category": "relief",
@@ -53,6 +62,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "kod",
+    "tag": "KOD",
     "title": "KOD",
     "name": "Horizontal Knock Out Drum as per API RP 521, 1997, par. 5.4.2.1",
     "category": "relief",
@@ -61,6 +71,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "noise",
+    "tag": "dB",
     "title": "Noise",
     "name": "Noise Calculation by API 521 5th Edition par. 7.3.4.3",
     "category": "relief",
@@ -69,6 +80,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "pressurization-depressurization",
+    "tag": "BDV",
     "title": "Pressurization & Depressurization",
     "name": "Pressurization and Depressurization",
     "category": "relief",
@@ -76,6 +88,8 @@ export const tools: Tool[] = [
   },
   {
     "slug": "pressure-loss-single-phase",
+    "tag": "ΔP",
+    "sub": "1",
     "title": "Pressure Loss: Single Phase",
     "name": "Pressure Loss of Single Phase Flow in Circular Rough Piping",
     "category": "piping",
@@ -83,6 +97,8 @@ export const tools: Tool[] = [
   },
   {
     "slug": "pressure-loss-non-circular-piping",
+    "tag": "ΔP",
+    "sub": "NC",
     "title": "Pressure Loss: Non-Circular Piping",
     "name": "Pressure Loss of Single Phase Flow in Non-Circular Rough Piping",
     "category": "piping",
@@ -90,6 +106,8 @@ export const tools: Tool[] = [
   },
   {
     "slug": "pressure-loss-two-phase",
+    "tag": "ΔP",
+    "sub": "2",
     "title": "Pressure Loss: Two Phase",
     "name": "Pressure Loss of Two Phase Flow in Circular Rough Piping",
     "category": "piping",
@@ -97,6 +115,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "pipe-size",
+    "tag": "DN",
     "title": "Pipe Size",
     "name": "Pipe Size Optimization for Carbon and Stainless Steel Pipes",
     "category": "piping",
@@ -104,6 +123,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "cv",
+    "tag": "CV",
     "title": "CV",
     "name": "Control Valve",
     "category": "piping",
@@ -111,6 +131,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "ro",
+    "tag": "RO",
     "title": "RO",
     "name": "Restriction Orifice",
     "category": "piping",
@@ -118,6 +139,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "drainage-overflow",
+    "tag": "DRN",
     "title": "Drainage & Overflow",
     "name": "Liquid Gravity Drainage / Overflow Design",
     "category": "piping",
@@ -129,6 +151,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "compressor",
+    "tag": "K",
     "title": "Compressor",
     "name": "Compressor",
     "category": "equipment",
@@ -136,6 +159,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "pump",
+    "tag": "P",
     "title": "Pump",
     "name": "Pump",
     "category": "equipment",
@@ -143,6 +167,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "drum",
+    "tag": "D",
     "title": "Drum",
     "name": "Drum Geometry, Hold-up & Surge Rate",
     "category": "equipment",
@@ -150,6 +175,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "heat-exchanger",
+    "tag": "E",
     "title": "Heat Exchanger",
     "name": "Heat Exchanger Design",
     "category": "equipment",
@@ -157,6 +183,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "sieve",
+    "tag": "SV",
     "title": "Sieve",
     "name": "Sieve Opening Size",
     "category": "equipment",
@@ -164,6 +191,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "ped",
+    "tag": "PED",
     "title": "PED",
     "name": "PED Selection: European Pressure Equipment Directive 97/23/EG",
     "category": "equipment",
@@ -172,6 +200,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "properties",
+    "tag": "PRP",
     "title": "Properties",
     "name": "Physical Properties of Pure Components",
     "category": "properties",
@@ -179,6 +208,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "steam",
+    "tag": "STM",
     "title": "Steam",
     "name": "Properties of Saturated Steam",
     "category": "properties",
@@ -186,6 +216,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "gas-equation",
+    "tag": "pVT",
     "title": "Gas Equation",
     "name": "Gas Calculations (p.V=n.R.t.Z)",
     "category": "properties",
@@ -193,6 +224,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "unit-conversion",
+    "tag": "UC",
     "title": "Unit Conversion",
     "name": "Unit Conversion",
     "category": "general",
@@ -200,6 +232,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "geometry",
+    "tag": "GEO",
     "title": "Geometry",
     "name": "Geometry – Volume and Area of Geometrical Objects",
     "category": "general",
@@ -207,6 +240,7 @@ export const tools: Tool[] = [
   },
   {
     "slug": "prime-numbers",
+    "tag": "PN",
     "title": "Prime Numbers",
     "name": "Prime Numbers",
     "category": "general",
