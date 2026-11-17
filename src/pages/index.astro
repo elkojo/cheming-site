@@ -30,8 +30,7 @@ import { url } from '../lib/url';
                   <Bubble tag={t.tag} sub={t.sub} />
                   <span class="txt">
                     <span class="name">{t.title}</span>
-                    {t.name !== t.title && <span class="full">{t.name}</span>}
-                    {t.description && <span class="desc">{t.description}</span>}
+                    <span class="desc">{t.description ?? t.name}</span>
                   </span>
                 </a>
               </li>
@@ -143,7 +142,7 @@ import { url } from '../lib/url';
   li a:hover :global(.bubble) { color: var(--line); }
   .txt { display: grid; min-width: 0; }
   .name { font-weight: 600; }
-  .full, .desc { font-size: 0.875rem; color: var(--muted); line-height: 1.35; }
+  .desc { font-size: 0.875rem; color: var(--muted); line-height: 1.35; }
 
   .empty { margin: 1rem 0 0; padding: 1rem; border: 1px dashed var(--muted); max-width: 52rem; }
   .request { margin: 3rem 0 0; color: var(--muted); }
