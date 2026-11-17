@@ -1,0 +1,345 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-17T10:53:03+00:00",
+  "title": "Design System: Cheming.Site",
+  "extensions": {
+    "colorMeta": {
+      "drawing-paper": {
+        "role": "neutral",
+        "displayName": "Drawing Paper",
+        "canonical": "#fbfbf8",
+        "tonalRamp": [
+          "#31311c",
+          "#51512e",
+          "#727241",
+          "#929253",
+          "#b1b177",
+          "#c7c79e",
+          "#dedec5",
+          "#f6f6ef"
+        ]
+      },
+      "hover-wash": {
+        "role": "neutral",
+        "displayName": "Hover Wash",
+        "canonical": "#eef1f4",
+        "tonalRamp": [
+          "#1e262e",
+          "#32404d",
+          "#46596c",
+          "#5a738b",
+          "#7d94ab",
+          "#a2b2c3",
+          "#c7d1db",
+          "#f0f2f5"
+        ]
+      },
+      "drafting-ink": {
+        "role": "neutral",
+        "displayName": "Drafting Ink",
+        "canonical": "#1b2433",
+        "tonalRamp": [
+          "#1a2332",
+          "#2c3b53",
+          "#3e5275",
+          "#4f6a96",
+          "#738cb5",
+          "#9badca",
+          "#c3cedf",
+          "#eef1f6"
+        ]
+      },
+      "graphite": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "#4f5a6b",
+        "tonalRamp": [
+          "#20252c",
+          "#363e49",
+          "#4c5667",
+          "#616f84",
+          "#8490a4",
+          "#a7b0be",
+          "#cad0d8",
+          "#f0f2f4"
+        ]
+      },
+      "pencil-rule": {
+        "role": "neutral",
+        "displayName": "Pencil Rule",
+        "canonical": "#c9ced6",
+        "tonalRamp": [
+          "#21252b",
+          "#373e48",
+          "#4d5665",
+          "#636f82",
+          "#8591a3",
+          "#a8b0bd",
+          "#cbd0d7",
+          "#f1f2f4"
+        ]
+      },
+      "line-blue": {
+        "role": "primary",
+        "displayName": "Line Blue",
+        "canonical": "#2f5d8a",
+        "tonalRamp": [
+          "#132639",
+          "#20405f",
+          "#2d5a85",
+          "#3a73ab",
+          "#5f94c9",
+          "#8db3d8",
+          "#bbd1e8",
+          "#ecf2f9"
+        ]
+      },
+      "line-blue-deep": {
+        "role": "primary",
+        "displayName": "Line Blue Deep",
+        "canonical": "#244a6f",
+        "tonalRamp": [
+          "#13273a",
+          "#1f4060",
+          "#2c5a87",
+          "#3874ad",
+          "#5d95cb",
+          "#8bb3da",
+          "#bad1e9",
+          "#ecf2f9"
+        ]
+      },
+      "markup-red": {
+        "role": "error",
+        "displayName": "Markup Red",
+        "canonical": "#d0312d",
+        "tonalRamp": [
+          "#3f0f0e",
+          "#691917",
+          "#932320",
+          "#bd2c29",
+          "#d9524f",
+          "#e48481",
+          "#efb5b4",
+          "#faeaea"
+        ]
+      },
+      "sent-green": {
+        "role": "success",
+        "displayName": "Sent Green",
+        "canonical": "#1f6b3a",
+        "tonalRamp": [
+          "#113b20",
+          "#1d6336",
+          "#288a4b",
+          "#34b260",
+          "#59cf83",
+          "#88dda6",
+          "#b8eaca",
+          "#ebf9f0"
+        ]
+      },
+      "selection-blue": {
+        "role": "primary",
+        "displayName": "Selection Blue",
+        "canonical": "#cfdcea",
+        "tonalRamp": [
+          "#172635",
+          "#273f59",
+          "#36587c",
+          "#4671a0",
+          "#6a92be",
+          "#95b1d0",
+          "#bfd0e3",
+          "#edf2f7"
+        ]
+      },
+      "sheet-input": {
+        "role": "semantic",
+        "displayName": "Sheet Input",
+        "canonical": "#ffff99",
+        "tonalRamp": [
+          "#4c4c00",
+          "#7f8000",
+          "#b2b200",
+          "#e5e600",
+          "#ffff29",
+          "#ffff66",
+          "#ffffa3",
+          "#ffffe5"
+        ]
+      },
+      "sheet-output": {
+        "role": "semantic",
+        "displayName": "Sheet Output",
+        "canonical": "#ccffcc",
+        "tonalRamp": [
+          "#004c00",
+          "#008000",
+          "#00b200",
+          "#00e600",
+          "#29ff29",
+          "#66ff66",
+          "#a3ffa3",
+          "#e5ffe5"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Home purpose line and page titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Full tool name on a tool page."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose, list names, controls; tabular numerals."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Descriptions, breadcrumbs, hints."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Osifont uppercase: category heads, form labels, title-block fields."
+      },
+      "tag": {
+        "displayName": "Tag",
+        "purpose": "Osifont lettering inside tag bubbles, sized from the bubble."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ease-out-quick",
+        "value": "150ms ease-out",
+        "purpose": "Row hover wash, button fill."
+      },
+      {
+        "name": "menu-drop",
+        "value": "160ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Tools menu opening (fade + 6px drop); off under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "640px"
+      },
+      {
+        "name": "titleblock",
+        "value": "800px"
+      },
+      {
+        "name": "tool-header",
+        "value": "896px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Tag Bubble",
+      "kind": "custom",
+      "refersTo": "tag-bubble",
+      "description": "ISA-style instrument tag identifying a tool.",
+      "html": "<span class=\"ds-bubble\">PSV</span> <span class=\"ds-bubble ds-split\"><span>ΔP</span><span>NC</span></span>",
+      "css": ".ds-bubble{display:inline-grid;place-content:center;justify-items:center;width:44px;height:44px;border:1.5px solid #1b2433;border-radius:50%;font-family:Osifont,'Archivo Variable',sans-serif;font-size:16px;line-height:1;color:#1b2433;background:#fbfbf8;transition:color 150ms ease-out}.ds-bubble:hover{color:#2f5d8a}.ds-split{font-size:11px;gap:2px}.ds-split span+span{border-top:1px solid currentColor;padding-top:2px;width:40px;text-align:center;font-size:9.5px}"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Form submit.",
+      "html": "<button class=\"ds-btn-primary\">Send message</button>",
+      "css": ".ds-btn-primary{height:40px;padding:0 20px;border:1px solid #2f5d8a;border-radius:0;background:#2f5d8a;color:#fbfbf8;font:600 16px 'Archivo Variable',system-ui,sans-serif;cursor:pointer;transition:background-color 150ms ease-out}.ds-btn-primary:hover{background:#244a6f}.ds-btn-primary:focus-visible{outline:2px solid #2f5d8a;outline-offset:2px}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action, e.g. open the sheet full screen.",
+      "html": "<a class=\"ds-btn-outline\" href=\"#\">Open sheet full screen <svg viewBox=\"0 0 12 12\" width=\"12\" height=\"12\"><path d=\"M4.5 2H10v5.5M10 2 2.5 9.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg></a>",
+      "css": ".ds-btn-outline{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid #2f5d8a;color:#2f5d8a;font:600 14px 'Archivo Variable',system-ui,sans-serif;text-decoration:none;transition:background-color 150ms ease-out,color 150ms ease-out}.ds-btn-outline:hover{background:#2f5d8a;color:#fbfbf8}.ds-btn-outline:focus-visible{outline:2px solid #2f5d8a;outline-offset:2px}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Finder and form fields.",
+      "html": "<label class=\"ds-label\" for=\"ds-q\">Find a tool</label><input id=\"ds-q\" class=\"ds-input\" type=\"search\" placeholder=\"Tag or name: PSV, pump, steam…\">",
+      "css": ".ds-label{display:block;margin-bottom:6px;font:400 13px/1 Osifont,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#1b2433}.ds-input{width:100%;max-width:448px;height:40px;padding:0 12px;border:1px solid #4f5a6b;border-radius:0;background:#fff;color:#1b2433;font:16px 'Archivo Variable',system-ui,sans-serif}.ds-input:focus-visible{outline:2px solid #2f5d8a;outline-offset:0;border-color:#2f5d8a}"
+    },
+    {
+      "name": "Header Band",
+      "kind": "nav",
+      "refersTo": "header-band",
+      "description": "Sticky ink header with mark and links.",
+      "html": "<nav class=\"ds-band\"><a class=\"ds-brand\" href=\"#\"><span class=\"ds-mark\">CS</span>Cheming.Site</a><span class=\"ds-links\"><a href=\"#\">Tools</a><a href=\"#\" aria-current=\"page\">About</a><a href=\"#\">Contact</a></span></nav>",
+      "css": ".ds-band{display:flex;align-items:center;justify-content:space-between;height:56px;padding:0 24px;background:#1b2433;color:#fbfbf8;font:16px 'Archivo Variable',system-ui,sans-serif}.ds-brand{display:inline-flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-weight:650}.ds-mark{display:inline-grid;place-content:center;width:30px;height:30px;border:1px solid currentColor;border-radius:50%;font:12px Osifont,sans-serif}.ds-links a{display:inline-flex;align-items:center;height:36px;padding:0 12px;color:#fbfbf8;text-decoration:none;font-size:15px}.ds-links a:hover,.ds-links a[aria-current=page]{background:rgba(255,255,255,.1)}"
+    },
+    {
+      "name": "Tool Row",
+      "kind": "custom",
+      "description": "Home index row: bubble, short name, one-line description.",
+      "html": "<a class=\"ds-row\" href=\"#\"><span class=\"ds-bubble\">KOD</span><span><strong>KOD</strong><small>Sizes a horizontal knock-out drum from the droplet dropout velocity.</small></span></a>",
+      "css": ".ds-row{display:flex;align-items:center;gap:14px;padding:8px;max-width:420px;border-top:1px solid #c9ced6;color:#1b2433;text-decoration:none;font:16px/1.4 'Archivo Variable',system-ui,sans-serif;transition:background-color 150ms ease-out}.ds-row:hover{background:#eef1f4}.ds-row strong{display:block;font-weight:600}.ds-row small{display:block;font-size:14px;line-height:1.35;color:#4f5a6b}.ds-row .ds-bubble{flex:none;display:inline-grid;place-content:center;width:44px;height:44px;border:1.5px solid currentColor;border-radius:50%;font:16px Osifont,sans-serif}.ds-row:hover .ds-bubble{color:#2f5d8a}"
+    },
+    {
+      "name": "Usage Legend",
+      "kind": "custom",
+      "description": "Swatches in the Zoho cell colours.",
+      "html": "<dl class=\"ds-legend\"><div><dt><i style=\"background:#ffff99\"></i>Yellow cells</dt><dd>input: type your values</dd></div><div><dt><i style=\"background:#ccffcc\"></i>Green cells</dt><dd>calculated output</dd></div></dl>",
+      "css": ".ds-legend{display:flex;flex-wrap:wrap;gap:8px 28px;margin:0;font:15px 'Archivo Variable',system-ui,sans-serif;color:#1b2433}.ds-legend div{display:flex;align-items:center;gap:6px}.ds-legend dt{display:inline-flex;align-items:center;gap:8px;font-weight:600}.ds-legend dd{margin:0;color:#4f5a6b}.ds-legend i{width:28px;height:16px;border:1px solid #1b2433}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Drawing Sheet",
+    "overview": "The site reads as one clean engineering drawing: paper-white ground, drafting-ink lines, hairline rules and square corners. Every tool is an instrument on that drawing, identified by an ISA-style tag bubble (PSV, KOD, CV) the way a P&ID identifies a valve or vessel. The world lends type, palette, density and that one signature mark; layout, navigation and controls stay standard web, because visitors come to work, not to admire.\n\nDensity is that of a reference index: many items visible at once, each with tag, short name and one line of description. Colour does few, specific jobs: ink for structure, line blue for anything you can act on, markup red only for errors. The yellow and green that mean input and output inside the Zoho sheets are reserved for that meaning.\n\nRejected: rounded calculator cards on a grey SaaS grid, and blueprint pastiche (white-on-blue, grid-paper backgrounds).",
+    "keyCharacteristics": [
+      "Tag bubbles as the identity of every tool, everywhere a tool is named",
+      "Ink header band, paper body, a title-block footer",
+      "Hairline rules and square corners; no cards, no shadows",
+      "Osifont (ISO 3098 CAD lettering) for tags and labels; Archivo for everything read",
+      "The Zoho sheet sits in a zone-marked drawing frame (A–F, 1–4)"
+    ],
+    "rules": [
+      {
+        "name": "The Sheet Colours Rule",
+        "body": "Pale yellow and pale green mean \"input\" and \"output\", because that's what they mean inside the Zoho sheets. They never appear on the site for any other purpose.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Blue Rule",
+        "body": "If it is blue, it can be clicked or is focused. Nothing decorative is blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Lettering Rule",
+        "body": "Osifont is lettering, not text: never set a sentence or a paragraph in it. If it would be printed in a drawing's title block or a tag bubble, it is Osifont; otherwise it's Archivo.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lines-Not-Shadows Rule",
+        "body": "If something must stand apart, draw a line around it.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** give every tool a tag bubble wherever the tool is named (index, menu, tool header, related tools).",
+      "**Do** use hairlines (pencil-rule) between list rows and ink rules (1.5px) for structure.",
+      "**Do** keep the legend swatches identical to the Zoho cell colours (sheet-input, sheet-output).",
+      "**Do** keep the disclaimer in the title block on every page.",
+      "**Do** theme browser surfaces: selection (selection-blue), caret and focus (line-blue), scrollbar (pencil-rule on paper)."
+    ],
+    "donts": [
+      "**Don't** use cards, rounded corners or shadows; this is a drawing, not a dashboard.",
+      "**Don't** use yellow or green for anything except the input/output meaning.",
+      "**Don't** set prose in Osifont.",
+      "**Don't** add eyebrow labels above headings; category heads are the headings.",
+      "**Don't** colour anything blue that isn't interactive."
+    ]
+  }
+}
