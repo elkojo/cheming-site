@@ -3,7 +3,7 @@
 // Rendered with the defaults already filled in, so it shows results even before the script runs.
 import DrawingFrame from './DrawingFrame.astro';
 import { calculators, type CalcId } from '../lib/calc/registry';
-import { evaluate, defaults, formatNumber } from '../lib/calc/types';
+import { evaluate, defaults, formatNumber, mathHtml } from '../lib/calc/types';
 
 interface Props { id: CalcId; title: string }
 const { id, title } = Astro.props;
@@ -13,7 +13,7 @@ const groups = calculators[id];
   <div class="calc" data-calc={id}>
     <div class="bar">
       <p>All lengths in one unit of your choice (<b>u</b>); areas come out in u², volumes in u³.</p>
-      <button type="button" class="reset" data-reset>Reset to defaults</button>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
     </div>
     <div class="groups">
       {groups.map((g) => {
@@ -33,21 +33,21 @@ const groups = calculators[id];
                 <tbody>
                   {g.inputs.map((i) => (
                     <tr>
-                      <th scope="row"><label for={`${id}-${g.id}-in-${i.key}`}><span class="lb">{i.label}</span> <span class="eq">{i.sym}</span></label></th>
+                      <th scope="row"><label for={`${id}-${g.id}-in-${i.key}`}><span class="lb">{i.label}</span> <span class="eq" set:html={mathHtml(i.sym)} /></label></th>
                       <td class="v"><input id={`${id}-${g.id}-in-${i.key}`} data-in={i.key} data-default={i.value} value={i.value} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
                       <td class="u">{i.unit}</td>
                     </tr>
                   ))}
                   {g.outputs.map((o) => (
                     <tr>
-                      <th scope="row"><span class="lb">{o.label}</span> <span class="eq">{o.formula}</span></th>
+                      <th scope="row"><span class="lb">{o.label}</span> <span class="eq" set:html={mathHtml(o.formula)} /></th>
                       <td class="v"><output data-out={o.key} aria-live="polite">{formatNumber(out[o.key])}</output></td>
                       <td class="u">{o.unit}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {g.note && <p class="note">{g.note}</p>}
+              {g.note && <p class="note" set:html={g.note} />}
             </div>
           </section>
         );
@@ -74,7 +74,7 @@ const groups = calculators[id];
 
 <script>
   import { calculators, type CalcId } from '../lib/calc/registry';
-  import { evaluate, parseNumber, formatNumber, type Values } from '../lib/calc/types';
+  import { evaluate, parseNumber, formatNumber, mathHtml, type Values } from '../lib/calc/types';
 
   for (const root of document.querySelectorAll<HTMLElement>('.calc[data-calc]')) {
     const groups = calculators[root.dataset.calc as CalcId];
@@ -84,14 +84,24 @@ const groups = calculators[id];
       const g = groups.find((x) => x.id === section.dataset.group);
       if (!g) return;
       const values: Values = {};
+      let empty = false;
       for (const input of section.querySelectorAll<HTMLInputElement>('input[data-in]')) {
         const v = parseNumber(input.value);
         values[input.dataset.in!] = v;
-        input.toggleAttribute('aria-invalid', !(Number.isFinite(v) && v >= 0));
+        // an empty field is just not filled in yet; only typed text that isn't a valid number is marked
+        const blank = input.value.trim() === '';
+        if (blank) empty = true;
+        input.toggleAttribute('aria-invalid', !blank && !(Number.isFinite(v) && v >= 0));
       }
       const out = evaluate(g, values);
       for (const o of section.querySelectorAll<HTMLOutputElement>('output[data-out]')) {
-        o.textContent = formatNumber(out[o.dataset.out!]);
+        const key = o.dataset.out!;
+        if (!empty) { o.textContent = formatNumber(out[key]); continue; }
+        // some fields still empty: show each result whose own inputs are filled (e.g. radius from the diameter alone)
+        const bad = g.inputs.some((i) => Number.isFinite(values[i.key]) && values[i.key] < 0)
+          || [...section.querySelectorAll<HTMLInputElement>('input[aria-invalid]')].length > 0;
+        const x = bad ? NaN : g.outputs.find((oo) => oo.key === key)!.calc(values);
+        o.textContent = bad ? '—' : Number.isFinite(x) ? formatNumber(x) : '';
       }
     };
 
@@ -101,10 +111,11 @@ const groups = calculators[id];
     });
 
     root.querySelector('[data-reset]')?.addEventListener('click', () => {
-      for (const input of root.querySelectorAll<HTMLInputElement>('input[data-in]')) input.value = input.dataset.default!;
+      for (const input of root.querySelectorAll<HTMLInputElement>('input[data-in]')) input.value = '';
       root.querySelectorAll<HTMLElement>('[data-group]').forEach(run);
+      root.querySelector<HTMLInputElement>('input[data-in]')?.focus();
       const status = root.querySelector('[data-status]');
-      if (status) status.textContent = 'All values reset to defaults.';
+      if (status) status.textContent = 'All input fields cleared.';
     });
 
     // Enlarged drawing with the symbols and formulas of that shape.
@@ -122,7 +133,7 @@ const groups = calculators[id];
           const tr = document.createElement('tr');
           const th = document.createElement('th'); th.scope = 'row';
           const lb = document.createElement('span'); lb.className = 'lb'; lb.textContent = label;
-          const q = document.createElement('span'); q.className = 'eq'; q.textContent = eq;
+          const q = document.createElement('span'); q.className = 'eq'; q.innerHTML = mathHtml(eq);
           th.append(lb, ' ', q);
           const mark = document.createElement('td'); mark.className = `mk ${kind}`;
           mark.innerHTML = '<span aria-hidden="true"></span>';
@@ -132,7 +143,7 @@ const groups = calculators[id];
         };
         for (const i of g.inputs) row(i.label, i.sym, i.unit, 'in');
         for (const o of g.outputs) row(o.label, o.formula, o.unit, 'out');
-        dlg.querySelector('[data-zd-note]')!.textContent = g.note ?? '';
+        dlg.querySelector('[data-zd-note]')!.innerHTML = g.note ?? '';
         dlg.showModal();
       });
     });
@@ -190,7 +201,7 @@ const groups = calculators[id];
   .sk:hover { border-color: var(--rule); background: var(--wash); }
   .skimg { display: block; width: 100%; }
   .sk :global(svg), .zimg :global(svg) { display: block; width: 100%; height: auto; overflow: visible; }
-  .sk :global(.sk-l), .zimg :global(.sk-l) { fill: var(--ink); font: 400 14px var(--font-ui); }
+  .sk :global(.sk-l), .zimg :global(.sk-l) { fill: var(--ink); font: italic 400 14px var(--font-ui); }
   .zoom { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
 
   .zd {
@@ -229,6 +240,7 @@ const groups = calculators[id];
   th label { cursor: text; }
   .calc :global(.lb) { margin-right: 0.625rem; }
   .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i) { font-style: italic; padding-right: 0.05em; }
   .v { width: 8.5rem; }
   .u { width: 2rem; padding-left: 0.375rem; color: var(--muted); }
   input, output {

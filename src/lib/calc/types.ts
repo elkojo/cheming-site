@@ -23,7 +23,7 @@ export interface Group {
   id: string;
   title: string;
   sketch: string;  // inline SVG markup, viewBox 0 0 120 100
-  note?: string;
+  note?: string;  // HTML allowed (trusted, static): symbols in <i>
   inputs: Input[];
   outputs: Output[];
 }
@@ -54,4 +54,11 @@ export function formatNumber(x: number): string {
   const abs = Math.abs(x);
   if (abs >= 1e12 || abs < 1e-6) return x.toExponential(6).replace(/\.?0+e/, 'e');
   return String(Number(x.toPrecision(10)));
+}
+
+/** Formula or symbol as HTML with the variables in italics (maths convention): "A = π·r²" → "<i>A</i> = π·<i>r</i>²".
+ *  Numbers, operators, π and √ stay upright. */
+export function mathHtml(text: string): string {
+  const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc.replace(/(&\w+;)|([A-Za-z]+\d*)/g, (m, entity) => (entity ? m : `<i>${m}</i>`));
 }

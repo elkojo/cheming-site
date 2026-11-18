@@ -72,3 +72,11 @@ test('formatNumber matches Zoho-style display', () => {
   assert.equal(formatNumber(6), '6');
   assert.equal(formatNumber(NaN), '—');
 });
+
+test('mathHtml italicises variables only', async () => {
+  const { mathHtml } = await import('../src/lib/calc/types.ts');
+  assert.equal(mathHtml('A = π·r²'), '<i>A</i> = π·<i>r</i>²');
+  assert.equal(mathHtml('P = a + b1 + b2 + c'), '<i>P</i> = <i>a</i> + <i>b1</i> + <i>b2</i> + <i>c</i>');
+  assert.equal(mathHtml('S = b² + 2·b·√(h² + b²/4)'), '<i>S</i> = <i>b</i>² + 2·<i>b</i>·√(<i>h</i>² + <i>b</i>²/4)');
+  assert.equal(mathHtml('x < y'), '<i>x</i> &lt; <i>y</i>');
+});

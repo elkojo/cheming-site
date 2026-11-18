@@ -106,7 +106,7 @@ export const geometry: Group[] = [
     id: 'triangle',
     title: 'Triangle',
     sketch: svg(`<path d="M8 82 44 20l68 62Z"/><path d="M44 20v62" ${dash} stroke-width="1"/>${t(16, 50, 'a')}${t(82, 46, 'c')}${t(60, 96, 'b')}${t(48, 62, 'h')}`),
-    note: 'Defaults: isosceles triangle, a = c = √((b/2)² + h²).',
+    note: 'Defaults: isosceles triangle, <i>a</i> = <i>c</i> = √((<i>b</i>/2)² + <i>h</i>²).',
     inputs: [
       { key: 'b', label: 'Base', sym: 'b', unit: 'u', value: 3 },
       { key: 'h', label: 'Height', sym: 'h', unit: 'u', value: 2 },
@@ -153,7 +153,7 @@ export const geometry: Group[] = [
     id: 'prism',
     title: 'Prism',
     sketch: svg(`<path d="M10 34 50 14l26 20Z"/><path d="M10 34v52M76 34v52" /><path d="M50 14v52M10 86l40-20 26 20" ${dash} stroke-width="1"/><path d="M10 86h66"/>${t(88, 64, 'h')}${t(39, 83, 'B')}`),
-    note: 'Any right prism: B is the area of the base, P its perimeter.',
+    note: 'Any right prism: <i>B</i> is the area of the base, <i>P</i> its perimeter.',
     inputs: [
       { key: 'h', label: 'Height', sym: 'h', unit: 'u', value: 2 },
       { key: 'B', label: 'Area of Base', sym: 'B', unit: 'u²', value: 3 },

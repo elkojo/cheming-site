@@ -18,7 +18,7 @@ Goal: replace the Zoho Sheet iframes one tool at a time with calculators built i
 ### Progress
 | Tool | Status | Notes |
 |---|---|---|
-| Geometry | native (2026-11-18) | 26 tests: every Zoho default result + hand-checked cases. Two Zoho errors fixed: triangle "circumference" was 2·b + 2·h (now perimeter a + b + c, with side inputs a and c added); prism volume showed 2 instead of B·h = 6. Polygon "Circumference" renamed "Perimeter". |
+| Geometry | native (2026-11-18) | 26 tests: every Zoho default result + hand-checked cases. Two Zoho errors fixed: triangle "circumference" was 2·b + 2·h (now perimeter a + b + c, with side inputs a and c added); prism volume showed 2 instead of B·h = 6 (both fixes approved by the owner 2026-11-18). Polygon "Circumference" renamed "Perimeter". |
 
 ### Suggested order (simple → complex)
 1. Unit Conversion
