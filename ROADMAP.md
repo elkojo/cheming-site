@@ -15,6 +15,18 @@ Goal: replace the Zoho Sheet iframes one tool at a time with calculators built i
 - Switch: set `native: '<id>'` on the tool in `src/data/tools.ts`. The Zoho sheet stays linked as "Original Zoho sheet".
 - Tests: `tests/<tool>.test.ts`, run with `npm test`. `npm run build` runs the tests first, so a failing calculator never deploys.
 
+### Conventions for every native calculator (lessons from Geometry, approved by the owner)
+- **One cell per row:** property name followed by its symbol or formula in the same cell, same font and colour (Archivo, ink). Then the yellow/green field, then the unit. No separate formula column, no CAD lettering inside the calculator.
+- **Formula basis always visible**, on every screen size; on phones it wraps under the name inside the same cell, never hidden.
+- **Italic variables everywhere** (formulas, symbols, drawing labels, notes, enlarged view); numbers, operators, π and √ upright. Use `mathHtml()` for formulas; notes may contain `<i>` for symbols.
+- **Same order everywhere:** name → symbol/formula → value → unit, in the sheet and the enlarged view alike.
+- **Drawings:** simple line sketches with the same symbols as the formulas; no label may touch a line (check them rendered large). Each drawing opens in an enlarged view with its rows (yellow/green markers) and note.
+- **Phone:** drawing sits beside the group title so the rows use the full width; no sideways scroll.
+- **Clear all inputs** button empties every input; empty fields are not errors; a result shows as soon as its own inputs are filled. Reload restores the example values (the Zoho defaults).
+- **Invalid input:** red border, result "—". Decimal comma accepted.
+- **Zoho as reference, not gospel:** the published Zoho views don't recalculate, so the default values on the sheet are the reference cases. Check every formula; if the sheet is wrong, fix it, add a test explaining the fix, and get the owner's approval before going live.
+- **Before going live:** tests pass (`npm run build` runs them), browser check on desktop and phone (typing, invalid input, clear, enlarged view), owner approval, then push.
+
 ### Progress
 | Tool | Status | Notes |
 |---|---|---|
