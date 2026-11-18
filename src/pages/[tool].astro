@@ -4,6 +4,7 @@ import Base from '../layouts/Base.astro';
 import Bubble from '../components/Bubble.astro';
 import Legend from '../components/Legend.astro';
 import ZohoEmbed from '../components/ZohoEmbed.astro';
+import NativeCalc from '../components/NativeCalc.astro';
 import { tools, categories } from '../data/tools';
 import { url } from '../lib/url';
 
@@ -31,9 +32,9 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
       </div>
     </div>
     <div class="aside">
-      <Legend compact />
+      <Legend compact native={!!tool.native} />
       <a class="open" href={openUrl} target="_blank" rel="noopener">
-        Open sheet full screen
+        {tool.native ? 'Original Zoho sheet' : 'Open sheet full screen'}
         <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M4.5 2H10v5.5M10 2 2.5 9.5" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
         <span class="sr">(opens Zoho in a new tab)</span>
       </a>
@@ -41,7 +42,9 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
   </div>
 
   <div class="sheetwrap">
-    <ZohoEmbed src={tool.zoho} title={tool.title} />
+    {tool.native
+      ? <NativeCalc id={tool.native} title={tool.title} />
+      : <ZohoEmbed src={tool.zoho} title={tool.title} />}
   </div>
 
   {siblings.length > 0 && (

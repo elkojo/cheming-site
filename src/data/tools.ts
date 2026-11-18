@@ -1,6 +1,8 @@
 // The single list of all tools. Order inside a category = order on the site.
 // Generated from the WordPress export (migration/pages.raw.json) on 2026-11-17; edit by hand from now on.
 
+import type { CalcId } from '../lib/calc/registry';
+
 export type CategoryId = 'relief' | 'piping' | 'equipment' | 'properties' | 'general';
 
 export const categories: { id: CategoryId; title: string }[] = [
@@ -19,7 +21,8 @@ export interface Tool {
   title: string;       // short name (menu)
   name: string;        // full descriptive name
   category: CategoryId;
-  zoho: string;        // Zoho Sheet embed URL
+  zoho: string;        // Zoho Sheet embed URL (kept as the fallback when `native` is set)
+  native?: CalcId;     // native JS calculator (Phase 7); set only once its tests pass against Zoho
   standard?: string;   // standard / reference followed
   credit?: { name: string; url: string };
 }
@@ -272,7 +275,8 @@ export const tools: Tool[] = [
     "name": "Geometry – Volume and Area of Geometrical Objects",
     "description": "Volume, surface area and circumference of common shapes: circle, sphere, cylinder, rectangle, box, parallelogram, triangle, cone and pyramid.",
     "category": "general",
-    "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/1e4d4c0cc14f918ddbd0a012cbcd9862f0980c77919cfaf312181ebf7c20aad3?type=grid&mode=embed"
+    "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/1e4d4c0cc14f918ddbd0a012cbcd9862f0980c77919cfaf312181ebf7c20aad3?type=grid&mode=embed",
+    "native": "geometry"
   },
   {
     "slug": "prime-numbers",
