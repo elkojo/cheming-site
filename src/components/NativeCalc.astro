@@ -20,14 +20,20 @@ const groups = calculators[id];
         const out = evaluate(g, defaults(g));
         return (
           <section class="grp" data-group={g.id} aria-labelledby={`${id}-${g.id}-title`}>
-            <div class="sk" set:html={g.sketch} />
+            <button type="button" class="sk" data-zoom aria-haspopup="dialog" aria-label={`Enlarge the ${g.title} drawing and formulas`}>
+              <span class="skimg" set:html={g.sketch} />
+              <span class="zoom" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 10l4 4M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" stroke-width="1.5"/></svg>
+                Enlarge
+              </span>
+            </button>
             <div class="body">
               <h2 id={`${id}-${g.id}-title`}>{g.title}</h2>
               <table>
                 <tbody>
                   {g.inputs.map((i) => (
                     <tr>
-                      <th scope="row"><label for={`${id}-${g.id}-in-${i.key}`}>{i.label}</label></th>
+                      <th scope="row"><label for={`${id}-${g.id}-in-${i.key}`}>{i.label}</label><span class="fm" aria-hidden="true">{i.sym}</span></th>
                       <td class="f">{i.sym}</td>
                       <td class="v"><input id={`${id}-${g.id}-in-${i.key}`} data-in={i.key} data-default={i.value} value={i.value} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
                       <td class="u">{i.unit}</td>
@@ -35,7 +41,7 @@ const groups = calculators[id];
                   ))}
                   {g.outputs.map((o) => (
                     <tr>
-                      <th scope="row">{o.label}</th>
+                      <th scope="row">{o.label}<span class="fm" aria-hidden="true">{o.formula}</span></th>
                       <td class="f">{o.formula}</td>
                       <td class="v"><output data-out={o.key} aria-live="polite">{formatNumber(out[o.key])}</output></td>
                       <td class="u">{o.unit}</td>
@@ -50,6 +56,18 @@ const groups = calculators[id];
       })}
     </div>
     <p class="sr" aria-live="polite" data-status></p>
+    <dialog class="zd" aria-labelledby={`${id}-zd-title`}>
+      <div class="zhead">
+        <h2 id={`${id}-zd-title`} data-zd-title></h2>
+        <button type="button" class="zclose" data-zd-close aria-label="Close">
+          <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+      </div>
+      <div class="zbody">
+        <div class="zimg" data-zd-img></div>
+        <dl class="zf" data-zd-formulas></dl>
+      </div>
+    </dialog>
   </div>
 </DrawingFrame>
 
@@ -88,6 +106,31 @@ const groups = calculators[id];
       if (status) status.textContent = 'All values reset to defaults.';
     });
 
+    // Enlarged drawing with the symbols and formulas of that shape.
+    const dlg = root.querySelector<HTMLDialogElement>('dialog.zd');
+    root.querySelectorAll<HTMLButtonElement>('[data-zoom]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const g = groups.find((x) => x.id === btn.closest<HTMLElement>('[data-group]')?.dataset.group);
+        if (!dlg || !g) return;
+        dlg.querySelector('[data-zd-title]')!.textContent = g.title;
+        dlg.querySelector('[data-zd-img]')!.innerHTML = g.sketch;
+        const dl = dlg.querySelector('[data-zd-formulas]')!;
+        dl.replaceChildren();
+        const row = (term: string, def: string, cls: string) => {
+          const dt = document.createElement('dt'); dt.textContent = term; dt.className = cls;
+          const dd = document.createElement('dd'); dd.textContent = def; dd.className = cls;
+          dl.append(dt, dd);
+        };
+        for (const i of g.inputs) row(i.sym, `${i.label} [${i.unit}]`, 'in');
+        for (const o of g.outputs) row(o.label, `${o.formula}  [${o.unit}]`, 'out');
+        if (g.note) row('Note', g.note, 'nt');
+        dlg.showModal();
+      });
+    });
+    dlg?.querySelector('[data-zd-close]')?.addEventListener('click', () => dlg.close());
+    // click on the backdrop closes
+    dlg?.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+
     // Values kept by the browser after "back" or a soft reload: recalculate them.
     root.querySelectorAll<HTMLElement>('[data-group]').forEach(run);
   }
@@ -117,21 +160,60 @@ const groups = calculators[id];
   }
   .grp {
     display: grid;
-    grid-template-columns: 6.5rem minmax(0, 1fr);
+    grid-template-columns: 8.5rem minmax(0, 1fr);
     gap: 1rem;
     align-items: start;
     padding-block: 1.25rem;
     border-bottom: 1px solid var(--rule);
   }
-  .sk { color: var(--ink); padding-top: 1.75rem; }
-  .sk :global(svg) { display: block; width: 100%; height: auto; overflow: visible; }
-  .sk :global(.sk-l) { fill: var(--muted); font: italic 400 13px var(--font-drawing); }
+  .sk {
+    display: grid;
+    justify-items: center;
+    gap: 0.25rem;
+    margin-top: 1.875rem;
+    padding: 0.375rem 0.375rem 0.25rem;
+    border: 1px solid transparent;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    cursor: zoom-in;
+  }
+  .sk:hover { border-color: var(--rule); background: var(--wash); }
+  .skimg { display: block; width: 100%; }
+  .sk :global(svg), .zimg :global(svg) { display: block; width: 100%; height: auto; overflow: visible; }
+  .sk :global(.sk-l), .zimg :global(.sk-l) { fill: var(--ink); font: italic 400 14px var(--font-drawing); }
+  .zoom { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+
+  .zd {
+    width: min(46rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    padding: 0;
+    border: 1.5px solid var(--ink);
+    border-radius: 0;
+    background: #fff;
+    color: var(--ink);
+  }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .zhead h2 { margin: 0; font-size: 1.25rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zclose:hover { background: var(--line); color: var(--paper); }
+  .zbody { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1.5rem; align-items: center; padding: 1.5rem 1.25rem 1.75rem; }
+  .zimg { padding: 0.5rem 1rem; }
+  .zimg :global(svg) { stroke-width: 1.2; }
+  .zf { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.375rem 0.875rem; margin: 0; font-size: 0.9375rem; align-items: baseline; }
+  .zf :global(dt) { font-weight: 600; }
+  .zf :global(dt.in) { font: italic 400 1rem/1.3 var(--font-drawing); }
+  .zf :global(dd) { margin: 0; }
+  .zf :global(dd.out) { font: 400 1rem/1.3 var(--font-drawing); letter-spacing: 0.02em; white-space: pre-wrap; }
+  .zf :global(dt.nt), .zf :global(dd.nt) { color: var(--muted); font-size: 0.8125rem; font-weight: 400; padding-top: 0.5rem; }
   h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
 
   table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
   th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
   th { font-weight: 400; padding-right: 0.75rem; white-space: nowrap; }
-  .f { font: 400 0.875rem/1.3 var(--font-drawing); letter-spacing: 0.02em; color: var(--muted); padding-right: 0.75rem; }
+  .f { font: 400 0.9375rem/1.3 var(--font-drawing); letter-spacing: 0.02em; color: var(--ink); padding-right: 0.75rem; }
+  .fm { display: none; }
   .v { width: 8.5rem; }
   .u { width: 2rem; padding-left: 0.375rem; color: var(--muted); }
   input, output {
@@ -155,8 +237,14 @@ const groups = calculators[id];
 
   @media (max-width: 40rem) {
     .calc { border-inline: 0; padding-inline: var(--gutter); }
-    .grp { grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0.75rem; }
+    .grp { grid-template-columns: 5rem minmax(0, 1fr); gap: 0.75rem; }
+    .sk { margin-top: 1.5rem; padding-inline: 0; }
     .f { display: none; }
+    /* formula moves under the label of each result */
+    .fm { display: block; font: 400 0.875rem/1.25 var(--font-drawing); letter-spacing: 0.02em; white-space: normal; }
+    th { white-space: normal; padding-block: 0.25rem; }
     .v { width: 7.5rem; }
+    .zbody { grid-template-columns: 1fr; gap: 0.75rem; padding-top: 1rem; }
+    .zimg { max-width: 20rem; justify-self: center; width: 100%; }
   }
 </style>

@@ -27,7 +27,7 @@ export const geometry: Group[] = [
   {
     id: 'sphere',
     title: 'Sphere',
-    sketch: svg(`<circle cx="60" cy="50" r="40"/><ellipse cx="60" cy="50" rx="40" ry="11" ${dash}/><path d="M60 50 h40" stroke-width="1"/>${t(76, 45, 'r')}`),
+    sketch: svg(`<circle cx="60" cy="50" r="40"/><ellipse cx="60" cy="50" rx="40" ry="11" ${dash}/><path d="M60 50 88.3 21.7" stroke-width="1"/>${t(63, 34, 'r')}`),
     inputs: [{ key: 'D', label: 'Diameter', sym: 'D', unit: 'u', value: 5.7 }],
     outputs: [
       { key: 'r', label: 'Radius', formula: 'r = D/2', unit: 'u', calc: (v) => v.D / 2 },
@@ -38,7 +38,7 @@ export const geometry: Group[] = [
   {
     id: 'cylinder',
     title: 'Cylinder',
-    sketch: svg(`<ellipse cx="60" cy="18" rx="32" ry="9"/><path d="M28 18v64M92 18v64"/><path d="M28 82a32 9 0 0 0 64 0"/><path d="M28 82a32 9 0 0 1 64 0" ${dash}/><path d="M60 18h32" stroke-width="1"/>${t(72, 14, 'r')}${t(14, 54, 'h')}`),
+    sketch: svg(`<ellipse cx="60" cy="18" rx="32" ry="12"/><path d="M28 18v64M92 18v64"/><path d="M28 82a32 12 0 0 0 64 0"/><path d="M28 82a32 12 0 0 1 64 0" ${dash}/><path d="M60 18h32" stroke-width="1"/>${t(70, 28, 'r')}${t(14, 54, 'h')}`),
     inputs: [
       { key: 'D', label: 'Diameter', sym: 'D', unit: 'u', value: 1 },
       { key: 'h', label: 'Height', sym: 'h', unit: 'u', value: 2 },
@@ -121,7 +121,7 @@ export const geometry: Group[] = [
   {
     id: 'cone',
     title: 'Cone',
-    sketch: svg(`<path d="M24 76 60 8l36 68"/><path d="M24 76a36 11 0 0 0 72 0"/><path d="M24 76a36 11 0 0 1 72 0" ${dash}/><path d="M60 8v68h36" ${dash} stroke-width="1"/>${t(52, 52, 'h')}${t(76, 72, 'r')}${t(82, 38, 's')}`),
+    sketch: svg(`<path d="M24 76 60 8l36 68"/><path d="M24 76a36 13 0 0 0 72 0"/><path d="M24 76a36 13 0 0 1 72 0" ${dash}/><path d="M60 8v68h36" ${dash} stroke-width="1"/>${t(47, 52, 'h')}${t(74, 86, 'r')}${t(82, 38, 's')}`),
     inputs: [
       { key: 'D', label: 'Diameter', sym: 'D', unit: 'u', value: 1 },
       { key: 'h', label: 'Height', sym: 'h', unit: 'u', value: 2 },
@@ -152,7 +152,7 @@ export const geometry: Group[] = [
   {
     id: 'prism',
     title: 'Prism',
-    sketch: svg(`<path d="M10 34 50 14l26 20Z"/><path d="M10 34v52M76 34v52M50 14v52" /><path d="M10 86l40-20 26 20Z" ${dash} stroke-width="1"/><path d="M10 86h66"/>${t(88, 64, 'h')}${t(36, 46, 'B')}`),
+    sketch: svg(`<path d="M10 34 50 14l26 20Z"/><path d="M10 34v52M76 34v52" /><path d="M50 14v52M10 86l40-20 26 20" ${dash} stroke-width="1"/><path d="M10 86h66"/>${t(88, 64, 'h')}${t(39, 83, 'B')}`),
     note: 'Any right prism: B is the area of the base, P its perimeter.',
     inputs: [
       { key: 'h', label: 'Height', sym: 'h', unit: 'u', value: 2 },
