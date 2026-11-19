@@ -11,7 +11,8 @@ Goal: replace the Zoho Sheet iframes one tool at a time with calculators built i
 
 ### How it is built
 - Calculation: `src/lib/calc/<tool>.ts`: inputs, outputs and formulas as data (pure functions, no DOM). Registered in `src/lib/calc/registry.ts`.
-- Page: `src/components/NativeCalc.astro` renders any registered calculator (yellow inputs, green outputs, live recalculation, Reset button, decimal comma accepted).
+- Page: `src/components/NativeCalc.astro` renders any table-style calculator (groups of rows); a calculator with a different layout gets its own component, listed in `custom` in the registry and chosen in `src/pages/[tool].astro` (e.g. `PrimeCalc.astro`). It still follows the conventions below.
+- (table-style) `NativeCalc.astro` renders any registered calculator (yellow inputs, green outputs, live recalculation, Reset button, decimal comma accepted).
 - Switch: set `native: '<id>'` on the tool in `src/data/tools.ts`. The Zoho sheet stays linked as "Original Zoho sheet".
 - Tests: `tests/<tool>.test.ts`, run with `npm test`. `npm run build` runs the tests first, so a failing calculator never deploys.
 
@@ -31,6 +32,7 @@ Goal: replace the Zoho Sheet iframes one tool at a time with calculators built i
 | Tool | Status | Notes |
 |---|---|---|
 | Geometry | native (2026-11-18) | 26 tests: every Zoho default result + hand-checked cases. Two Zoho errors fixed: triangle "circumference" was 2·b + 2·h (now perimeter a + b + c, with side inputs a and c added); prism volume showed 2 instead of B·h = 6 (both fixes approved by the owner 2026-11-18). Polygon "Circumference" renamed "Perimeter". |
+| Prime Numbers | native (2026-11-19) | Own component (`PrimeCalc.astro`): the fraction chain as in Zoho (a/b = lowest terms = mixed number = mixed in lowest terms), plus a "Working" table (prime factors of a and b, gcd, whole-number part, remainder) and a one-line answer. Tests: the Zoho default 375/225 = 5/3 = 1 150/225 = 1 2/3 + hand-checked cases (proper fraction, exact division, coprime, large numbers). The Zoho limit (first 500 primes, up to the 10th power) is gone: gcd by Euclid's algorithm; inputs are whole numbers 1 to 10¹². Lifted limit, input rules and the added Working table approved by the owner 2026-11-19. |
 
 ### Suggested order (simple → complex)
 1. Unit Conversion

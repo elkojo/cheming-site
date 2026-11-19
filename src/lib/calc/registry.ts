@@ -1,6 +1,11 @@
 // Native calculators by id. A tool in src/data/tools.ts uses one by setting `native: '<id>'`.
+// `calculators` are rendered by NativeCalc.astro (groups of input/output rows);
+// `custom` ones have their own component, chosen in src/pages/[tool].astro.
 import type { Group } from './types';
 import { geometry } from './geometry';
 
 export const calculators = { geometry } satisfies Record<string, Group[]>;
-export type CalcId = keyof typeof calculators;
+export const custom = ['primes'] as const;
+
+export type TableCalcId = keyof typeof calculators;
+export type CalcId = TableCalcId | (typeof custom)[number];

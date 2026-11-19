@@ -2,7 +2,7 @@
 // A native calculator (Phase 7): yellow inputs, green outputs, recalculated as you type.
 // Rendered with the defaults already filled in, so it shows results even before the script runs.
 import DrawingFrame from './DrawingFrame.astro';
-import { calculators, type CalcId } from '../lib/calc/registry';
+import { calculators, type TableCalcId as CalcId } from '../lib/calc/registry';
 import { evaluate, defaults, formatNumber, mathHtml } from '../lib/calc/types';
 
 interface Props { id: CalcId; title: string }
@@ -73,7 +73,7 @@ const groups = calculators[id];
 </DrawingFrame>
 
 <script>
-  import { calculators, type CalcId } from '../lib/calc/registry';
+  import { calculators, type TableCalcId as CalcId } from '../lib/calc/registry';
   import { evaluate, parseNumber, formatNumber, mathHtml, type Values } from '../lib/calc/types';
 
   for (const root of document.querySelectorAll<HTMLElement>('.calc[data-calc]')) {

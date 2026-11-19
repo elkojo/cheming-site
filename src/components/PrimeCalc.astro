@@ -1,0 +1,251 @@
+---
+// Native Prime Numbers calculator (Phase 7). Laid out like the Zoho sheet: the fraction a/b (yellow),
+// then the same fraction in lowest terms, as a mixed number, and as a mixed number in lowest terms (green).
+// Below: the working (prime factors, greatest common divisor, whole-number part, remainder).
+// Rendered with the defaults filled in, so it shows results before the script runs.
+import DrawingFrame from './DrawingFrame.astro';
+import { DEFAULTS, simplify, factorize, factorsHtml, gcdHtml, summary } from '../lib/calc/primes';
+import { mathHtml } from '../lib/calc/types';
+
+const { a, b } = DEFAULTS;
+const x = simplify(a, b)!;
+const f = (n: number) => factorsHtml(factorize(n));
+const out: Record<string, string> = {
+  a1: String(x.a1), b1: String(x.b1), n: String(x.n), r: String(x.r), b: String(b), n2: String(x.n), r1: String(x.r1), b2: String(x.b1),
+  fa: f(a), fb: f(b), g: gcdHtml(x.g), nn: String(x.n), rr: String(x.r),
+};
+const rows = [
+  { key: 'fa', label: 'Prime factors of the numerator', eq: 'a' },
+  { key: 'fb', label: 'Prime factors of the denominator', eq: 'b' },
+  { key: 'g', label: 'Greatest common divisor', eq: 'g = gcd(a, b)' },
+  { key: 'nn', label: 'Whole-number part', eq: 'n = ⌊a/b⌋' },
+  { key: 'rr', label: 'Remainder', eq: 'r = a − n·b' },
+];
+---
+<DrawingFrame>
+  <div class="calc pn" data-pn>
+    <div class="bar">
+      <p>Whole numbers from 1 to 10<sup>12</sup>. Spaces as thousands separators are fine.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <div class="chain">
+      <figure class="step first">
+        <div class="frac">
+          <label for="pn-a"><span class="lb">Numerator</span> <span class="eq"><i>a</i></span></label>
+          <input id="pn-a" data-in="a" value={a} type="text" inputmode="numeric" autocomplete="off" spellcheck="false" />
+          <span class="rule" aria-hidden="true"></span>
+          <label for="pn-b"><span class="lb">Denominator</span> <span class="eq"><i>b</i></span></label>
+          <input id="pn-b" data-in="b" value={b} type="text" inputmode="numeric" autocomplete="off" spellcheck="false" />
+        </div>
+        <figcaption>Fraction</figcaption>
+      </figure>
+
+      <figure class="step">
+        <span class="is" aria-hidden="true">=</span>
+        <div class="frac">
+          <output data-out="a1" aria-label="Numerator in lowest terms">{out.a1}</output>
+          <span class="rule"></span>
+          <output data-out="b1" aria-label="Denominator in lowest terms">{out.b1}</output>
+        </div>
+        <figcaption>Lowest terms <span class="eq" set:html={mathHtml('a/g, b/g')} /></figcaption>
+      </figure>
+
+      <figure class="step">
+        <span class="is" aria-hidden="true">=</span>
+        <div class="mixed">
+          <output data-out="n" aria-label="Whole-number part">{out.n}</output>
+          <div class="frac">
+            <output data-out="r" aria-label="Remainder">{out.r}</output>
+            <span class="rule"></span>
+            <output data-out="b" aria-label="Denominator">{out.b}</output>
+          </div>
+        </div>
+        <figcaption>Mixed number <span class="eq" set:html={mathHtml('n r/b')} /></figcaption>
+      </figure>
+
+      <figure class="step">
+        <span class="is" aria-hidden="true">=</span>
+        <div class="mixed">
+          <output data-out="n2" aria-label="Whole-number part">{out.n2}</output>
+          <div class="frac">
+            <output data-out="r1" aria-label="Remainder in lowest terms">{out.r1}</output>
+            <span class="rule"></span>
+            <output data-out="b2" aria-label="Denominator in lowest terms">{out.b2}</output>
+          </div>
+        </div>
+        <figcaption>Mixed, lowest terms <span class="eq" set:html={mathHtml('n (r/g)/(b/g)')} /></figcaption>
+      </figure>
+    </div>
+
+    <p class="sum" aria-live="polite" data-sum>{summary(a, b, x)}</p>
+
+    <h2>Working</h2>
+    <table>
+      <tbody>
+        {rows.map((r) => (
+          <tr>
+            <th scope="row"><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.eq)} /></th>
+            <td class="v"><output data-out={r.key} set:html={out[r.key]} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    <p class="note">
+      The common prime factors of <i>a</i> and <i>b</i> multiply to their greatest common divisor <i>g</i>;
+      dividing both by <i>g</i> gives the lowest terms. The remainder <i>r</i> shares the same <i>g</i> with <i>b</i>.
+      The Zoho sheet was limited to the first 500 primes up to the 10th power; this version has no such limit.
+    </p>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { parseWhole, valid, simplify, factorize, factorsHtml, gcdHtml, summary } from '../lib/calc/primes';
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-pn]')) {
+    const ins = [...root.querySelectorAll<HTMLInputElement>('input[data-in]')];
+    const outs = Object.fromEntries([...root.querySelectorAll<HTMLOutputElement>('output[data-out]')].map((o) => [o.dataset.out!, o]));
+    const sum = root.querySelector<HTMLElement>('[data-sum]')!;
+    const f = (n: number) => factorsHtml(factorize(n));
+
+    const run = () => {
+      const v: Record<string, number> = {};
+      for (const input of ins) {
+        const blank = input.value.trim() === '';
+        v[input.dataset.in!] = parseWhole(input.value);
+        input.toggleAttribute('aria-invalid', !blank && !valid(v[input.dataset.in!]));
+      }
+      const anyBad = ins.some((i) => i.hasAttribute('aria-invalid'));
+      // values are numbers or factor strings built by factorsHtml (digits, · and <sup>), never visitor text
+      const set = (vals: Record<string, string>) => { for (const [k, o] of Object.entries(outs)) o.innerHTML = vals[k] ?? ''; };
+      const okA = valid(v.a), okB = valid(v.b);
+      // each prime factorisation shows as soon as its own input is filled
+      const part: Record<string, string> = {};
+      if (okA) part.fa = f(v.a);
+      if (okB) part.fb = f(v.b);
+      const x = simplify(v.a, v.b);
+      if (x) {
+        set({
+          ...part,
+          a1: String(x.a1), b1: String(x.b1), n: String(x.n), r: String(x.r), b: String(v.b),
+          n2: String(x.n), r1: String(x.r1), b2: String(x.b1),
+          g: gcdHtml(x.g), nn: String(x.n), rr: String(x.r),
+        });
+        sum.textContent = summary(v.a, v.b, x);
+      } else if (anyBad) {
+        set(Object.fromEntries(Object.keys(outs).map((k) => [k, part[k] ?? '—'])));
+        sum.textContent = 'Enter whole numbers from 1 to 1 000 000 000 000 (no decimals or signs).';
+      } else {
+        set(part);
+        sum.textContent = '';
+      }
+    };
+
+    root.addEventListener('input', run);
+    root.querySelector('[data-reset]')?.addEventListener('click', () => {
+      for (const input of ins) input.value = '';
+      run();
+      ins[0]?.focus();
+      const status = root.querySelector('[data-status]');
+      if (status) status.textContent = 'All input fields cleared.';
+    });
+
+    // Values kept by the browser after "back" or a soft reload: recalculate them.
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset {
+    height: 2.25rem;
+    padding-inline: 0.875rem;
+    border: 1px solid var(--line);
+    background: none;
+    color: var(--line);
+    font: 600 0.875rem/1 var(--font-ui);
+    cursor: pointer;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .reset:hover { background: var(--line); color: var(--paper); }
+
+  /* The fraction chain: a/b = a₁/b₁ = n r/b = n r₁/b₁ */
+  .chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.5rem 0;
+    padding: 1.75rem 0 1.25rem;
+    font-size: 0.9375rem;
+  }
+  .step { display: grid; grid-template-columns: auto auto; grid-template-areas: 'is f' '. cap'; gap: 0.5rem 0; margin: 0; }
+  .step.first { grid-template-columns: auto; grid-template-areas: 'f' 'cap'; }
+  .is { grid-area: is; align-self: center; padding-inline: 1.25rem; font-size: 1.25rem; }
+  .step > .frac, .step > .mixed { grid-area: f; }
+  figcaption { grid-area: cap; color: var(--muted); font-size: 0.8125rem; text-align: center; }
+  .step.first figcaption { padding-left: 9.5rem; }
+  figcaption .eq { display: block; color: var(--ink); }
+
+  .frac { display: grid; justify-items: stretch; gap: 0.3125rem; }
+  .first .frac { grid-template-columns: 9.5rem 8rem; align-items: center; gap: 0.3125rem 0; }
+  .first .frac label:first-of-type { grid-row: 1; }
+  .first .frac input:first-of-type { grid-row: 1; grid-column: 2; }
+  .first .frac .rule { grid-row: 2; grid-column: 2; }
+  .first .frac label:last-of-type { grid-row: 3; }
+  .first .frac input:last-of-type { grid-row: 3; grid-column: 2; }
+  .rule { display: block; height: 0; border-top: 1.5px solid var(--ink); }
+  .mixed { display: flex; align-items: center; gap: 0.375rem; }
+  .mixed > output { min-width: 3rem; }
+
+  label { cursor: text; }
+  .calc :global(.lb) { margin-right: 0.5rem; }
+  .calc :global(.eq) { white-space: nowrap; }
+  .calc :global(.eq i), .calc .note i { font-style: italic; padding-right: 0.05em; }
+
+  input, output {
+    display: block;
+    min-width: 4.5rem;
+    height: 1.875rem;
+    padding: 0 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 0;
+    color: var(--ink);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.75rem;
+    text-align: center;
+  }
+  input { width: 100%; background: var(--zoho-in); border-color: var(--muted); }
+  input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  output { background: var(--zoho-out); white-space: nowrap; }
+  /* exponents are inserted by the script, so the rule must be global (scoped CSS can't see them) */
+  .calc :global(sup) { position: relative; top: -0.45em; font-size: 0.75em; line-height: 0; vertical-align: baseline; }
+
+  .sum { margin: 0 0 1.25rem; padding: 0.625rem 0.875rem; border-left: 3px solid var(--line); background: var(--wash); font-size: 0.9375rem; }
+  .sum:empty { display: none; }
+
+  h2 { margin: 0 0 0.375rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: 1.0625rem; font-weight: 650; }
+  table { border-collapse: collapse; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  th { font-weight: 400; padding-right: 1.25rem; line-height: 1.35; }
+  .v { min-width: 8.5rem; }
+  .v output { text-align: left; }
+  .note { margin: 0.75rem 0 0; max-width: 70ch; color: var(--muted); font-size: 0.8125rem; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  @media (max-width: 40rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .chain { gap: 1.25rem 0; padding-top: 1.25rem; }
+    /* the input fraction gets its own line; the three results follow, two per line */
+    .step.first { flex-basis: 100%; }
+    .first .frac { grid-template-columns: minmax(0, 1fr) 8rem; }
+    .step.first figcaption { padding-left: 0; text-align: right; }
+    .is { padding-inline: 0.625rem; }
+    th { padding-block: 0.25rem; padding-right: 0.75rem; }
+    .calc :global(.eq) { display: inline-block; }
+  }
+</style>

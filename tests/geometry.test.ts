@@ -79,4 +79,5 @@ test('mathHtml italicises variables only', async () => {
   assert.equal(mathHtml('P = a + b1 + b2 + c'), '<i>P</i> = <i>a</i> + <i>b1</i> + <i>b2</i> + <i>c</i>');
   assert.equal(mathHtml('S = b² + 2·b·√(h² + b²/4)'), '<i>S</i> = <i>b</i>² + 2·<i>b</i>·√(<i>h</i>² + <i>b</i>²/4)');
   assert.equal(mathHtml('x < y'), '<i>x</i> &lt; <i>y</i>');
+  assert.equal(mathHtml('g = gcd(a, b)'), '<i>g</i> = gcd(<i>a</i>, <i>b</i>)');
 });

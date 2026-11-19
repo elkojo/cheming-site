@@ -56,9 +56,11 @@ export function formatNumber(x: number): string {
   return String(Number(x.toPrecision(10)));
 }
 
+const UPRIGHT = new Set(['gcd', 'lcm', 'min', 'max', 'ln', 'log', 'exp', 'sin', 'cos', 'tan']);
+
 /** Formula or symbol as HTML with the variables in italics (maths convention): "A = π·r²" → "<i>A</i> = π·<i>r</i>²".
- *  Numbers, operators, π and √ stay upright. */
+ *  Numbers, operators, π, √ and function names (gcd, ln, …) stay upright. */
 export function mathHtml(text: string): string {
   const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return esc.replace(/(&\w+;)|([A-Za-z]+\d*)/g, (m, entity) => (entity ? m : `<i>${m}</i>`));
+  return esc.replace(/(&\w+;)|([A-Za-z]+\d*)/g, (m, entity) => (entity || UPRIGHT.has(m) ? m : `<i>${m}</i>`));
 }

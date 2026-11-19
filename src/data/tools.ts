@@ -283,8 +283,9 @@ export const tools: Tool[] = [
     "tag": "PN",
     "title": "Prime Numbers",
     "name": "Prime Numbers",
-    "description": "Simplifies a fraction by dividing both terms by their common prime factors and splits off the whole-number part. Uses the first 500 primes.",
+    "description": "Simplifies a fraction by dividing both terms by their common prime factors and splits off the whole-number part.",
     "category": "general",
+    "native": "primes",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/a852f5426713dcd67b3614914880fe7b302a35ea5334df3ac6496a926997f788?type=grid&mode=embed"
   }
 ];
