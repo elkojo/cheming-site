@@ -25,7 +25,7 @@ Goal: replace the Zoho Sheet iframes one tool at a time with calculators built i
 - **Phone:** drawing sits beside the group title so the rows use the full width; no sideways scroll.
 - **Clear all inputs** button empties every input; empty fields are not errors; a result shows as soon as its own inputs are filled. Reload restores the example values (the Zoho defaults).
 - **Invalid input:** red border, result "—". Decimal comma accepted.
-- **Zoho as reference, not gospel:** the published Zoho views don't recalculate, so the default values on the sheet are the reference cases. Check every formula; if the sheet is wrong, fix it, add a test explaining the fix, and get the owner's approval before going live.
+- **Zoho as reference, not gospel:** the published Zoho views don't recalculate, so the default values on the sheet are the reference cases. Check every formula; if the sheet is wrong, fix it, add a test explaining the fix, and get the owner's approval before going live. Log every error in the owner's private errors log (outside this repo), so the original sheets get corrected too.
 - **Before going live:** tests pass (`npm run build` runs them), browser check on desktop and phone (typing, invalid input, clear, enlarged view), owner approval, then push.
 
 ### Progress
@@ -33,6 +33,7 @@ Goal: replace the Zoho Sheet iframes one tool at a time with calculators built i
 |---|---|---|
 | Geometry | native (2026-11-18) | 26 tests: every Zoho default result + hand-checked cases. Two Zoho errors fixed: triangle "circumference" was 2·b + 2·h (now perimeter a + b + c, with side inputs a and c added); prism volume showed 2 instead of B·h = 6 (both fixes approved by the owner 2026-11-18). Polygon "Circumference" renamed "Perimeter". |
 | Prime Numbers | native (2026-11-19) | Own component (`PrimeCalc.astro`): the fraction chain as in Zoho (a/b = lowest terms = mixed number = mixed in lowest terms), plus a "Working" table (prime factors of a and b, gcd, whole-number part, remainder) and a one-line answer. Tests: the Zoho default 375/225 = 5/3 = 1 150/225 = 1 2/3 + hand-checked cases (proper fraction, exact division, coprime, large numbers). The Zoho limit (first 500 primes, up to the 10th power) is gone: gcd by Euclid's algorithm; inputs are whole numbers 1 to 10¹². Lifted limit, input rules and the added Working table approved by the owner 2026-11-19. |
+| Gas Equation | native (2026-11-19) | Own component (`GasCalc.astro`). Zoho's six columns (Volume, Mass, Volume & Mass, Density, Unit Volume, Rates) became one sheet: type into any flow row and it becomes the input. Formulas and unit lists from the owner's source workbook. **Zoho/Excel errors fixed:** temperature and gauge-pressure offsets were looked up in an empty column (VLOOKUP col 4 instead of 3), so °C/°F were treated as K/°R and gauge pressures as absolute: the published defaults (100 "°C") were really 100 K (U.V. 8.205 instead of 30.62 m³/kmol); unit volume was divided by the density-unit factor; R shown 8.314472 but 8.314 used (now exact 8.314462618). Tests reproduce every Zoho number with the temperatures entered in K and R = 8.314, then check the corrected values, textbook cases and four mixed-unit cases computed independently. Fixes, unit behaviour (an input keeps its number when its unit changes) and Z at standard = Z actual approved by the owner 2026-11-19. |
 
 ### Suggested order (simple → complex)
 1. Unit Conversion
@@ -48,5 +49,6 @@ Goal: replace the Zoho Sheet iframes one tool at a time with calculators built i
 - **Drainage & Overflow**: third-party sheet (credit: LinkedIn). Keep the Zoho embed unless its author agrees.
 
 ### Notes
+- **Source workbook:** the owner keeps a private Excel export with the formulas and hidden unit tables outside this repo. Use it when rebuilding a tool; never copy it here.
 - PED tool basis is Directive 97/23/EC, superseded by 2014/68/EU (2016); update the logic if rebuilt.
 - Background: `/home/milan/Claude/Cheming/MIGRATION-PLAN.md` (Phase 7) and `PRODUCT.md`.

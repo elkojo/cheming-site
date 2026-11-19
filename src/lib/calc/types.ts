@@ -59,8 +59,11 @@ export function formatNumber(x: number): string {
 const UPRIGHT = new Set(['gcd', 'lcm', 'min', 'max', 'ln', 'log', 'exp', 'sin', 'cos', 'tan']);
 
 /** Formula or symbol as HTML with the variables in italics (maths convention): "A = π·r²" → "<i>A</i> = π·<i>r</i>²".
- *  Numbers, operators, π, √ and function names (gcd, ln, …) stay upright. */
+ *  Greek variables (ρ) too; "V_m" gives an upright subscript. Numbers, operators, π, √ and function names (gcd, ln, …) stay upright. */
 export function mathHtml(text: string): string {
   const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return esc.replace(/(&\w+;)|([A-Za-z]+\d*)/g, (m, entity) => (entity || UPRIGHT.has(m) ? m : `<i>${m}</i>`));
+  // Latin and Greek letters are variables; π (a constant) stays upright
+  // "V_m" or "V_m,std": italic V with an upright subscript label
+  return esc.replace(/(&\w+;)|([A-Za-zα-ορ-ωΑ-Ω]+\d*)(?:_([A-Za-z0-9,]+))?/g, (m, entity, v, sub) =>
+    entity || UPRIGHT.has(m) ? m : `<i>${v}</i>${sub ? `<sub>${sub}</sub>` : ''}`);
 }

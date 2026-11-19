@@ -256,6 +256,7 @@ export const tools: Tool[] = [
     "name": "Gas Calculations (p.V=n.R.t.Z)",
     "description": "Real-gas law pV = nRTZ: converts between mass, volumetric, molar and standard flows, and gives density and specific volume at the stated conditions.",
     "category": "properties",
+    "native": "gas",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/dc31fc5d502a6b4ee5bac824aff9bf7b9eb8df8e3f308d0e6d727c80d7da85ef?type=grid&mode=embed"
   },
   {

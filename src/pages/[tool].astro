@@ -6,6 +6,7 @@ import Legend from '../components/Legend.astro';
 import ZohoEmbed from '../components/ZohoEmbed.astro';
 import NativeCalc from '../components/NativeCalc.astro';
 import PrimeCalc from '../components/PrimeCalc.astro';
+import GasCalc from '../components/GasCalc.astro';
 import { tools, categories } from '../data/tools';
 import { url } from '../lib/url';
 
@@ -44,6 +45,7 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
 
   <div class="sheetwrap">
     {tool.native === 'primes' ? <PrimeCalc />
+      : tool.native === 'gas' ? <GasCalc />
       : tool.native ? <NativeCalc id={tool.native} title={tool.title} />
       : <ZohoEmbed src={tool.zoho} title={tool.title} />}
   </div>

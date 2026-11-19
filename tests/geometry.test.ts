@@ -80,4 +80,7 @@ test('mathHtml italicises variables only', async () => {
   assert.equal(mathHtml('S = b² + 2·b·√(h² + b²/4)'), '<i>S</i> = <i>b</i>² + 2·<i>b</i>·√(<i>h</i>² + <i>b</i>²/4)');
   assert.equal(mathHtml('x < y'), '<i>x</i> &lt; <i>y</i>');
   assert.equal(mathHtml('g = gcd(a, b)'), '<i>g</i> = gcd(<i>a</i>, <i>b</i>)');
+  assert.equal(mathHtml('ρ = Mw/Vm'), '<i>ρ</i> = <i>Mw</i>/<i>Vm</i>');
+  assert.equal(mathHtml('C = 2·π·r'), '<i>C</i> = 2·π·<i>r</i>');
+  assert.equal(mathHtml('V_m,std = Z·R·T_std/p_std'), '<i>V</i><sub>m,std</sub> = <i>Z</i>·<i>R</i>·<i>T</i><sub>std</sub>/<i>p</i><sub>std</sub>');
 });

@@ -1,0 +1,288 @@
+---
+// Native Gas Equation calculator (Phase 7): p·V = n·R·T·Z.
+// The Zoho sheet had six columns (Volume, Mass, Volume & Mass, Density, Unit Volume, Rates), each starting
+// from a different known quantity. Here that is one sheet: type into any of the four flow rows and it
+// becomes the input (yellow); the other three follow (green). Gas properties need no flow at all.
+// Rendered with the defaults filled in, so it shows results before the script runs.
+import DrawingFrame from './DrawingFrame.astro';
+import {
+  solve, toSI, fromSI, R_SI, temperature, pressure, massFlow, volumeFlow, stdVolumeFlow, molarFlow, density,
+  type Unit, type Given,
+} from '../lib/calc/gas';
+import { formatNumber, mathHtml } from '../lib/calc/types';
+
+interface Row {
+  key: string; label: string; sym: string; formula?: string;
+  units?: Unit[]; unit: string; value?: number; out?: boolean;
+}
+const cond: Row[] = [
+  { key: 't', label: 'Temperature', sym: 't', units: temperature, unit: '°C', value: 100 },
+  { key: 'p', label: 'Pressure', sym: 'p', units: pressure, unit: 'bar a', value: 1.01325 },
+  { key: 'Z', label: 'Compressibility', sym: 'Z', unit: '–', value: 1 },
+  { key: 'Mw', label: 'Molecular weight', sym: 'M_w', unit: 'kg/kmol', value: 50 },
+  { key: 'uv', label: 'Unit (molar) volume', sym: 'V_m', formula: 'V_m = Z·R·T/p', unit: 'm³/kmol', out: true },
+  { key: 'rho', label: 'Density', sym: 'ρ', formula: 'ρ = M_w/V_m', units: density, unit: 'kg/m³', out: true },
+  { key: 'v', label: 'Specific volume', sym: 'v', formula: 'v = 1/ρ', unit: 'm³/kg', out: true },
+];
+const std: Row[] = [
+  { key: 'tstd', label: 'Standard temperature', sym: 't_std', units: temperature, unit: '°C', value: 20 },
+  { key: 'pstd', label: 'Standard pressure', sym: 'p_std', units: pressure, unit: 'bar a', value: 1.01325 },
+  { key: 'uvStd', label: 'Unit volume at standard', sym: 'V_m,std', formula: 'V_m,std = Z·R·T_std/p_std', unit: 'm³/kmol', out: true },
+];
+const GIVEN: Given = 'M';
+const flows: Row[] = [
+  { key: 'M', label: 'Mass flow', sym: 'M', units: massFlow, unit: 'kg/h', value: 1000 },
+  { key: 'V', label: 'Volumetric flow', sym: 'V', units: volumeFlow, unit: 'm³/h' },
+  { key: 'N', label: 'Molar flow', sym: 'N', units: molarFlow, unit: 'kmol/h' },
+  { key: 'Vstd', label: 'Standard volumetric flow', sym: 'V_std', units: stdVolumeFlow, unit: 'Std m³/h' },
+];
+
+// Default results (the same calculation the script runs)
+const r = solve({
+  T: toSI(temperature, '°C', 100), p: toSI(pressure, 'bar a', 1.01325), Z: 1, Mw: 50,
+  Tstd: toSI(temperature, '°C', 20), pstd: toSI(pressure, 'bar a', 1.01325),
+  given: GIVEN, flow: toSI(massFlow, 'kg/h', 1000),
+});
+const shown: Record<string, string> = {
+  uv: formatNumber(r.uv), rho: formatNumber(r.rho), v: formatNumber(r.v), uvStd: formatNumber(r.uvStd),
+  V: formatNumber(fromSI(volumeFlow, 'm³/h', r.V)), N: formatNumber(fromSI(molarFlow, 'kmol/h', r.N)),
+  Vstd: formatNumber(fromSI(stdVolumeFlow, 'Std m³/h', r.Vstd)),
+};
+// Formula of each flow when it is calculated, by which flow is known
+const flowFormula = (k: string, g: Given): string => {
+  if (k === g) return k === 'Vstd' ? 'V_std' : k;
+  if (k === 'N') return { M: 'N = M/M_w', V: 'N = V/V_m', Vstd: 'N = V_std/V_m,std', N: 'N' }[g];
+  return { M: 'M = N·M_w', V: 'V = N·V_m', Vstd: 'V_std = N·V_m,std' }[k]!;
+};
+const vm = (t: number) => formatNumber(Number((R_SI * (t + 273.15) / 101.325).toFixed(3)));
+
+const groups = [
+  { id: 'cond', title: 'Gas at actual conditions', rows: cond,
+    note: `<i>T</i> and <i>p</i> are absolute: <i>T</i> = <i>t</i> + 273.15 K; gauge units add 1.01325 bar. <i>R</i> = 8.314462618 kJ/(kmol·K).` },
+  { id: 'flow', title: 'Flow rates', rows: flows,
+    note: 'Type in any one flow: it turns yellow and the other three follow. Mass flow needs <i>M</i><sub>w</sub>.' },
+  { id: 'std', title: 'Standard conditions', rows: std,
+    note: `Standard compressibility is taken equal to <i>Z</i> at actual conditions. For reference, <i>V</i><sub>m</sub> at 1.01325 bar a and <i>Z</i> = 1: 0 °C ${vm(0)}, 15 °C ${vm(15)}, 20 °C ${vm(20)} m³/kmol.` },
+];
+const id = (k: string) => `gas-${k}`;
+---
+<DrawingFrame>
+  <div class="calc gas" data-gas data-given={GIVEN}>
+    <div class="bar">
+      <p>Real-gas law <span class="eq" set:html={mathHtml('p·V = n·R·T·Z')} />. Pick the units in the right-hand column.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+    <div class="groups">
+      {groups.map((g) => (
+        <section class="grp" data-group={g.id} aria-labelledby={id(`${g.id}-title`)}>
+          <h2 id={id(`${g.id}-title`)}>{g.title}</h2>
+          <table>
+            <tbody>
+              {g.rows.map((row) => {
+                const isFlow = g.id === 'flow';
+                const given = isFlow && row.key === GIVEN;
+                const eq = isFlow ? flowFormula(row.key, GIVEN) : row.formula ?? row.sym;
+                return (
+                  <tr data-row={row.key}>
+                    <th scope="row">
+                      <label for={id(row.key)}><span class="lb">{row.label}</span> <span class="eq" data-eq set:html={mathHtml(eq)} /></label>
+                    </th>
+                    <td class="v">
+                      {row.out
+                        ? <output id={id(row.key)} data-o={row.key} aria-live="polite">{shown[row.key]}</output>
+                        : <input id={id(row.key)} data-k={row.key} data-flow={isFlow ? row.key : undefined}
+                            class:list={[{ calcd: isFlow && !given }]}
+                            value={given || !isFlow ? row.value : shown[row.key]}
+                            type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />}
+                    </td>
+                    <td class="u">
+                      {row.units
+                        ? <select data-u={row.key} aria-label={`${row.label} unit`}>
+                            {row.units.map((u) => <option selected={u.label === row.unit}>{u.label}</option>)}
+                          </select>
+                        : <span data-ulabel={row.key}>{row.unit}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p class="note" set:html={g.note} />
+        </section>
+      ))}
+    </div>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import {
+    solve, toSI, fromSI, temperature, pressure, massFlow, volumeFlow, stdVolumeFlow, molarFlow, density,
+    type Unit, type Given,
+  } from '../lib/calc/gas';
+  import { parseNumber, formatNumber, mathHtml } from '../lib/calc/types';
+
+  const LISTS: Record<string, Unit[]> = {
+    t: temperature, tstd: temperature, p: pressure, pstd: pressure, rho: density,
+    M: massFlow, V: volumeFlow, N: molarFlow, Vstd: stdVolumeFlow,
+  };
+  const FLOWS: Given[] = ['M', 'V', 'N', 'Vstd'];
+  const flowFormula = (k: string, g: Given): string => {
+    if (k === g) return k === 'Vstd' ? 'V_std' : k;
+    if (k === 'N') return { M: 'N = M/M_w', V: 'N = V/V_m', Vstd: 'N = V_std/V_m,std', N: 'N' }[g];
+    return ({ M: 'M = N·M_w', V: 'V = N·V_m', Vstd: 'V_std = N·V_m,std' } as Record<string, string>)[k];
+  };
+  // specific volume unit = the density unit turned over: kg/m³ → m³/kg
+  const flip = (u: string) => { const [a, b] = u.split('/'); return `${b}/${a}`; };
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-gas]')) {
+    const inp = (k: string) => root.querySelector<HTMLInputElement>(`input[data-k="${k}"]`)!;
+    const sel = (k: string) => root.querySelector<HTMLSelectElement>(`select[data-u="${k}"]`)?.value ?? '';
+    const out = (k: string) => root.querySelector<HTMLOutputElement>(`output[data-o="${k}"]`)!;
+    let given = root.dataset.given as Given;
+
+    const run = () => {
+      let bad = false;
+      // reads one input; marks it red when it is filled in but not valid
+      const read = (k: string, toSi: (x: number) => number, ok: (si: number) => boolean) => {
+        const el = inp(k);
+        const blank = el.value.trim() === '';
+        const x = blank ? NaN : toSi(parseNumber(el.value));
+        const invalid = !blank && !(Number.isFinite(x) && ok(x));
+        el.toggleAttribute('aria-invalid', invalid);
+        if (invalid) bad = true;
+        return invalid ? NaN : x;
+      };
+      const pos = (x: number) => x > 0;
+      const T = read('t', (x) => toSI(temperature, sel('t'), x), pos);
+      const p = read('p', (x) => toSI(pressure, sel('p'), x), pos);
+      const Z = read('Z', (x) => x, pos);
+      const Mw = read('Mw', (x) => x, pos);
+      const Tstd = read('tstd', (x) => toSI(temperature, sel('tstd'), x), pos);
+      const pstd = read('pstd', (x) => toSI(pressure, sel('pstd'), x), pos);
+      const flow = read(given, (x) => toSI(LISTS[given], sel(given), x), (x) => x >= 0);
+      for (const k of FLOWS) if (k !== given) inp(k).removeAttribute('aria-invalid');
+
+      const r = solve({ T, p, Z, Mw, Tstd, pstd, given, flow });
+      // a missing result is blank while inputs are still being filled in, "—" when an input is invalid
+      const show = (x: number) => (Number.isFinite(x) ? formatNumber(x) : bad ? '—' : '');
+      out('uv').textContent = show(r.uv);
+      out('uvStd').textContent = show(r.uvStd);
+      const rho = fromSI(density, sel('rho'), r.rho);
+      out('rho').textContent = show(rho);
+      out('v').textContent = show(1 / rho);
+      root.querySelector('[data-ulabel="v"]')!.textContent = flip(sel('rho'));
+      for (const k of FLOWS) {
+        const el = inp(k);
+        const isGiven = k === given;
+        el.classList.toggle('calcd', !isGiven);
+        root.querySelector(`tr[data-row="${k}"] [data-eq]`)!.innerHTML = mathHtml(flowFormula(k, given));
+        if (!isGiven) el.value = show(fromSI(LISTS[k], sel(k), r[k]));
+      }
+    };
+
+    root.addEventListener('input', (e) => {
+      const t = e.target as HTMLElement;
+      const f = t.dataset.flow as Given | undefined;
+      if (f && f !== given) {
+        given = f;
+        const status = root.querySelector('[data-status]');
+        if (status) status.textContent = `${t.closest('tr')?.querySelector('.lb')?.textContent} is now the input; the other flows are calculated.`;
+      }
+      run();
+    });
+    root.addEventListener('change', (e) => { if ((e.target as HTMLElement).matches('select')) run(); });
+
+    root.querySelector('[data-reset]')?.addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) el.value = '';
+      run();
+      inp('t').focus();
+      const status = root.querySelector('[data-status]');
+      if (status) status.textContent = 'All input fields cleared.';
+    });
+
+    // Values or units kept by the browser after "back" or a soft reload: recalculate them.
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .bar .eq { color: var(--ink); }
+  .reset {
+    height: 2.25rem;
+    padding-inline: 0.875rem;
+    border: 1px solid var(--line);
+    background: none;
+    color: var(--line);
+    font: 600 0.875rem/1 var(--font-ui);
+    cursor: pointer;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .reset:hover { background: var(--line); color: var(--paper); }
+
+  .groups { display: grid; grid-template-columns: 1fr; }
+  /* wide: actual conditions on the left; flows and the standard conditions they use on the right */
+  @media (min-width: 64rem) {
+    .groups { grid-template-columns: 1fr 1fr; grid-template-areas: 'cond flow' 'cond std'; gap: 0 2.5rem; align-items: start; }
+    .grp[data-group='cond'] { grid-area: cond; border-bottom: 0; }
+    .grp[data-group='flow'] { grid-area: flow; }
+    .grp[data-group='std'] { grid-area: std; border-bottom: 0; }
+  }
+  .calc :global(sub) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  /* One cell per row: the property name, then its symbol or formula, in the same font. */
+  th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i) { font-style: italic; padding-right: 0.05em; }
+  .v { width: 8.5rem; }
+  .u { width: 7.5rem; padding-left: 0.375rem; color: var(--muted); white-space: nowrap; }
+  input, output, select {
+    display: block;
+    width: 100%;
+    height: 1.875rem;
+    border-radius: 0;
+    color: var(--ink);
+    font: inherit;
+  }
+  input, output {
+    padding: 0 0.5rem;
+    border: 1px solid transparent;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.75rem;
+  }
+  input { background: var(--zoho-in); border-color: var(--muted); }
+  /* a flow that is calculated from the one you typed: green, but you can type into it to make it the input */
+  input.calcd { background: var(--zoho-out); border-color: transparent; }
+  input.calcd:hover { border-color: var(--rule); }
+  input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  output { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  select {
+    padding: 0 0.25rem;
+    border: 1px solid var(--rule);
+    background: #fff;
+    color: var(--ink);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  @media (max-width: 40rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    th { padding-block: 0.25rem; }
+    .v { width: 6.75rem; }
+    .u { width: 6.25rem; }
+    .calc :global(.eq) { white-space: normal; }
+  }
+</style>
