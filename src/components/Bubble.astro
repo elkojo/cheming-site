@@ -6,10 +6,12 @@ interface Props {
   sub?: string;
   size?: 'sm' | 'md' | 'lg';
   tone?: 'ink' | 'paper';
+  /** light grey fill: the tool runs as a native calculator (home index only) */
+  native?: boolean;
 }
-const { tag, sub, size = 'md', tone = 'ink' } = Astro.props;
+const { tag, sub, size = 'md', tone = 'ink', native = false } = Astro.props;
 ---
-<span class:list={['bubble', size, tone, { split: sub }]} data-len={tag.length} aria-hidden="true">
+<span class:list={['bubble', size, tone, { split: sub, native }]} data-len={tag.length} aria-hidden="true">
   <span class="t">{tag}</span>
   {sub && <span class="s">{sub}</span>}
 </span>
@@ -33,6 +35,7 @@ const { tag, sub, size = 'md', tone = 'ink' } = Astro.props;
   .sm { --d: 1.875rem; border-width: 1px; }
   .lg { --d: 4.25rem; border-width: 2px; }
   .paper { color: var(--paper); background: transparent; }
+  .native { background: var(--rule); }
 
   .t { font-size: calc(var(--d) * 0.36); letter-spacing: 0.02em; }
   .bubble[data-len='1'] .t { font-size: calc(var(--d) * 0.46); }

@@ -176,7 +176,7 @@ Square corners on everything (0px): inputs, buttons, menus, the sheet frame, the
 ## Components
 
 ### Tag bubble (signature)
-A circle with an ink stroke and the tool's tag in Osifont. Sizes: small 30px (menus, related tools), medium 44px (home index), large 68px (tool page header). A tag with a qualifier splits the bubble with a hairline: tag above, qualifier below (PSV / G, ΔP / NC), as in ISA notation. On hover in lists, the stroke and lettering turn line blue. Tags are kept to three characters.
+A circle with an ink stroke and the tool's tag in Osifont. Sizes: small 30px (menus, related tools), medium 44px (home index), large 68px (tool page header). A tag with a qualifier splits the bubble with a hairline: tag above, qualifier below (PSV / G, ΔP / NC), as in ISA notation. On hover in lists, the stroke and lettering turn line blue. On the home index, a tool rebuilt as a native calculator has its bubble filled with pencil-rule grey (no legend; remove once every tool is native). Tags are kept to three characters.
 
 ### Buttons
 - **Shape:** square (0px).
