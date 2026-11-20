@@ -217,8 +217,9 @@ export const tools: Tool[] = [
     "tag": "SV",
     "title": "Sieve",
     "name": "Sieve Opening Size",
-    "description": "U.S. mesh sieve sizes with their openings in inches and microns.",
+    "description": "U.S. standard sieve sizes (ASTM E11) with openings in mm, µm or inches, the old E11 openings and Tyler mesh equivalents; finds the sieves for a particle size.",
     "category": "equipment",
+    "native": "sieve",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/daac6a0543f110d4dbfb19d0bfd71d6c99a0e1cb0edb2226688e65921cc8aefd?type=grid&mode=embed"
   },
   {

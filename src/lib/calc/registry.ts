@@ -5,7 +5,7 @@ import type { Group } from './types';
 import { geometry } from './geometry';
 
 export const calculators = { geometry } satisfies Record<string, Group[]>;
-export const custom = ['primes', 'gas', 'units', 'steam'] as const;
+export const custom = ['primes', 'gas', 'units', 'steam', 'sieve'] as const;
 
 export type TableCalcId = keyof typeof calculators;
 export type CalcId = TableCalcId | (typeof custom)[number];

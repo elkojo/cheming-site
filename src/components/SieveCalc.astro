@@ -1,0 +1,208 @@
+---
+// Native Sieve table (Phase 7): U.S. standard sieves (current ASTM E11 = ISO openings) with the old E11
+// openings of the Zoho sheet, Tyler mesh equivalents and typical materials. A particle-size lookup highlights
+// the sieve a particle passes and the one it stays on. The opening unit is selectable.
+import DrawingFrame from './DrawingFrame.astro';
+import { SIEVES, LENGTH } from '../lib/calc/sieve';
+
+const id = (k: string) => `sv-${k}`;
+/** opening as text: "auto" = the standard designation (mm from 1 mm up, µm below) */
+const fmt = (mm: number, unit: string) => {
+  if (unit === 'auto') return mm >= 1 ? `${mm.toPrecision(3)} mm` : `${Math.round(mm * 1000)} µm`;
+  if (unit === 'µm') return String(Math.round(mm * 1000));
+  if (unit === 'mm') return mm.toPrecision(3);
+  return (mm / 25.4).toPrecision(3);
+};
+const UNITS = [{ label: 'mm / µm', value: 'auto' }, ...LENGTH.map((u) => ({ label: u.label, value: u.label }))];
+---
+<DrawingFrame>
+  <div class="calc sieve" data-sieve>
+    <div class="bar">
+      <p>U.S. standard sieve series (ASTM E11) with Tyler mesh equivalents. Type a particle size to find its sieves.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('find-title')}>
+      <h2 id={id('find-title')}>Find a sieve</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('d')}><span class="lb">Particle size</span> <span class="eq"><i>d</i></span></label></th>
+            <td class="v"><input id={id('d')} data-d type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-du aria-label="Particle size unit">{LENGTH.map((u) => <option selected={u.label === 'µm'}>{u.label}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">In a full stack</span></th>
+            <td class="v res" colspan="2"><output data-res aria-live="polite"></output></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">A particle passes every sieve whose opening is larger than <i>d</i> and stays on the first one whose opening is not larger (current openings).</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('tab-title')}>
+      <h2 id={id('tab-title')}>Sieve openings</h2>
+      <table class="tab">
+        <thead>
+          <tr>
+            <th scope="col">U.S. sieve</th>
+            <th scope="col">Tyler mesh</th>
+            <th scope="col" class="num">
+              <label for={id('unit')}>Opening</label>
+              <select id={id('unit')} data-unit>{UNITS.map((u) => <option value={u.value} selected={u.value === 'auto'}>{u.label}</option>)}</select>
+            </th>
+            <th scope="col" class="num old">Old E11</th>
+            <th scope="col" class="mat">Typical material</th>
+          </tr>
+        </thead>
+        <tbody>
+          {SIEVES.map((s, i) => (
+            <tr data-i={i}>
+              <th scope="row">{s.us}<span class="tag" data-tag></span>{s.material && <span class="mat-inline">{s.material}</span>}</th>
+              <td class="ty">{s.tyler ? <>{s.tyler}<span class="mesh"> mesh</span></> : '–'}</td>
+              <td class="num" data-mm={s.mm}>{fmt(s.mm, 'auto')}</td>
+              <td class="num old" data-mm={s.old / 1000}>{fmt(s.old / 1000, 'auto')}</td>
+              <td class="mat">{s.material ?? ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note">
+        Sieves from 1 in to 1/4 in are named by their opening in inches; No. 3½ to No. 400 by the number of openings per linear inch.
+        Opening: current ASTM E11 (since E11-95; the same apertures as ISO 565 / ISO 3310-1). Old E11: the earlier series, as on the
+        original sheet (e.g. No. 20 = 841 µm). Tyler mesh: equivalent Tyler screen (Kuo &amp; Acharya, 2012, Table D.1).
+      </p>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { SIEVES, lookup, lengthUnit } from '../lib/calc/sieve';
+  import { parseNumber } from '../lib/calc/types';
+
+  const fmt = (mm: number, unit: string) => {
+    if (unit === 'auto') return mm >= 1 ? `${mm.toPrecision(3)} mm` : `${Math.round(mm * 1000)} µm`;
+    if (unit === 'µm') return String(Math.round(mm * 1000));
+    if (unit === 'mm') return mm.toPrecision(3);
+    return (mm / 25.4).toPrecision(3);
+  };
+  const name = (i: number, unit: string) => {
+    const s = SIEVES[i];
+    return `${s.us} (${fmt(s.mm, unit === 'auto' ? 'auto' : unit)}${unit === 'auto' ? '' : ` ${unit}`}${s.tyler ? `, Tyler ${s.tyler}` : ''})`;
+  };
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-sieve]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const rows = [...root.querySelectorAll<HTMLTableRowElement>('tbody tr[data-i]')];
+
+    const run = () => {
+      const unit = $<HTMLSelectElement>('[data-unit]').value;
+      for (const td of root.querySelectorAll<HTMLElement>('td[data-mm]')) td.textContent = fmt(Number(td.dataset.mm), unit);
+
+      const inp = $<HTMLInputElement>('[data-d]');
+      const blank = inp.value.trim() === '';
+      const x = parseNumber(inp.value);
+      const bad = !blank && !(Number.isFinite(x) && x > 0);
+      inp.toggleAttribute('aria-invalid', bad);
+      for (const tr of rows) { tr.classList.remove('pass', 'ret'); tr.querySelector('[data-tag]')!.textContent = ''; }
+      const out = $<HTMLOutputElement>('[data-res]');
+      if (blank || bad) { out.textContent = bad ? '—' : ''; return; }
+
+      const d = x * lengthUnit($<HTMLSelectElement>('[data-du]').value).f;
+      const r = lookup(d);
+      const parts: string[] = [];
+      if (r.passes !== undefined) {
+        parts.push(`passes ${name(r.passes, unit)}`);
+        rows[r.passes].classList.add('pass'); rows[r.passes].querySelector('[data-tag]')!.textContent = 'passes';
+      } else parts.push('larger than every opening');
+      if (r.retained !== undefined) {
+        parts.push(`stays on ${name(r.retained, unit)}`);
+        rows[r.retained].classList.add('ret'); rows[r.retained].querySelector('[data-tag]')!.textContent = 'stays on';
+      } else parts.push('falls through to the pan');
+      out.textContent = parts.join('; ');
+    };
+
+    root.addEventListener('input', run);
+    root.addEventListener('change', run);
+    $('[data-reset]').addEventListener('click', () => {
+      $<HTMLInputElement>('[data-d]').value = '';
+      run();
+      $<HTMLInputElement>('[data-d]').focus();
+      $('[data-status]').textContent = 'Particle size cleared.';
+    });
+
+    // a value or unit kept by the browser after "back" or a soft reload
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset {
+    height: 2.25rem;
+    padding-inline: 0.875rem;
+    border: 1px solid var(--line);
+    background: none;
+    color: var(--line);
+    font: 600 0.875rem/1 var(--font-ui);
+    cursor: pointer;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .lb { margin-right: 0.625rem; }
+  .eq i, .note i { font-style: italic; }
+  .io { max-width: 40rem; }
+  .io tbody th { font-weight: 400; padding-right: 0.75rem; width: 11rem; }
+  .io .v { width: 8.5rem; }
+  .io .u { width: 6rem; padding-left: 0.375rem; }
+  .io .res { width: auto; }
+
+  input, output, select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  input, output { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  input { background: var(--zoho-in); border-color: var(--muted); }
+  input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  output { background: var(--zoho-out); height: auto; min-height: 1.875rem; white-space: normal; }
+  select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+
+  /* the table */
+  .tab { max-width: 46rem; font-variant-numeric: tabular-nums; }
+  .tab thead th { padding: 0.375rem 0.75rem 0.375rem 0; color: var(--muted); font-size: 0.8125rem; font-weight: 600; vertical-align: bottom; border-bottom: 1px solid var(--ink); }
+  .tab thead select { display: inline-block; width: auto; height: 1.625rem; margin-left: 0.375rem; font-size: 0.8125rem; color: var(--ink); }
+  .tab tbody th, .tab tbody td { padding: 0.25rem 0.75rem 0.25rem 0; border-bottom: 1px solid var(--rule); }
+  .tab tbody th { font-weight: 600; white-space: nowrap; }
+  .tab .num { text-align: right; white-space: nowrap; }
+  .tab .old { color: var(--muted); }
+  .tab tbody td.mat { color: var(--muted); font-size: 0.875rem; }
+  .tab tr.pass, .tab tr.ret { background: var(--zoho-out); }
+  .tab tr.ret th, .tab tr.ret td { border-bottom-color: var(--ink); }
+  .tag { margin-left: 0.5rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .tag:empty { display: none; }
+  .mat-inline { display: none; }
+
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 46rem; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  @media (max-width: 40rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .io tbody th { width: auto; }
+    .io .v { width: 6.75rem; }
+    .tab { font-size: 0.8125rem; }
+    .tab thead th, .tab tbody th, .tab tbody td { padding-right: 0.5rem; }
+    .tab .mat { display: none; }
+    .tag { display: block; margin-left: 0; }
+    .mat-inline { display: block; color: var(--muted); font-weight: 400; font-size: 0.75rem; }
+    .mesh { display: none; }
+    .ty { white-space: nowrap; }
+  }
+</style>
