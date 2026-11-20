@@ -1,0 +1,302 @@
+---
+// Native Steam calculator (Phase 7), IAPWS-IF97.
+// 1. Saturated water and steam: type a pressure or a temperature; the one typed is the input (yellow), the other
+//    follows (green), as in the Gas Equation. The Zoho sheet had a pressure column and a temperature column.
+// 2. Subcooled water / superheated steam at a given p and t (new, approved by the owner 2026-11-20).
+// Rendered with the Zoho default (0 bar (G)) filled in, so section 1 shows results before the script runs.
+// On load and after Clear, pressure and temperature are both yellow: either can be typed (owner, 2026-11-20).
+import DrawingFrame from './DrawingFrame.astro';
+import { saturated, PROPS, UNITS, pressure, temperature, toSI, fromSI, show, type Props } from '../lib/calc/steam';
+import { formatSig } from '../lib/calc/units';
+import { mathHtml } from '../lib/calc/types';
+
+const fmt = (x: number) => formatSig(x, 6, false);
+const P0 = { value: 0, unit: 'bar (G)' };
+const r = saturated('p', toSI(pressure.find((u) => u.label === P0.unit)!, P0.value));
+const t0 = fmt(fromSI(temperature.find((u) => u.label === '°C')!, r.T));
+const cell = (k: keyof Props, unit: string, which: 'water' | 'steam' | 'evap') => {
+  const p = PROPS.find((x) => x.key === k)!;
+  const x = which === 'evap' ? r.steam[k] - r.water[k] : r[which][k];
+  return fmt(show(p, unit, x));
+};
+const id = (k: string) => `stm-${k}`;
+const opts = (list: { label: string }[], sel: string) => list.map((u) => ({ label: u.label, selected: u.label === sel }));
+---
+<DrawingFrame>
+  <div class="calc steam" data-steam data-given="p">
+    <div class="bar">
+      <p>Water and steam properties from IAPWS-IF97. Pick the units in the right-hand column.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" data-sec="sat" aria-labelledby={id('sat-title')}>
+      <h2 id={id('sat-title')}>Saturated water and steam</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('p')}><span class="lb">Pressure</span> <span class="eq" set:html={mathHtml('p')} /></label></th>
+            <td class="v"><input id={id('p')} data-sat="p" value={P0.value} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="p" aria-label="Pressure unit">{opts(pressure, P0.unit).map((o) => <option selected={o.selected}>{o.label}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('t')}><span class="lb">Temperature</span> <span class="eq" set:html={mathHtml('t')} /></label></th>
+            <td class="v"><input id={id('t')} data-sat="t" value={t0} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="t" aria-label="Temperature unit">{opts(temperature, '°C').map((o) => <option selected={o.selected}>{o.label}</option>)}</select></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">
+        Type a pressure <b>or</b> a temperature: the one you type stays yellow (input), the other turns green and follows.
+        Range: triple point 0.00611657 bar a (0.01 °C) to critical point 220.64 bar a (373.946 °C). Gauge (G) units add 1.01325 bar.
+      </p>
+
+      <table class="props" data-props="sat">
+        <thead>
+          <tr><th scope="col">Property</th><th scope="col">Water</th><th scope="col">Steam</th><th scope="col">Evaporation</th><th scope="col">Unit</th></tr>
+        </thead>
+        <tbody>
+          {PROPS.map((p) => (
+            <tr data-p={p.key}>
+              <th scope="row"><span class="lb">{p.label}</span> <span class="eq" set:html={mathHtml(p.sym)} /></th>
+              <td class="o" data-label="Water"><output data-o="water">{cell(p.key, p.def, 'water')}</output></td>
+              <td class="o" data-label="Steam"><output data-o="steam">{cell(p.key, p.def, 'steam')}</output></td>
+              <td class="o" data-label={p.evap ? 'Evap.' : undefined}>{p.evap ? <output data-o="evap">{cell(p.key, p.def, 'evap')}</output> : <span class="none" aria-hidden="true"></span>}</td>
+              <td class="u">
+                {UNITS[p.unit].units.length > 1
+                  ? <select data-pu aria-label={`${p.label} unit`}>{opts(UNITS[p.unit].units, p.def).map((o) => <option selected={o.selected}>{o.label}</option>)}</select>
+                  : <span>{p.def}</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note" set:html={`Evaporation = steam − water (Δ<i>h</i> is the latent heat). <i>R</i> = 0.461526 kJ/(kg·K); <i>T</i> in K; <i>β</i> at constant pressure. Viscosity: IAPWS 2008; thermal conductivity: IAPWS 2011.`} />
+    </section>
+
+    <section class="grp" data-sec="pt" aria-labelledby={id('pt-title')}>
+      <h2 id={id('pt-title')}>Subcooled water and superheated steam</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('p2')}><span class="lb">Pressure</span> <span class="eq" set:html={mathHtml('p')} /></label></th>
+            <td class="v"><input id={id('p2')} data-pt="p" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="p2" aria-label="Pressure unit">{opts(pressure, 'bar (A)').map((o) => <option selected={o.selected}>{o.label}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('t2')}><span class="lb">Temperature</span> <span class="eq" set:html={mathHtml('t')} /></label></th>
+            <td class="v"><input id={id('t2')} data-pt="t" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="t2" aria-label="Temperature unit">{opts(temperature, '°C').map((o) => <option selected={o.selected}>{o.label}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">State</span></th>
+            <td class="v state" colspan="2"><output data-state></output></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Saturation temperature</span> <span class="eq" set:html={mathHtml('t_sat')} /></th>
+            <td class="v"><output data-tsat></output></td>
+            <td class="u"><span data-tsat-u>°C</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Superheat (+) / subcooling (−)</span> <span class="eq" set:html={mathHtml('t − t_sat')} /></th>
+            <td class="v"><output data-dt></output></td>
+            <td class="u"><span data-dt-u>°C</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <table class="props single" data-props="pt">
+        <tbody>
+          {PROPS.map((p) => (
+            <tr data-p={p.key}>
+              <th scope="row"><span class="lb">{p.label}</span> <span class="eq" set:html={mathHtml(p.sym)} /></th>
+              <td class="o"><output data-o="one"></output></td>
+              <td class="u">
+                {UNITS[p.unit].units.length > 1
+                  ? <select data-pu aria-label={`${p.label} unit`}>{opts(UNITS[p.unit].units, p.def).map((o) => <option selected={o.selected}>{o.label}</option>)}</select>
+                  : <span>{p.def}</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note">Enter both pressure and temperature. Range: 0 to 800 °C, up to 1000 bar a. On the saturation line the water side is shown; use the section above for saturated states.</p>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { saturated, atPT, PROPS, pressure, temperature, toSI, fromSI, show, PHASE_NAME, type Props } from '../lib/calc/steam';
+  import { parseNumber } from '../lib/calc/types';
+  import { formatSig } from '../lib/calc/units';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const unitOf = (list: { label: string }[], label: string) => list.find((u) => u.label === label)! as Parameters<typeof toSI>[0];
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-steam]')) {
+    const $ = <T extends Element>(s: string, el: ParentNode = root) => el.querySelector<T>(s)!;
+    const sel = (k: string) => $<HTMLSelectElement>(`select[data-u="${k}"]`).value;
+    const status = (t: string) => { $('[data-status]').textContent = t; };
+    let given: 'p' | 't' = root.dataset.given === 't' ? 't' : 'p';
+    // both fields stay yellow (either can be typed) until the visitor types into one of them
+    let chosen = false;
+
+    /** reads an input: NaN when blank, null when filled in but not a number */
+    const read = (el: HTMLInputElement) => (el.value.trim() === '' ? NaN : (Number.isFinite(parseNumber(el.value)) ? parseNumber(el.value) : null));
+
+    const fill = (table: HTMLElement, vals: Partial<Record<'water' | 'steam' | 'one', Props>> | null, bad: boolean) => {
+      for (const tr of table.querySelectorAll<HTMLElement>('tr[data-p]')) {
+        const p = PROPS.find((x) => x.key === tr.dataset.p)!;
+        const unit = tr.querySelector('select')?.value ?? p.def;
+        for (const o of tr.querySelectorAll<HTMLOutputElement>('output[data-o]')) {
+          const w = o.dataset.o as 'water' | 'steam' | 'evap' | 'one';
+          if (!vals) { o.textContent = bad ? '—' : ''; continue; }
+          const x = w === 'evap' ? vals.steam![p.key] - vals.water![p.key] : vals[w]![p.key];
+          o.textContent = fmt(show(p, unit, x));
+        }
+      }
+    };
+
+    const runSat = () => {
+      const pEl = $<HTMLInputElement>('input[data-sat="p"]'), tEl = $<HTMLInputElement>('input[data-sat="t"]');
+      const inEl = given === 'p' ? pEl : tEl, outEl = given === 'p' ? tEl : pEl;
+      pEl.classList.toggle('calcd', chosen && given !== 'p'); tEl.classList.toggle('calcd', chosen && given !== 't');
+      outEl.removeAttribute('aria-invalid');
+      const x = read(inEl);
+      let res = null;
+      if (x !== null && Number.isFinite(x)) {
+        try {
+          res = given === 'p' ? saturated('p', toSI(unitOf(pressure, sel('p')), x)) : saturated('T', toSI(unitOf(temperature, sel('t')), x));
+        } catch { res = null; }
+      }
+      const bad = x === null || (Number.isFinite(x) && !res);
+      inEl.toggleAttribute('aria-invalid', bad);
+      outEl.value = res
+        ? fmt(given === 'p' ? fromSI(unitOf(temperature, sel('t')), res.T) : fromSI(unitOf(pressure, sel('p')), res.p))
+        : bad ? '—' : '';
+      fill($('[data-props="sat"]'), res ? { water: res.water, steam: res.steam } : null, bad);
+    };
+
+    const runPT = () => {
+      const pEl = $<HTMLInputElement>('input[data-pt="p"]'), tEl = $<HTMLInputElement>('input[data-pt="t"]');
+      const p = read(pEl), t = read(tEl);
+      const tu = unitOf(temperature, sel('t2'));
+      const pSI = p === null || Number.isNaN(p) ? NaN : toSI(unitOf(pressure, sel('p2')), p);
+      const tSI = t === null || Number.isNaN(t) ? NaN : toSI(tu, t);
+      // each input on its own: a value that can never be valid gets the red border
+      const pBad = p === null || pSI <= 0 || pSI > 1e8;
+      const tBad = t === null || tSI < 273.15 || tSI > 1073.15;
+      pEl.toggleAttribute('aria-invalid', pBad); tEl.toggleAttribute('aria-invalid', tBad);
+      let res = null;
+      if (!pBad && !tBad && Number.isFinite(pSI) && Number.isFinite(tSI)) { try { res = atPT(pSI, tSI); } catch { res = null; } }
+      const bad = pBad || tBad;
+      $('[data-state]').textContent = res ? PHASE_NAME[res.phase] : bad ? '—' : '';
+      const step = tu.f;                                    // K per unit step (1 for °C/K, 5/9 for °F/°R)
+      $('[data-tsat]').textContent = res && Number.isFinite(res.tsat) ? fmt(fromSI(tu, res.tsat)) : res ? '—' : bad ? '—' : '';
+      $('[data-dt]').textContent = res && Number.isFinite(res.tsat) ? fmt((tSI - res.tsat) / step) : res ? '—' : bad ? '—' : '';
+      $('[data-tsat-u]').textContent = sel('t2');
+      $('[data-dt-u]').textContent = sel('t2');
+      fill($('[data-props="pt"]'), res ? { one: res.props } : null, bad);
+    };
+
+    root.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.dataset.sat) {
+        const g = t.dataset.sat as 'p' | 't';
+        if (g !== given || !chosen) { given = g; chosen = true; status(`${g === 'p' ? 'Pressure' : 'Temperature'} is now the input; the other is calculated.`); }
+        runSat();
+      } else if (t.dataset.pt) runPT();
+    });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLElement;
+      if (!t.matches('select')) return;
+      if (t.closest('[data-sec="sat"]')) runSat(); else runPT();
+    });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[data-sat], input[data-pt]')) el.value = '';
+      chosen = false;
+      runSat(); runPT();
+      $<HTMLInputElement>(`input[data-sat="${given}"]`).focus();
+      status('All input fields cleared.');
+    });
+
+    // Values or units kept by the browser after "back" or a soft reload: recalculate them.
+    runSat(); runPT();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset {
+    height: 2.25rem;
+    padding-inline: 0.875rem;
+    border: 1px solid var(--line);
+    background: none;
+    color: var(--line);
+    font: 600 0.875rem/1 var(--font-ui);
+    cursor: pointer;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .reset:hover { background: var(--line); color: var(--paper); }
+
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(sub) { font-size: 0.75em; font-style: normal; line-height: 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  thead th { padding-top: 0.75rem; color: var(--muted); font-size: 0.8125rem; font-weight: 600; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .lb { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i) { font-style: italic; padding-right: 0.05em; }
+  .note b { font-weight: 650; color: var(--ink); }
+  .io { max-width: 36rem; }
+  .io .v { width: 8.5rem; }
+  .io .u { width: 7.5rem; padding-left: 0.375rem; color: var(--muted); white-space: nowrap; }
+  .io .state { width: auto; }
+  .props { margin-top: 0.75rem; }
+  .props .o { width: 7.5rem; padding-left: 0.375rem; }
+  .props .u { width: 7.5rem; padding-left: 0.375rem; color: var(--muted); white-space: nowrap; }
+  .props.single { max-width: 36rem; }
+  .props.single .o { width: 8.5rem; padding-left: 0; }
+  .none { display: block; height: 1.875rem; }
+
+  input, output, select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  input, output { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  input { background: var(--zoho-in); border-color: var(--muted); }
+  /* the calculated one of p / t: green, but you can type into it to make it the input */
+  input.calcd { background: var(--zoho-out); border-color: transparent; }
+  input.calcd:hover { border-color: var(--rule); }
+  input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  output { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .state output { width: auto; min-width: 8.5rem; }
+  select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 52rem; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* Phone: property name on top, then water | steam | evaporation | unit */
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .io .v { width: 6.75rem; }
+    .io .u { width: 6.25rem; }
+    .props thead { display: none; }
+    .props tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr); gap: 0.25rem 0.25rem; padding-block: 0.5rem; border-top: 1px solid var(--rule); }
+    .props.single tbody tr { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .props tbody th { grid-column: 1 / -1; padding: 0; }
+    .props td, .props .o, .props .u, .props.single .o { width: auto; padding: 0; }
+    .props td.o[data-label]::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.6875rem; line-height: 1.2; }
+    /* unit selector on the name line, the three values across the full width */
+    .props:not(.single) tbody tr { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .props:not(.single) tbody th { grid-column: 1 / 3; grid-row: 1; align-self: center; }
+    .props:not(.single) td.u { grid-column: 3; grid-row: 1; }
+    .props output { padding-inline: 0.375rem; }
+    .props .u { align-self: end; }
+  }
+</style>

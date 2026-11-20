@@ -244,9 +244,10 @@ export const tools: Tool[] = [
     "slug": "steam",
     "tag": "STM",
     "title": "Steam",
-    "name": "Properties of Saturated Steam",
-    "description": "Properties of saturated water and steam from pressure or temperature: density, enthalpy, entropy, heat capacities, viscosity and thermal conductivity.",
+    "name": "Properties of Water and Steam",
+    "description": "Properties of saturated water and steam from pressure or temperature, and of subcooled water and superheated steam: density, enthalpy, entropy, heat capacities, viscosity and thermal conductivity (IAPWS-IF97).",
     "category": "properties",
+    "native": "steam",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/63d9fe5a7817f726df25c343cb6ddba735f65721e175f91ea697a01f57912fbf?type=grid&mode=embed"
   },
   {
