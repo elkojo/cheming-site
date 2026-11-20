@@ -1,0 +1,260 @@
+---
+// Native Pipe Size calculator (Phase 7): economic inside diameter and velocity for carbon steel and stainless
+// steel (one fluid, both materials side by side), plus the standard pipe at or above the economic diameter
+// (CS Schedule STD, SS Schedule 10S) and the size below. Mass or volume flow can be typed; both are yellow
+// until one is typed (as in Gas Equation and Steam). Rendered with the Zoho defaults filled in.
+import DrawingFrame from './DrawingFrame.astro';
+import { econPipe, type Result } from '../lib/calc/pipesize';
+import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig } from '../lib/calc/units';
+import { mathHtml } from '../lib/calc/types';
+
+const U = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
+const LEN = [{ label: 'mm', f: 1e-3 }, { label: 'm', f: 1 }, { label: 'in', f: 0.0254 }, { label: 'ft', f: 0.3048 }];
+const VEL = [{ label: 'm/s', f: 1 }, { label: 'ft/s', f: 0.3048 }];
+const fmt = (x: number) => formatSig(x, 6, false);
+
+const D = { W: [500000, 'kg/h'], rho: [1000, 'kg/m³'], mu: [1, 'cP'], Q: 'm³/h' } as const;
+const rho0 = D.rho[0];
+const W0 = toSI(U('mflow').find((u) => u.label === D.W[1])!, D.W[0]);
+const q0 = W0 / rho0;
+const mu0 = toSI(U('mu').find((u) => u.label === D.mu[1])!, D.mu[0]);
+const res: Record<'cs' | 'ss', Result> = { cs: econPipe('cs', q0, rho0, mu0), ss: econPipe('ss', q0, rho0, mu0) };
+const Q0 = fmt(fromSI(U('vflow').find((u) => u.label === D.Q)!, q0));
+
+interface In { key: string; label: string; sym: string; units: { label: string }[]; unit: string; value: string; flow?: boolean }
+const inputs: In[] = [
+  { key: 'W', label: 'Mass flow', sym: 'W', units: U('mflow'), unit: D.W[1], value: String(D.W[0]), flow: true },
+  { key: 'Q', label: 'Volume flow', sym: 'Q = W/ρ', units: U('vflow'), unit: D.Q, value: Q0, flow: true },
+  { key: 'rho', label: 'Density', sym: 'ρ', units: U('density'), unit: D.rho[1], value: String(D.rho[0]) },
+  { key: 'mu', label: 'Viscosity', sym: 'μ', units: U('mu'), unit: D.mu[1], value: String(D.mu[0]) },
+];
+
+type Kind = 'len' | 'vel' | 'one' | 'text';
+interface Out { key: string; label: string; sym?: string; kind: Kind; sub?: boolean }
+const outputs: Out[] = [
+  { key: 'd', label: 'Economic inside diameter', sym: 'd', kind: 'len' },
+  { key: 'v', label: 'Economic velocity', sym: 'v = Q/(π·d²/4)', kind: 'vel' },
+  { key: 're', label: 'Reynolds number', sym: 'Re = ρ·v·d/μ', kind: 'one' },
+  { key: 'up', label: 'Standard pipe', sym: 'd_i ≥ d', kind: 'text' },
+  { key: 'upd', label: 'Inside diameter', sym: 'd_i', kind: 'len', sub: true },
+  { key: 'upv', label: 'Velocity', sym: 'v', kind: 'vel', sub: true },
+  { key: 'dn', label: 'Next size down', sym: 'd_i < d', kind: 'text' },
+  { key: 'dnd', label: 'Inside diameter', sym: 'd_i', kind: 'len', sub: true },
+  { key: 'dnv', label: 'Velocity', sym: 'v', kind: 'vel', sub: true },
+];
+const pipeText = (r?: Result['up']) => (r ? `NPS ${r.pipe.nps} ${r.sched} (DN ${r.pipe.dn})` : '—');
+const value = (r: Result, o: Out): string => {
+  const len = (x?: number) => (x === undefined ? '—' : fmt(x / 1e-3));
+  switch (o.key) {
+    case 'd': return len(r.d);
+    case 'v': return fmt(r.v);
+    case 're': return fmt(r.re);
+    case 'up': return pipeText(r.up);
+    case 'upd': return len(r.up?.d);
+    case 'upv': return r.up ? fmt(r.up.v) : '—';
+    case 'dn': return pipeText(r.down);
+    case 'dnd': return len(r.down?.d);
+    default: return r.down ? fmt(r.down.v) : '—';
+  }
+};
+const id = (k: string) => `ps-${k}`;
+---
+<DrawingFrame>
+  <div class="calc pipesize" data-pipesize>
+    <div class="bar">
+      <p>Economic pipe diameter and velocity for carbon-steel and stainless-steel lines. Pick the units in the right-hand column.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('in-title')}>
+      <h2 id={id('in-title')}>Fluid</h2>
+      <table class="io">
+        <tbody>
+          {inputs.map((r) => (
+            <tr>
+              <th scope="row"><label for={id(r.key)}><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></label></th>
+              <td class="v"><input id={id(r.key)} data-k={r.key} data-flow={r.flow ? r.key : undefined} value={r.value} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+              <td class="u"><select data-u={r.key} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u.label === r.unit}>{u.label}</option>)}</select></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note">Type the mass flow <b>or</b> the volume flow: the one you type stays yellow (input), the other turns green and follows through the density.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('out-title')}>
+      <h2 id={id('out-title')}>Economic pipe</h2>
+      <table class="res">
+        <thead><tr><th scope="col">Result</th><th scope="col">Carbon steel</th><th scope="col">Stainless steel</th><th scope="col">Unit</th></tr></thead>
+        <tbody>
+          {outputs.map((o) => (
+            <tr data-o={o.key} class:list={[{ sub: o.sub, txt: o.kind === 'text' }]}>
+              <th scope="row"><span class="lb">{o.label}</span>{o.sym && <> <span class="eq" set:html={mathHtml(o.sym)} /></>}</th>
+              <td class="o" data-label="Carbon steel"><output data-m="cs">{value(res.cs, o)}</output></td>
+              <td class="o" data-label="Stainless"><output data-m="ss">{value(res.ss, o)}</output></td>
+              <td class="u">
+                {o.kind === 'len' ? <select data-ou aria-label={`${o.label} unit`}>{LEN.map((u) => <option selected={u.label === 'mm'}>{u.label}</option>)}</select>
+                  : o.kind === 'vel' ? <select data-ou aria-label={`${o.label} unit`}>{VEL.map((u) => <option selected={u.label === 'm/s'}>{u.label}</option>)}</select>
+                  : o.kind === 'one' ? <span>–</span> : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note" set:html={`Economic optimum after Anaya Durand et al., “Updated Rules for Pipe Sizing”, <i>Chemical Engineering</i>, May 1999 (Generaux type; turbulent flow): <i>Q</i><sup>2.84</sup> = <i>a</i>·<i>d</i><sup><i>n</i></sup> / (1.9156·(1 + <i>c</i>·<i>d</i>)·0.00483·<i>ρ</i><sup>0.84</sup>·<i>μ</i><sup>0.16</sup>) with <i>Q</i> in ft³/s, <i>d</i> in ft, <i>ρ</i> in lb/ft³, <i>μ</i> in cP; carbon steel <i>a</i> = 29.15, <i>n</i> = 6.19, <i>c</i> = 2.18; stainless <i>a</i> = 460.31, <i>n</i> = 5.6193, <i>c</i> = 2.164.`} />
+      <p class="note caution"><b>Economic optimum only:</b> the correlation balances the cost of the pipe against the cost of pumping. It does not check velocity limits: erosion, noise, vibration or the allowed pressure drop must be checked separately. For gases, and for stainless steel in particular, it can give high velocities (e.g. 50 m³/h at 1.2 kg/m³: 11 m/s in carbon steel, 48 m/s in stainless).</p>
+      <p class="note">Standard pipes: carbon steel Schedule STD (ASME B36.10M), stainless Schedule 10S (ASME B36.19M), NPS 1/8 to 48 (10S to 30).</p>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { econPipe, type Result } from '../lib/calc/pipesize';
+  import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+
+  const U = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
+  const LISTS: Record<string, ReturnType<typeof U>> = { W: U('mflow'), Q: U('vflow'), rho: U('density'), mu: U('mu') };
+  const F: Record<string, number> = { mm: 1e-3, m: 1, in: 0.0254, ft: 0.3048, 'm/s': 1, 'ft/s': 0.3048 };
+  const fmt = (x: number) => formatSig(x, 6, false);
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-pipesize]')) {
+    const $ = <T extends Element>(s: string, el: ParentNode = root) => el.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const unit = (k: string) => LISTS[k].find((u) => u.label === $<HTMLSelectElement>(`select[data-u="${k}"]`).value)!;
+    let given: 'W' | 'Q' = 'W';
+    let chosen = false;   // both flows yellow until one is typed
+
+    const run = () => {
+      let bad = false;
+      const read = (k: string, ok: (x: number) => boolean) => {
+        const el = inp(k);
+        const blank = el.value.trim() === '';
+        const x = blank ? NaN : toSI(unit(k), parseNumber(el.value));
+        const invalid = !blank && !(Number.isFinite(x) && ok(x));
+        el.toggleAttribute('aria-invalid', invalid);
+        if (invalid) bad = true;
+        return invalid ? NaN : x;
+      };
+      const pos = (x: number) => x > 0;
+      const rho = read('rho', pos), mu = read('mu', pos);
+      const flow = read(given, pos);
+      const other = given === 'W' ? 'Q' : 'W';
+      inp(other).removeAttribute('aria-invalid');
+      const q = given === 'Q' ? flow : flow / rho;
+      const W = given === 'W' ? flow : flow * rho;
+      inp('W').classList.toggle('calcd', chosen && given !== 'W');
+      inp('Q').classList.toggle('calcd', chosen && given !== 'Q');
+      const otherVal = given === 'W' ? q : W;
+      inp(other).value = Number.isFinite(otherVal) ? fmt(fromSI(unit(other), otherVal)) : bad ? '—' : '';
+
+      const ok = Number.isFinite(q) && Number.isFinite(rho) && Number.isFinite(mu);
+      const res: Record<string, Result | null> = { cs: ok ? econPipe('cs', q, rho, mu) : null, ss: ok ? econPipe('ss', q, rho, mu) : null };
+      for (const tr of root.querySelectorAll<HTMLElement>('tr[data-o]')) {
+        const key = tr.dataset.o!;
+        const f = F[tr.querySelector<HTMLSelectElement>('select[data-ou]')?.value ?? ''] ?? 1;
+        for (const o of tr.querySelectorAll<HTMLOutputElement>('output[data-m]')) {
+          const r = res[o.dataset.m!];
+          if (!r) { o.textContent = bad ? '—' : ''; continue; }
+          const p = key.startsWith('up') ? r.up : r.down;
+          const text = (x?: typeof p) => (x ? `NPS ${x.pipe.nps} ${x.sched} (DN ${x.pipe.dn})` : '—');
+          o.textContent =
+            key === 'd' ? fmt(r.d / f) : key === 'v' ? fmt(r.v / f) : key === 're' ? fmt(r.re)
+            : key === 'up' || key === 'dn' ? text(p)
+            : key.endsWith('d') ? (p ? fmt(p.d / f) : '—') : (p ? fmt(p.v / f) : '—');
+        }
+      }
+    };
+
+    root.addEventListener('input', (e) => {
+      const f = (e.target as HTMLElement).dataset.flow as 'W' | 'Q' | undefined;
+      if (f && (f !== given || !chosen)) {
+        given = f; chosen = true;
+        $('[data-status]').textContent = `${f === 'W' ? 'Mass' : 'Volume'} flow is now the input; the other is calculated.`;
+      }
+      run();
+    });
+    root.addEventListener('change', (e) => { if ((e.target as HTMLElement).matches('select')) run(); });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) el.value = '';
+      chosen = false;
+      run();
+      inp('W').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset {
+    height: 2.25rem;
+    padding-inline: 0.875rem;
+    border: 1px solid var(--line);
+    background: none;
+    color: var(--line);
+    font: 600 0.875rem/1 var(--font-ui);
+    cursor: pointer;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  thead th { padding-top: 0.5rem; color: var(--muted); font-size: 0.8125rem; font-weight: 600; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .lb { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i) { font-style: italic; padding-right: 0.05em; }
+  .note b { font-weight: 650; color: var(--ink); }
+  .note.caution { padding: 0.5rem 0.75rem; border-left: 3px solid var(--line); background: var(--wash); color: var(--ink); }
+  .io { max-width: 36rem; }
+  .io .v { width: 8.5rem; }
+  .io .u { width: 7.5rem; padding-left: 0.375rem; }
+  .res { max-width: 52rem; }
+  .res .o { width: 10.5rem; padding-left: 0.375rem; }
+  .res .u { width: 5.5rem; padding-left: 0.375rem; color: var(--muted); }
+  .res tr.sub th { padding-left: 1rem; }
+  .res tr.txt th { padding-top: 0.5rem; }
+  .res tr.txt output { background: none; padding-left: 0; font-weight: 600; }
+
+  input, output, select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  input, output { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  input { background: var(--zoho-in); border-color: var(--muted); }
+  input.calcd { background: var(--zoho-out); border-color: transparent; }
+  input.calcd:hover { border-color: var(--rule); }
+  input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  output { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 52rem; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* phone: result name on top (unit beside it), then carbon steel | stainless */
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .io .v { width: 6.75rem; }
+    .io .u { width: 6.25rem; }
+    .res thead { display: none; }
+    .res tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.25rem; padding-block: 0.5rem; border-top: 1px solid var(--rule); }
+    .res tbody th { grid-column: 1 / 3; grid-row: 1; padding: 0; align-self: center; }
+    .res td.u { grid-column: 3; grid-row: 1; width: auto; padding: 0; }
+    .res td.o { width: auto; padding: 0; }
+    .res td.o:nth-of-type(1) { grid-column: 1; grid-row: 2; }
+    .res td.o:nth-of-type(2) { grid-column: 2; grid-row: 2; }
+    .res tr.txt output { white-space: normal; height: auto; line-height: 1.3; }
+    .res td.o::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.6875rem; line-height: 1.2; }
+    .res tr.sub th { padding-left: 0; }
+  }
+</style>

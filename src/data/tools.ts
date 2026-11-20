@@ -138,9 +138,10 @@ export const tools: Tool[] = [
     "tag": "DN",
     "title": "Pipe Size",
     "name": "Pipe Size Optimization for Carbon and Stainless Steel Pipes",
-    "description": "Economic pipe diameter and velocity for carbon and stainless steel lines from mass flow, density and viscosity.",
+    "description": "Economic pipe diameter and velocity for carbon and stainless steel lines from mass or volume flow, density and viscosity, with the nearest standard pipe (NPS, Schedule STD / 10S).",
     "standard": "“Updated Rules for Pipe Sizing”, Chemical Engineering (May 1999)",
     "category": "piping",
+    "native": "pipesize",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/37f0cd48177be703ca2d0bf1696576b8c6e052db1b23436bfa9de72dba2aa9f6?type=grid&mode=embed"
   },
   {
