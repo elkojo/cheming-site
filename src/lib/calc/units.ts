@@ -1,8 +1,8 @@
 // Unit Conversion: 30 engineering quantities, each with the Zoho sheet's unit list.
 // Native rebuild of the Zoho sheet (Phase 7). Unit lists from the owner's source workbook; factors are the
-// exact definitions (SI, international foot/pound, IT BTU, thermochemical calorie), not the sheet's rounded
+// exact definitions (SI, international foot/pound, IT BTU, International Table calorie), not the sheet's rounded
 // numbers. Corrected against the sheet: cal·cm/(s·cm²·°C) (100× too small), cSt (10⁶× too large),
-// teaspoon/tablespoon (swapped), drop (was a grain's mass), 10⁶·kcal/h (used 4.183 instead of 4.184),
+// teaspoon/tablespoon (swapped), drop (was a grain's mass), 10⁶·kcal/h (used 4.183 instead of the sheet's own 4.184),
 // liquid-column gauge offsets (used g = 9.81). Removed: t/yd³ (factor matched no ton), and the empirical
 // viscosity scales SSU, °Engler, s Redwood. Approved by the owner 2026-11-20 (layout, format, removals).
 //
@@ -41,7 +41,10 @@ const LB = 0.45359237;                       // kg
 const OZ = LB / 16;
 const USGAL = 231 * IN3;                     // 0.003785411784 m³
 const UKGAL = 0.00454609;
-const CAL = 4.184;                           // thermochemical calorie, J
+// International Table calorie (5th Int. Conf. on the Properties of Steam, 1956; NIST SP 811): the steam-table and
+// process-engineering calorie, consistent with the IT BTU (1 kcal/(kg·°C) = 1 BTU/(lb·°F)). The sheet used the
+// thermochemical 4.184 J; changed by the owner's decision 2026-11-20, same value as the Steam tool.
+const CAL = 4.1868;                          // J
 const BTU = 1055.05585262;                   // IT BTU, J
 const LBF = LB * G;                          // N
 const PSI = LBF / IN2;                       // Pa

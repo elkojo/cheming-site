@@ -25,18 +25,19 @@ const CASES: [string, number, string, string, number, number?][] = [
   ['density', 1, 'g/cm³', 'lbm/US gal', 8.345404452],
   ['energy', 1, 'kW·h', 'MJ', 3.6],
   ['energy', 1, 'BTU', 'J', 1055.05585262],
-  ['energy', 1, 'kcal', 'BTU', 3.965666831],
+  ['energy', 1, 'kcal', 'BTU', 3.968320719],
   ['force', 1, 'lbf', 'N', 4.4482216152605],
   ['force', 1, 'kgf', 'dyn', 980665],
   ['cp', 1, 'BTU/lbm/°F', 'kJ/kg/K', 4.1868],
-  ['cp', 1, 'kcal/kg/°C', 'J/kg/K', 4184],
+  ['cp', 1, 'kcal/kg/°C', 'J/kg/K', 4186.8],
+  ['cp', 1, 'kcal/kg/°C', 'BTU/lbm/°F', 1],                     // IT calorie and IT BTU agree exactly
   ['k', 1, 'BTU·ft/h/ft²/°F', 'W/m/K', 1.730734666],
   ['k', 12, 'BTU·in/h/ft²/°F', 'BTU·ft/h/ft²/°F', 1],
   ['h', 1, 'BTU/lbm', 'kJ/kg', 2.326],
   ['flux', 1, 'BTU/ft²/h', 'W/m²', 3.154590745],
   ['fouling', 1, 'h·ft²·°F/BTU', 'm²·K/W', 0.1761101838],
   ['htc', 1, 'BTU/h/ft²/°F', 'W/m²/K', 5.678263341],
-  ['htc', 1, 'kcal/m²/h/°C', 'W/m²/K', 1.162222222],
+  ['htc', 1, 'kcal/m²/h/°C', 'W/m²/K', 1.163],
   ['length', 1, 'in', 'mm', 25.4],
   ['length', 1, 'nmi (nautical mile)', 'ft', 6076.115485564],
   ['length', 1, 'mi', 'nm', 1.609344e12],                    // nm as output (the sheet's #N/A, UC-1)
@@ -128,7 +129,7 @@ test('invalid: below absolute zero or vacuum, non-numbers', () => {
 
 // ── corrections against the Zoho sheet (ORIGINAL-ERRORS UC-1…UC-9, approved 2026-11-20) ──
 test('corrections against the sheet', () => {
-  close(convert('k', 'cal·cm/s/cm²/°C', 'W/m/K', 1), 418.4, 1e-12, 'UC-2: sheet gave 4.184');
+  close(convert('k', 'cal·cm/s/cm²/°C', 'W/m/K', 1), 418.68, 1e-12, 'UC-2: sheet gave 4.184 (100× too small)');
   close(convert('nu', 'cSt', 'm²/s', 1), 1e-6, 1e-12, 'UC-3: sheet gave 1');
   close(convert('volume', 'tsp', 'mL', 1), 4.92892159375, 1e-12, 'UC-4: sheet gave 14.79');
   close(convert('volume', 'tbsp', 'tsp', 1), 3, 1e-12, 'UC-4: tablespoon = 3 teaspoons');
