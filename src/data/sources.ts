@@ -76,6 +76,7 @@ export const sources: Source[] = [
     id: 'iapws-visc', by: 'IAPWS', title: 'Release on the IAPWS Formulation 2008 for the Viscosity of Ordinary Water Substance, R12-08',
     where: 'International Association for the Properties of Water and Steam', year: 2008,
     url: 'https://iapws.org/technical-guidance/release/viscosity',
+    archive: 'https://web.archive.org/web/20261012033204/https://iapws.org/technical-guidance/release/viscosity',
     read: '2026-11-20',
     use: { steam: 'Viscosity (industrial use, without the critical term); check values in the tests from Table 4.' },
   },
