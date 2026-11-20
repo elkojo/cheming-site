@@ -1,0 +1,337 @@
+---
+// Native Unit Conversion (Phase 7). The Zoho sheet's 30 rows, one per quantity: value and unit in (yellow),
+// result and unit out (green). Under each name the relation between the two units ("1 m = 3.28084 ft").
+// "All units" opens the value in every unit of that quantity. Settings as in the sheet: significant digits,
+// thousands comma, atmospheric pressure (gauge units) and fluid density (column units).
+// Inputs start empty like the Zoho sheet (owner's choice, 2026-11-20); Clear all inputs keeps the settings.
+import DrawingFrame from './DrawingFrame.astro';
+import { QUANTITIES, DEFAULT_SETTINGS, ATM_UNITS, relation, formatSig } from '../lib/calc/units';
+
+const DIGITS = 6;
+const fmt = (x: number) => formatSig(x, DIGITS, true);
+// Inputs start empty, as on the Zoho sheet; each row starts on a typical pair of units.
+const rows = QUANTITIES.map((q) => {
+  const [, from, to] = q.example;
+  return { q, from, to, rel: relation(q.id, from, to, DEFAULT_SETTINGS, fmt) };
+});
+const id = (k: string) => `uc-${k}`;
+const notes = QUANTITIES.filter((q) => q.note).map((q) => `<b>${q.name}:</b> ${q.note}`);
+---
+<DrawingFrame>
+  <div class="calc uc" data-uc>
+    <div class="bar">
+      <p>Type a value in any row and pick both units. The line under each quantity shows how the two units relate.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <table class="rows">
+      <thead>
+        <tr><th scope="col">Quantity</th><th scope="col">Value</th><th scope="col">Unit</th><th scope="col">Result</th><th scope="col">Unit</th><th><span class="sr">All units</span></th></tr>
+      </thead>
+      <tbody>
+        {rows.map(({ q, from, to, rel }) => (
+          <tr data-q={q.id}>
+            <th scope="row">
+              <label for={id(q.id)}><span class="lb">{q.name}</span> <span class="rel" data-rel>{rel}</span></label>
+            </th>
+            <td class="v"><input id={id(q.id)} data-x type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u">
+              <select data-from aria-label={`${q.name}: unit of the value`}>
+                {q.units(DEFAULT_SETTINGS).map((u) => <option selected={u.label === from}>{u.label}</option>)}
+              </select>
+            </td>
+            <td class="v"><output data-out aria-live="polite" aria-label={`${q.name}: result`}></output></td>
+            <td class="u">
+              <select data-to aria-label={`${q.name}: unit of the result`}>
+                {q.units(DEFAULT_SETTINGS).map((u) => <option selected={u.label === to}>{u.label}</option>)}
+              </select>
+            </td>
+            <td class="all">
+              <button type="button" data-all aria-haspopup="dialog" aria-label={`${q.name} in all units`} title="All units">
+                <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M7 1h4v4M11 1L7 5M5 11H1V7M1 11l4-4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+                <span>All</span>
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+
+    <section class="settings" aria-labelledby={id('set-title')}>
+      <h2 id={id('set-title')}>Settings</h2>
+      <table>
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('digits')}>Significant digits</label></th>
+            <td class="v">
+              <select id={id('digits')} data-digits>
+                {[3, 4, 5, 6, 7, 8, 9, 10].map((d) => <option selected={d === DIGITS}>{d}</option>)}
+              </select>
+            </td>
+            <td class="u"></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('group')}>Comma in 1,000</label></th>
+            <td class="v"><input id={id('group')} data-group type="checkbox" checked /></td>
+            <td class="u"></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('patm')}>Atmospheric pressure <span class="rel">for gauge (G) units</span></label></th>
+            <td class="v"><input id={id('patm')} data-patm value="101.325" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u">
+              <select data-patm-u aria-label="Atmospheric pressure unit">
+                {ATM_UNITS.map((u) => <option selected={u.label === 'kPa (A)'}>{u.label}</option>)}
+              </select>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('rho')}>Fluid density <span class="rel">for column units</span></label></th>
+            <td class="v"><input id={id('rho')} data-rho value="1000" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><span>kg/m³</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">
+        Fluid density, for example: water at 4 °C 999.9725, water at 60 °F 999.001, mercury at 60 °F 13 556.806,
+        mercury at 0 °C 13 595.101 kg/m³. Defaults: 101.325 kPa (A) and 1000 kg/m³.
+      </p>
+      <p class="note" set:html={notes.join('<br />')} />
+      <p class="note">Factors are exact definitions (SI; international foot and pound; IT BTU; thermochemical calorie, 4.184 J).</p>
+    </section>
+
+    <p class="sr" aria-live="polite" data-status></p>
+
+    <dialog class="zd" aria-labelledby={id('zd-title')}>
+      <div class="zhead">
+        <h2 id={id('zd-title')} data-zd-title></h2>
+        <button type="button" class="zclose" data-zd-close aria-label="Close">
+          <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+      </div>
+      <div class="zbody">
+        <p class="zlead" data-zd-lead></p>
+        <table><tbody data-zd-rows></tbody></table>
+      </div>
+    </dialog>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { QUANTITIES, ATM_UNITS, convert, relation, formatSig, findUnit, type Settings } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-uc]')) {
+    const $ = <T extends Element>(s: string, el: ParentNode = root) => el.querySelector<T>(s)!;
+    const status = (t: string) => { $('[data-status]').textContent = t; };
+
+    let bad = false;
+    const settings = (): Settings => {
+      const p = $<HTMLInputElement>('[data-patm]');
+      const r = $<HTMLInputElement>('[data-rho]');
+      const pv = parseNumber(p.value), rv = parseNumber(r.value);
+      const pOk = Number.isFinite(pv) && pv > 0, rOk = Number.isFinite(rv) && rv > 0;
+      p.toggleAttribute('aria-invalid', !pOk && p.value.trim() !== '');
+      r.toggleAttribute('aria-invalid', !rOk && r.value.trim() !== '');
+      return {
+        pAtm: pOk ? pv * findUnit(ATM_UNITS, $<HTMLSelectElement>('[data-patm-u]').value).f : NaN,
+        rhoCol: rOk ? rv : NaN,
+      };
+    };
+    const fmt = (x: number) => formatSig(x, Number($<HTMLSelectElement>('[data-digits]').value), $<HTMLInputElement>('[data-group]').checked);
+
+    const runRow = (tr: HTMLElement, s: Settings) => {
+      const q = tr.dataset.q!;
+      const inp = $<HTMLInputElement>('[data-x]', tr);
+      const from = $<HTMLSelectElement>('[data-from]', tr).value;
+      const to = $<HTMLSelectElement>('[data-to]', tr).value;
+      const blank = inp.value.trim() === '';
+      const y = blank ? NaN : convert(q, from, to, parseNumber(inp.value), s);
+      const invalid = !blank && !Number.isFinite(y);
+      // a missing atmosphere or density is the settings' fault, not this input's
+      const settingsMissing = !Number.isFinite(s.pAtm) || !Number.isFinite(s.rhoCol);
+      inp.toggleAttribute('aria-invalid', invalid && !(settingsMissing && Number.isFinite(parseNumber(inp.value))));
+      $<HTMLOutputElement>('[data-out]', tr).textContent = blank ? '' : Number.isFinite(y) ? fmt(y) : '—';
+      const rel = relation(q, from, to, s, fmt);
+      $('[data-rel]', tr).textContent = /NaN|—/.test(rel) ? '' : rel;
+    };
+    const runAll = () => {
+      const s = settings();
+      for (const tr of root.querySelectorAll<HTMLElement>('tr[data-q]')) runRow(tr, s);
+    };
+
+    root.addEventListener('input', (e) => {
+      const tr = (e.target as HTMLElement).closest<HTMLElement>('tr[data-q]');
+      if (tr) runRow(tr, settings()); else runAll();
+    });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLElement;
+      if (!t.matches('select, [type=checkbox]')) return;
+      const tr = t.closest<HTMLElement>('tr[data-q]');
+      if (tr) runRow(tr, settings()); else runAll();
+    });
+
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[data-x]')) el.value = '';
+      runAll();
+      $<HTMLInputElement>('input[data-x]').focus();
+      status('All input values cleared. Settings are kept.');
+    });
+
+    // All units of one quantity
+    const dlg = $<HTMLDialogElement>('dialog.zd');
+    root.querySelectorAll<HTMLButtonElement>('[data-all]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tr = btn.closest<HTMLElement>('tr[data-q]')!;
+        const q = QUANTITIES.find((x) => x.id === tr.dataset.q)!;
+        const s = settings();
+        const from = $<HTMLSelectElement>('[data-from]', tr).value;
+        const text = $<HTMLInputElement>('[data-x]', tr).value;
+        const x = text.trim() === '' ? 1 : parseNumber(text);
+        $('[data-zd-title]', dlg).textContent = q.name;
+        $('[data-zd-lead]', dlg).textContent = text.trim() === '' ? `No value entered; showing 1 ${from}.` : '';
+        const body = $('[data-zd-rows]', dlg);
+        body.replaceChildren();
+        for (const u of q.units(s)) {
+          const row = document.createElement('tr');
+          const mark = document.createElement('td');
+          mark.className = `mk ${u.label === from ? 'in' : 'out'}`;
+          mark.innerHTML = '<span aria-hidden="true"></span>';
+          const v = document.createElement('td'); v.className = 'zv';
+          const y = convert(q.id, from, u.label, x, s);
+          v.textContent = Number.isFinite(y) ? fmt(y) : '—';
+          const unit = document.createElement('th'); unit.scope = 'row'; unit.className = 'zu'; unit.textContent = u.label;
+          if (u.label === from) row.setAttribute('aria-current', 'true');
+          row.append(mark, v, unit);
+          body.append(row);
+        }
+        dlg.showModal();
+      });
+    });
+    $('[data-zd-close]', dlg).addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+
+    // Values or units kept by the browser after "back" or a soft reload: recalculate them.
+    runAll();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset {
+    height: 2.25rem;
+    padding-inline: 0.875rem;
+    border: 1px solid var(--line);
+    background: none;
+    color: var(--line);
+    font: 600 0.875rem/1 var(--font-ui);
+    cursor: pointer;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .reset:hover { background: var(--line); color: var(--paper); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.1875rem 0; text-align: left; vertical-align: middle; }
+  thead th { padding-top: 0.875rem; color: var(--muted); font-size: 0.8125rem; font-weight: 600; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.3; }
+  tbody tr + tr th, tbody tr + tr td { border-top: 1px solid var(--rule-soft, transparent); }
+  th label { cursor: text; }
+  .lb { margin-right: 0.625rem; }
+  /* the relation between the two units: same font, smaller, wraps under the name when space is short */
+  .rel { display: inline-block; font-variant-numeric: tabular-nums; }
+  .rows .v { width: 9rem; }
+  .rows .u { width: 10.5rem; padding-left: 0.375rem; }
+  .rows td.v + td.u { padding-right: 0.75rem; }
+  .all { width: 3.25rem; padding-left: 0.25rem; }
+  .all button {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    height: 1.875rem; padding: 0 0.375rem;
+    border: 1px solid transparent; background: none; color: var(--line);
+    font: 600 0.75rem/1 var(--font-ui); cursor: zoom-in;
+  }
+  .all button:hover { border-color: var(--line); }
+  .all button:focus-visible { outline: 2px solid var(--line); outline-offset: 1px; }
+
+  input, output, select {
+    display: block;
+    width: 100%;
+    height: 1.875rem;
+    border-radius: 0;
+    color: var(--ink);
+    font: inherit;
+  }
+  input, output { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  input { background: var(--zoho-in); border-color: var(--muted); }
+  input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  input[type='checkbox'] { width: 1.125rem; height: 1.125rem; margin: 0; accent-color: var(--line); }
+  output { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  select {
+    padding: 0 0.25rem;
+    border: 1px solid var(--rule);
+    background: #fff;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+
+  .settings { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--rule); max-width: 40rem; }
+  .settings h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .settings .v { width: 8.5rem; }
+  .settings .u { width: 7.5rem; padding-left: 0.375rem; color: var(--muted); }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; }
+  .note :global(i) { font-style: italic; }
+  .note :global(b) { font-weight: 600; color: var(--ink); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* All units */
+  .zd {
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    padding: 0;
+    border: 1.5px solid var(--ink);
+    border-radius: 0;
+    background: #fff;
+    color: var(--ink);
+  }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); background: #fff; }
+  .zhead h2 { margin: 0; font-size: 1.25rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zclose:hover { background: var(--line); color: var(--paper); }
+  .zbody { padding: 1rem 1.25rem 1.5rem; }
+  .zlead { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.875rem; }
+  .zlead:empty { display: none; }
+  .zbody :global(td), .zbody :global(th) { padding-block: 0.3125rem; border-bottom: 1px solid var(--rule); }
+  .zbody :global(.zv) { padding-right: 1rem; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .zbody :global(.zu) { font-weight: 400; color: var(--ink); text-align: left; }
+  .zbody :global(tr[aria-current] .zv), .zbody :global(tr[aria-current] .zu) { font-weight: 650; }
+  .zbody :global(.mk) { width: 1.25rem; }
+  .zbody :global(.mk span) { display: block; width: 0.75rem; height: 0.75rem; border: 1px solid var(--muted); }
+  .zbody :global(.mk.in span) { background: var(--zoho-in); }
+  .zbody :global(.mk.out span) { background: var(--zoho-out); border-color: transparent; }
+
+  /* Phone: name and relation on top, then value | unit, then result | unit */
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .rows thead { display: none; }
+    .rows tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) auto;
+      grid-template-areas: 'name name all' 'x from from' 'y to to';
+      gap: 0.25rem 0.375rem;
+      padding-block: 0.625rem;
+      border-top: 1px solid var(--rule);
+    }
+    .rows tbody th, .rows tbody td { padding: 0; border: 0; width: auto; }
+    .rows tbody th { grid-area: name; align-self: center; }
+    .rows tbody td:nth-of-type(1) { grid-area: x; }
+    .rows tbody td:nth-of-type(2) { grid-area: from; }
+    .rows tbody td:nth-of-type(3) { grid-area: y; }
+    .rows tbody td:nth-of-type(4) { grid-area: to; }
+    .rows tbody td.all { grid-area: all; }
+    .rows .v, .rows .u { width: auto; padding: 0; }
+    .rel { display: block; }
+  }
+</style>

@@ -267,6 +267,7 @@ export const tools: Tool[] = [
     "description": "Converts values between SI, imperial and process units for common engineering quantities, with settings for atmospheric pressure and fluid-column density.",
     "standard": "unitconversion.org",
     "category": "general",
+    "native": "units",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/139dc894065c9d7af95f05f39fd4c1b89e681a205d153e181812f027caf5d7bd?type=grid&mode=embed"
   },
   {
