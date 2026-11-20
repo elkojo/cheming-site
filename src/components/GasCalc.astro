@@ -3,7 +3,8 @@
 // The Zoho sheet had six columns (Volume, Mass, Volume & Mass, Density, Unit Volume, Rates), each starting
 // from a different known quantity. Here that is one sheet: type into any of the four flow rows and it
 // becomes the input (yellow); the other three follow (green). Gas properties need no flow at all.
-// Rendered with the defaults filled in, so it shows results before the script runs.
+// Rendered with the defaults filled in, so it shows results before the script runs. On load and after Clear
+// all four flows are yellow (any can be typed); typing into one turns the other three green.
 import DrawingFrame from './DrawingFrame.astro';
 import {
   solve, toSI, fromSI, R_SI, temperature, pressure, massFlow, volumeFlow, stdVolumeFlow, molarFlow, density,
@@ -60,7 +61,7 @@ const groups = [
   { id: 'cond', title: 'Gas at actual conditions', rows: cond,
     note: `<i>T</i> and <i>p</i> are absolute: <i>T</i> = <i>t</i> + 273.15 K; gauge units add 1.01325 bar. <i>R</i> = 8.314462618 kJ/(kmol·K).` },
   { id: 'flow', title: 'Flow rates', rows: flows,
-    note: 'Type in any one flow: it turns yellow and the other three follow. Mass flow needs <i>M</i><sub>w</sub>.' },
+    note: 'Type into any one flow: it stays yellow (input) and the other three turn green and follow. Mass flow needs <i>M</i><sub>w</sub>.' },
   { id: 'std', title: 'Standard conditions', rows: std,
     note: `Standard compressibility is taken equal to <i>Z</i> at actual conditions. For reference, <i>V</i><sub>m</sub> at 1.01325 bar a and <i>Z</i> = 1: 0 °C ${vm(0)}, 15 °C ${vm(15)}, 20 °C ${vm(20)} m³/kmol.` },
 ];
@@ -91,7 +92,6 @@ const id = (k: string) => `gas-${k}`;
                       {row.out
                         ? <output id={id(row.key)} data-o={row.key} aria-live="polite">{shown[row.key]}</output>
                         : <input id={id(row.key)} data-k={row.key} data-flow={isFlow ? row.key : undefined}
-                            class:list={[{ calcd: isFlow && !given }]}
                             value={given || !isFlow ? row.value : shown[row.key]}
                             type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />}
                     </td>
@@ -140,6 +140,8 @@ const id = (k: string) => `gas-${k}`;
     const sel = (k: string) => root.querySelector<HTMLSelectElement>(`select[data-u="${k}"]`)?.value ?? '';
     const out = (k: string) => root.querySelector<HTMLOutputElement>(`output[data-o="${k}"]`)!;
     let given = root.dataset.given as Given;
+    // all four flows stay yellow (any can be typed) until the visitor types into one of them (owner, 2026-11-20)
+    let chosen = false;
 
     const run = () => {
       let bad = false;
@@ -175,7 +177,7 @@ const id = (k: string) => `gas-${k}`;
       for (const k of FLOWS) {
         const el = inp(k);
         const isGiven = k === given;
-        el.classList.toggle('calcd', !isGiven);
+        el.classList.toggle('calcd', chosen && !isGiven);
         root.querySelector(`tr[data-row="${k}"] [data-eq]`)!.innerHTML = mathHtml(flowFormula(k, given));
         if (!isGiven) el.value = show(fromSI(LISTS[k], sel(k), r[k]));
       }
@@ -184,8 +186,9 @@ const id = (k: string) => `gas-${k}`;
     root.addEventListener('input', (e) => {
       const t = e.target as HTMLElement;
       const f = t.dataset.flow as Given | undefined;
-      if (f && f !== given) {
+      if (f && (f !== given || !chosen)) {
         given = f;
+        chosen = true;
         const status = root.querySelector('[data-status]');
         if (status) status.textContent = `${t.closest('tr')?.querySelector('.lb')?.textContent} is now the input; the other flows are calculated.`;
       }
@@ -195,6 +198,7 @@ const id = (k: string) => `gas-${k}`;
 
     root.querySelector('[data-reset]')?.addEventListener('click', () => {
       for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) el.value = '';
+      chosen = false;
       run();
       inp('t').focus();
       const status = root.querySelector('[data-status]');
