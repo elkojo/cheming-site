@@ -1,0 +1,50 @@
+---
+// "Sources" section of a tool page: the original sheet, then every registry source used by the tool,
+// with a link to the source, a Wayback Machine copy and what it was used for.
+import { sourcesFor, type Source } from '../data/sources';
+import { url } from '../lib/url';
+
+interface Props { slug: string; zoho?: string; native: boolean }
+const { slug, zoho, native } = Astro.props;
+const list = sourcesFor(slug);
+const cite = (s: Source) => [s.by, `“${s.title}”`, s.where, s.year && !s.where?.includes(String(s.year)) ? String(s.year) : undefined].filter(Boolean).join(', ');
+---
+{(native || list.length > 0) && (
+  <section class="sources" aria-labelledby={`src-${slug}`}>
+    <h2 id={`src-${slug}`}>Sources</h2>
+    <ol>
+      {native && zoho && (
+        <li>
+          <span class="cite">Original Cheming.Site calculation sheet (Zoho Sheet)</span>
+          <span class="links"><a href={zoho} rel="noopener">sheet</a></span>
+          <span class="use">Inputs, formulas and default values rebuilt here; corrections are listed on the tool and in the project notes.</span>
+        </li>
+      )}
+      {list.map((s) => (
+        <li>
+          <span class="cite">{cite(s)}</span>
+          <span class="links">
+            {s.url && <a href={s.url} rel="noopener">source</a>}
+            {s.archive && <a href={s.archive} rel="noopener">archived copy</a>}
+            <span class="read">read {s.read}</span>
+          </span>
+          <span class="use">{s.use[slug]}</span>
+        </li>
+      ))}
+    </ol>
+    <p class="all"><a href={url('sources/')}>All sources of the site</a></p>
+  </section>
+)}
+
+<style>
+  .sources { padding: 2rem var(--gutter) 0; max-width: 60rem; }
+  h2 { margin: 0 0 0.75rem; font: 400 0.875rem/1 var(--font-drawing); letter-spacing: 0.08em; text-transform: uppercase; }
+  ol { margin: 0; padding-left: 1.5rem; display: grid; gap: 0.625rem; font-size: 0.875rem; }
+  li { padding-left: 0.25rem; }
+  .cite { display: block; color: var(--ink); }
+  .links { display: inline-flex; flex-wrap: wrap; gap: 0 0.75rem; }
+  .links a { color: var(--line); }
+  .read { color: var(--muted); }
+  .use { display: block; color: var(--muted); }
+  .all { margin: 0.75rem 0 0; font-size: 0.875rem; }
+</style>

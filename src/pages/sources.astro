@@ -1,0 +1,73 @@
+---
+// /sources/: every source behind the native calculators, with the tools that use it.
+import Base from '../layouts/Base.astro';
+import Bubble from '../components/Bubble.astro';
+import { sources } from '../data/sources';
+import { tools } from '../data/tools';
+import { url } from '../lib/url';
+
+const bySlug = Object.fromEntries(tools.map((t) => [t.slug, t]));
+const native = tools.filter((t) => t.native);
+---
+<Base title="Sources" description="Standards, articles, tables and web pages behind the Cheming.Site calculators, with archived copies." current="sources">
+  <div class="page">
+    <h1>Sources</h1>
+    <p class="lead">
+      The standards, articles and tables that the native calculators take their formulas and data from, or were checked
+      against. Each entry links to the source and to an archived copy (Wayback Machine), with the date it was read.
+      Tools still shown as Zoho sheets list their basis on their own page.
+    </p>
+
+    <ol class="list">
+      {sources.map((s) => (
+        <li id={s.id}>
+          <p class="cite">{s.by}, “{s.title}”{s.where && `, ${s.where}`}{s.year && !s.where?.includes(String(s.year)) && `, ${s.year}`}.</p>
+          <p class="links">
+            {s.url && <a href={s.url} rel="noopener">source</a>}
+            {s.archive && <a href={s.archive} rel="noopener">archived copy</a>}
+            <span class="read">read {s.read}</span>
+          </p>
+          <ul class="use">
+            {Object.entries(s.use).map(([slug, what]) => (
+              <li>
+                <a href={url(`${slug}/`)}><Bubble tag={bySlug[slug].tag} sub={bySlug[slug].sub} size="sm" /> <span>{bySlug[slug].title}</span></a>
+                <span class="what">{what}</span>
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))}
+    </ol>
+
+    <h2>Original sheets</h2>
+    <p class="lead">Each native calculator was rebuilt from its original Cheming.Site Zoho sheet, which stays linked on the tool page.</p>
+    <ul class="orig">
+      {native.map((t) => (
+        <li><a href={url(`${t.slug}/`)}>{t.title}</a> · <a href={t.zoho.replace(/([?&])mode=embed&?/, '$1').replace(/[?&]$/, '')} rel="noopener">original sheet</a></li>
+      ))}
+    </ul>
+  </div>
+</Base>
+
+<style>
+  .page { padding: 1.5rem var(--gutter) 0; max-width: 64rem; }
+  h1 { margin: 0 0 0.5rem; font-size: 1.75rem; font-weight: 650; letter-spacing: -0.015em; }
+  h2 { margin: 2.5rem 0 0.5rem; font-size: 1.25rem; font-weight: 650; }
+  .lead { margin: 0 0 1.5rem; color: var(--muted); max-width: 70ch; }
+  .list { margin: 0; padding-left: 1.75rem; display: grid; gap: 1.25rem; }
+  .list > li { padding-left: 0.25rem; }
+  .list > li:target { outline: 2px solid var(--line); outline-offset: 0.375rem; }
+  .cite { margin: 0; }
+  .links { margin: 0.125rem 0 0; display: flex; flex-wrap: wrap; gap: 0 0.875rem; font-size: 0.875rem; }
+  .links a { color: var(--line); }
+  .read { color: var(--muted); }
+  .use { list-style: none; margin: 0.375rem 0 0; padding: 0; display: grid; gap: 0.25rem; font-size: 0.875rem; }
+  .use li { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 0.75rem; align-items: start; }
+  .use a { display: inline-flex; align-items: center; gap: 0.375rem; color: var(--ink); text-decoration: none; }
+  .use a:hover span { text-decoration: underline; }
+  .what { color: var(--muted); }
+  .orig { margin: 0; padding-left: 1.25rem; display: grid; gap: 0.25rem; font-size: 0.9375rem; }
+  @media (max-width: 40rem) {
+    .use li { grid-template-columns: 1fr; gap: 0.125rem; }
+  }
+</style>
