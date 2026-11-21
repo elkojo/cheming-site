@@ -3,6 +3,10 @@ import Base from '../layouts/Base.astro';
 import Bubble from '../components/Bubble.astro';
 import Legend from '../components/Legend.astro';
 import { categories, tools } from '../data/tools';
+
+// Index columns (owner, 2026-11-21): Properties under General, Equipment under Relief & Flare, Piping & Flow alone.
+const cat = (id: string) => categories.find((c) => c.id === id)!;
+const columns = [[cat('general'), cat('properties')], [cat('relief'), cat('equipment')], [cat('piping')]];
 import { url } from '../lib/url';
 ---
 <Base>
@@ -20,24 +24,28 @@ import { url } from '../lib/url';
     </div>
 
     <div class="index" id="index">
-      {categories.map((c) => (
-        <section class="cat" aria-labelledby={`cat-${c.id}`}>
-          <h2 id={`cat-${c.id}`}>{c.title}</h2>
-          <ul>
-            {tools.filter((t) => t.category === c.id).map((t) => (
-              <li data-search={[t.tag, t.sub, t.title, t.name, t.standard, t.slug].filter(Boolean).join(' ').toLowerCase()}>
-                <a href={url(`${t.slug}/`)}>
-                  <Bubble tag={t.tag} sub={t.sub} native={!!t.native} />
-                  <span class="txt">
-                    <span class="name">{t.title}</span>
-                    <span class="desc">{t.description ?? t.name}</span>
-                  </span>
-                </a>
-                {t.credit && <p class="credit">Credits: <a href={t.credit.url} rel="noopener">{t.credit.name}</a></p>}
-              </li>
-            ))}
-          </ul>
-        </section>
+      {columns.map((col) => (
+        <div class="col">
+          {col.map((c) => (
+            <section class="cat" aria-labelledby={`cat-${c.id}`} style={`--o: ${categories.indexOf(c)}`}>
+              <h2 id={`cat-${c.id}`}>{c.title}</h2>
+              <ul>
+                {tools.filter((t) => t.category === c.id).map((t) => (
+                  <li data-search={[t.tag, t.sub, t.title, t.name, t.standard, t.slug].filter(Boolean).join(' ').toLowerCase()}>
+                    <a href={url(`${t.slug}/`)}>
+                      <Bubble tag={t.tag} sub={t.sub} native={!!t.native} />
+                      <span class="txt">
+                        <span class="name">{t.title}</span>
+                        <span class="desc">{t.description ?? t.name}</span>
+                      </span>
+                    </a>
+                    {t.credit && <p class="credit">Credits: <a href={t.credit.url} rel="noopener">{t.credit.name}</a></p>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       ))}
     </div>
 
@@ -54,6 +62,7 @@ import { url } from '../lib/url';
   const q = document.getElementById('q') as HTMLInputElement;
   const rows = [...document.querySelectorAll<HTMLLIElement>('#index li')];
   const cats = [...document.querySelectorAll<HTMLElement>('#index .cat')];
+  const cols = [...document.querySelectorAll<HTMLElement>('#index .col')];
   const count = document.getElementById('count')!;
   const empty = document.getElementById('empty')!;
   const emptyQ = document.getElementById('empty-q')!;
@@ -67,6 +76,7 @@ import { url } from '../lib/url';
       if (hit) shown++;
     }
     for (const c of cats) c.hidden = !c.querySelector('li:not([hidden])');
+    for (const col of cols) col.hidden = !col.querySelector('.cat:not([hidden])');
     count.textContent = shown === rows.length ? `${rows.length} tools` : `${shown} of ${rows.length}`;
     empty.hidden = shown > 0;
     emptyQ.textContent = q.value.trim();
@@ -119,6 +129,11 @@ import { url } from '../lib/url';
     gap: 2rem 2.5rem;
     align-items: start;
   }
+  /* Combined columns only when all three fit side by side; narrower, each category flows on its own as before. */
+  .index { container-type: inline-size; }
+  .col { display: grid; gap: 2rem; align-content: start; }
+  @container (max-width: 61.9rem) { .col { display: contents; } .cat { order: var(--o); } }
+  .col[hidden] { display: none; }
   .cat h2 {
     margin: 0 0 0.25rem;
     padding-bottom: 0.5rem;
