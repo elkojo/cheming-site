@@ -240,7 +240,8 @@ export const tools: Tool[] = [
     "name": "Physical Properties of Pure Components",
     "description": "Physical properties of pure components found by name: molecular weight, boiling and freezing points, critical constants, heats of vaporization and formation, density, heat capacity and viscosity.",
     "category": "properties",
-    "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/459b084fb19212c637bc096e8fd94e30a4584e3517987d87aa3b87aeebbc5354?type=grid&mode=embed"
+    "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/459b084fb19212c637bc096e8fd94e30a4584e3517987d87aa3b87aeebbc5354?type=grid&mode=embed",
+    "native": "properties"
   },
   {
     "slug": "steam",

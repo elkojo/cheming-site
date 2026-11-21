@@ -11,6 +11,7 @@ import UnitCalc from '../components/UnitCalc.astro';
 import SteamCalc from '../components/SteamCalc.astro';
 import SieveCalc from '../components/SieveCalc.astro';
 import PipeSizeCalc from '../components/PipeSizeCalc.astro';
+import PropertiesCalc from '../components/PropertiesCalc.astro';
 import SourceList from '../components/SourceList.astro';
 import { tools, categories } from '../data/tools';
 import { url } from '../lib/url';
@@ -55,6 +56,7 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
       : tool.native === 'steam' ? <SteamCalc />
       : tool.native === 'sieve' ? <SieveCalc />
       : tool.native === 'pipesize' ? <PipeSizeCalc />
+      : tool.native === 'properties' ? <PropertiesCalc />
       : tool.native ? <NativeCalc id={tool.native} title={tool.title} />
       : <ZohoEmbed src={tool.zoho} title={tool.title} />}
   </div>
