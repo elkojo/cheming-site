@@ -182,7 +182,7 @@ export const sources: Source[] = [
     url: 'http://user.engineering.uiowa.edu/~me_160/lecture_notes/MoodyLFpaper1944.pdf',
     archive: 'https://web.archive.org/web/20141121084643/http://user.engineering.uiowa.edu:80/~me_160/lecture_notes/MoodyLFpaper1944.pdf',
     read: '2026-11-22',
-    use: { 'pressure-loss-single-phase': 'Absolute roughness of commercial pipe materials (the material presets), as tabulated from the paper in the fluids library; the default 0.0457 mm is Moody\'s commercial steel, 0.00015 ft.' },
+    use: { 'pressure-loss-single-phase': 'Absolute roughness of new pipe (the material presets): Fig. 2 and the table in Fig. 7 (H. Rouse\'s discussion, p. 681), drawn tubing 0.000005 ft (p. 677); the default 0.0457 mm is commercial steel, 0.00015 ft. Also the laminar f = 64/R and the critical zone between R = 2000 and 3000–4000 (p. 674).' },
   },
   {
     id: 'goudar-sonnad-2007', by: 'C. T. Goudar, J. R. Sonnad', title: 'Explicit friction factor correlation for turbulent flow in rough pipe',
