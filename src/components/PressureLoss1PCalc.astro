@@ -1,0 +1,447 @@
+---
+// Native Pressure Loss: Single Phase calculator (Phase 7). Pipe by NPS + schedule (ASME B36.10M/B36.19M) or an own
+// inside diameter; roughness typed or picked (Moody 1944); liquid (typed density) or gas (density from p, T, M, Z);
+// straight length plus fittings by Le/D; Darcy–Weisbach with exact Colebrook (64/Re laminar); API RP 14E velocity.
+// Inputs start on the Zoho defaults; results are computed in the browser on load.
+import DrawingFrame from './DrawingFrame.astro';
+import { FITTINGS, ROUGHNESS } from '../lib/calc/pressure1p';
+import { SIZES, schedulesFor } from '../lib/calc/pipes';
+import { quantity, DEFAULT_SETTINGS, pressureAbs } from '../lib/calc/units';
+import { mathHtml } from '../lib/calc/types';
+
+const U = (q: string) => quantity(q).units(DEFAULT_SETTINGS).map((u) => u.label);
+const LEN = ['mm', 'm', 'in', 'ft'];
+const AREA = ['mm²', 'cm²', 'm²', 'in²', 'ft²'];
+const VEL = ['m/s', 'ft/s'];
+const DP = pressureAbs(DEFAULT_SETTINGS).map(([l]) => l);
+const DPL = U('dpl');
+const VFLOW = U('vflow');
+const STDFLOW = VFLOW.filter((l) => !l.startsWith('bpd')).map((l) => `Std ${l}`);
+const MOM = ['Pa', 'kg/(m·s²)', 'lbm/(ft·s²)'];
+
+type Row =
+  | { t: 'in'; k: string; label: string; sym: string; units?: string[]; unit?: string; value: string; phase?: 'liquid' | 'gas' }
+  | { t: 'out'; k: string; label: string; sym?: string; units?: string[]; unit?: string; phase?: 'liquid' | 'gas'; text?: boolean };
+
+const pipeRows: Row[] = [
+  { t: 'out', k: 'dn', label: 'Nominal diameter', sym: 'DN', text: true },
+  { t: 'out', k: 'od', label: 'Outside diameter', sym: 'OD', units: LEN, unit: 'mm' },
+  { t: 'out', k: 'wall', label: 'Wall thickness', sym: 's = (OD − d)/2', units: LEN, unit: 'mm' },
+  { t: 'out', k: 'area', label: 'Flow area', sym: 'A = π·d²/4', units: AREA, unit: 'mm²' },
+  { t: 'out', k: 'aod', label: 'Area over outside diameter', sym: 'A_o = π·OD²/4', units: AREA, unit: 'mm²' },
+];
+const fluidRows: Row[] = [
+  { t: 'in', k: 'w', label: 'Mass flow', sym: 'W', units: U('mflow'), unit: 'kg/s', value: '36.5' },
+  { t: 'in', k: 'rho', label: 'Density', sym: 'ρ', units: U('density'), unit: 'kg/m³', value: '862.68', phase: 'liquid' },
+  { t: 'in', k: 'mw', label: 'Molar mass', sym: 'M', units: ['kg/kmol'], unit: 'kg/kmol', value: '18.015', phase: 'gas' },
+  { t: 'in', k: 'z', label: 'Compressibility factor', sym: 'Z', value: '0.9977', phase: 'gas' },
+  { t: 'in', k: 't', label: 'Temperature', sym: 'T', units: U('temp'), unit: '°C (Celsius)', value: '370', phase: 'gas' },
+  { t: 'in', k: 'p', label: 'Pressure', sym: 'p', units: U('pressure').filter((l) => !/column/.test(l)), unit: 'bar (A)', value: '1.5', phase: 'gas' },
+  { t: 'in', k: 'k', label: 'Heat capacity ratio', sym: 'k = c_p/c_v', value: '1.295', phase: 'gas' },
+  { t: 'out', k: 'rhog', label: 'Density', sym: 'ρ = p·M/(Z·R·T)', units: U('density'), unit: 'kg/m³', phase: 'gas' },
+  { t: 'in', k: 'mu', label: 'Viscosity', sym: 'μ', units: U('mu'), unit: 'cP', value: '0.6503' },
+];
+const resRows: Row[] = [
+  { t: 'out', k: 'q', label: 'Volume flow', sym: 'Q = W/ρ', units: VFLOW, unit: 'm³/min' },
+  { t: 'out', k: 'qstd', label: 'Standard volume flow', sym: 'Q_std = W·R·T_std/(M·p_std)', units: STDFLOW, unit: 'Std m³/min', phase: 'gas' },
+  { t: 'out', k: 'v', label: 'Velocity', sym: 'v = Q/A', units: VEL, unit: 'm/s' },
+  { t: 'out', k: 're', label: 'Reynolds number', sym: 'Re = ρ·v·d/μ' },
+  { t: 'out', k: 'regime', label: 'Flow regime', sym: 'laminar ≤ 2000 < transitional < 4000 ≤ turbulent', text: true },
+  { t: 'out', k: 'f', label: 'Friction factor (Darcy)', sym: '1/√f = −2·log(ε/(3.7·d) + 2.51/(Re·√f))' },
+  { t: 'out', k: 'dp', label: 'Pressure drop', sym: 'Δp = f·(L_e/d)·ρ·v²/2', units: DP, unit: 'bar' },
+  { t: 'out', k: 'dpl', label: 'Pressure drop per length', sym: 'Δp/L_e', units: DPL, unit: DPL.includes('bar/100 m') ? 'bar/100 m' : DPL[0] },
+  { t: 'out', k: 'ratio', label: 'Pressure drop / pressure', sym: 'Δp/p', units: ['%'], unit: '%', phase: 'gas' },
+  { t: 'out', k: 'c', label: 'Speed of sound', sym: 'c = √(k·R·T/M)', units: VEL, unit: 'm/s', phase: 'gas' },
+  { t: 'out', k: 'mach', label: 'Mach number', sym: 'Ma = v/c', phase: 'gas' },
+  { t: 'out', k: 'mom', label: 'Momentum flux', sym: 'ρ·v²', units: MOM, unit: 'Pa' },
+  { t: 'in', k: 'c14', label: 'API RP 14E factor', sym: 'C', units: ['√(lb/(ft·s²))'], unit: '√(lb/(ft·s²))', value: '100' },
+  { t: 'out', k: 've', label: 'Erosional velocity', sym: 'v_e = C/√ρ', units: VEL, unit: 'm/s' },
+];
+const id = (k: string) => `p1-${k}`;
+const DEF = { nps: '8', sched: '40' };
+// mass flow and viscosity are remembered per phase; the gas example is steam at 370 °C, 1.5 bar a (IAPWS-IF97)
+const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: { w: ['0.5', 'kg/s'], mu: ['0.0232', 'cP'] } };
+---
+<DrawingFrame>
+  <div class="calc p1" data-p1 data-phase-def={JSON.stringify(PHASE_DEF)}>
+    <div class="bar">
+      <p>Frictional pressure drop of a liquid or a gas in a straight pipe with fittings. Pick the units in the right-hand column.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('pipe-h')}>
+      <h2 id={id('pipe-h')}>Pipe</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('nps')}><span class="lb">Nominal pipe size</span> <span class="eq" set:html={mathHtml('NPS')} /></label></th>
+            <td class="v"><select id={id('nps')} data-s="nps">{SIZES.map((s) => <option value={s.nps} selected={s.nps === DEF.nps}>{s.nps}</option>)}</select></td>
+            <td class="u"><span>in</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('sched')}><span class="lb">Schedule</span> <span class="eq">ASME B36.10M / B36.19M</span></label></th>
+            <td class="v"><select id={id('sched')} data-s="sched">{schedulesFor(DEF.nps).map((s) => <option selected={s === DEF.sched}>{s}</option>)}<option value="own">own ID</option></select></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+          <tr data-row="d">
+            <th scope="row"><label for={id('d')}><span class="lb">Inside diameter</span> <span class="eq" set:html={mathHtml('d')} /></label></th>
+            <td class="v"><input id={id('d')} data-k="d" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" readonly class="calcd" /></td>
+            <td class="u"><select data-u="d" aria-label="Inside diameter unit">{LEN.map((u) => <option selected={u === 'mm'}>{u}</option>)}</select></td>
+          </tr>
+          {pipeRows.map((r) => (
+            <tr data-row={r.k} class:list={[{ txt: r.t === 'out' && r.text }]}>
+              <th scope="row"><span class="lb">{r.label}</span> {r.sym && <span class="eq" set:html={mathHtml(r.sym)} />}</th>
+              <td class="v"><output data-o={r.k} /></td>
+              <td class="u">{r.units ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>{r.text ? '' : '–'}</span>}</td>
+            </tr>
+          ))}
+          <tr>
+            <th scope="row"><label for={id('mat')}><span class="lb">Pipe material</span> <span class="eq">(Moody 1944)</span></label></th>
+            <td class="v wide" colspan="2"><select id={id('mat')} data-s="mat">
+              <option value="">— type ε below —</option>
+              {ROUGHNESS.map(([n, e]) => <option value={String(e)}>{n} ({+(e * 1000).toPrecision(3)} mm)</option>)}
+            </select></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('eps')}><span class="lb">Absolute roughness</span> <span class="eq" set:html={mathHtml('ε')} /></label></th>
+            <td class="v"><input id={id('eps')} data-k="eps" value="0.0457" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="eps" aria-label="Roughness unit">{['mm', 'µm', 'm', 'in', 'ft'].map((u) => <option selected={u === 'mm'}>{u}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Relative roughness</span> <span class="eq" set:html={mathHtml('ε/d')} /></th>
+            <td class="v"><output data-o="rr" /></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">Choose <b>own ID</b> under Schedule to type any inside diameter. Pick a material to fill in its roughness, or type your own <i>ε</i> (corroded or lined pipe can be much rougher).</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('fluid-h')}>
+      <h2 id={id('fluid-h')}>Fluid</h2>
+      <fieldset class="phase">
+        <legend class="sr">Phase</legend>
+        <label><input type="radio" name={id('phase')} value="liquid" checked /> Liquid</label>
+        <label><input type="radio" name={id('phase')} value="gas" /> Gas</label>
+      </fieldset>
+      <table class="io">
+        <tbody>
+          {fluidRows.map((r) => (
+            <tr data-row={r.k} data-phase={r.phase}>
+              <th scope="row">{r.t === 'in'
+                ? <label for={id(r.k)}><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></label>
+                : <><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym!)} /></>}</th>
+              <td class="v">{r.t === 'in'
+                ? <input id={id(r.k)} data-k={r.k} value={r.value} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
+                : <output data-o={r.k} />}</td>
+              <td class="u">{r.units && r.units.length > 1 ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>{r.units?.[0] ?? '–'}</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note" data-phase="gas">Example: steam at 370 °C and 1.5 bar a (properties from IAPWS-IF97). Mass flow and viscosity are kept separately for liquid and gas. Gas density from the ideal-gas law with the compressibility factor, <i>R</i> = 8.314462618 J/(mol·K). Standard conditions 101.325 kPa, 20 °C. The method treats the gas as having constant density: fine while the pressure drop stays below about 10 % of the pressure.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('len-h')}>
+      <h2 id={id('len-h')}>Length</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('la')}><span class="lb">Straight pipe length</span> <span class="eq" set:html={mathHtml('L_a')} /></label></th>
+            <td class="v"><input id={id('la')} data-k="la" value="100" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="la" aria-label="Length unit">{['m', 'km', 'ft', 'mi'].map((u) => <option selected={u === 'm'}>{u}</option>)}</select></td>
+          </tr>
+        </tbody>
+      </table>
+      <details class="fit">
+        <summary>Fittings and valves <span class="muted" data-fitsum></span></summary>
+        <table class="ft">
+          <thead><tr><th scope="col">Fitting</th><th scope="col">Le/D</th><th scope="col">Number <i>n</i></th></tr></thead>
+          <tbody>
+            {FITTINGS.map(([n, l], i) => (
+              <tr>
+                <th scope="row"><label for={id(`f${i}`)}>{n}</label></th>
+                <td class="ld">{l}</td>
+                <td class="n"><input id={id(`f${i}`)} data-fit={i} type="text" inputmode="numeric" autocomplete="off" spellcheck="false" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="note">Equivalent lengths in pipe diameters as on the original sheet. Typical values for fully turbulent flow; they vary with size and maker.</p>
+      </details>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><span class="lb">Fittings</span> <span class="eq" set:html={mathHtml('Σ n·Le/D')} /></th>
+            <td class="v"><output data-o="nld" /></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Equivalent length</span> <span class="eq" set:html={mathHtml('L_e = L_a + d·Σ n·Le/D')} /></th>
+            <td class="v"><output data-o="le" /></td>
+            <td class="u"><select data-u="le" aria-label="Equivalent length unit">{['m', 'km', 'ft', 'mi'].map((u) => <option selected={u === 'm'}>{u}</option>)}</select></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="grp" aria-labelledby={id('res-h')}>
+      <h2 id={id('res-h')}>Pressure drop</h2>
+      <table class="io">
+        <tbody>
+          {resRows.map((r) => (
+            <tr data-row={r.k} data-phase={r.phase} class:list={[{ txt: r.t === 'out' && r.text, key: r.k === 'dp' }]}>
+              <th scope="row">{r.t === 'in'
+                ? <label for={id(r.k)}><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></label>
+                : <><span class="lb">{r.label}</span> {r.sym && <span class="eq" set:html={r.k === 'regime' ? r.sym : mathHtml(r.sym)} />}</>}</th>
+              <td class="v">{r.t === 'in'
+                ? <input id={id(r.k)} data-k={r.k} value={r.value} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
+                : <output data-o={r.k} />}</td>
+              <td class="u">{r.units && r.units.length > 1 ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>{r.units?.[0] ?? (r.t === 'out' && r.text ? '' : '–')}</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <ul class="warn" data-warn aria-live="polite"></ul>
+      <p class="note">Darcy–Weisbach with the Colebrook–White friction factor solved exactly (turbulent and transitional flow), <i>f</i> = 64/<i>Re</i> for laminar flow. API RP 14E: <i>v</i><sub>e</sub> in ft/s with <i>ρ</i> in lb/ft³; <i>C</i> = 100 for continuous service, 125 intermittent, 150–200 for non-corrosive or inhibited fluids (written for production piping; a rule of thumb elsewhere).</p>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { solve, FITTINGS, type Gas } from '../lib/calc/pressure1p';
+  import { pipe, id as pipeId, schedulesFor, SIZES, type Schedule } from '../lib/calc/pipes';
+  import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig, pressureAbs, type Unit } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+
+  const Q = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
+  const L = (pairs: [string, number][]): Unit[] => pairs.map(([label, f]) => ({ label, f }));
+  const LB = 0.45359237, FT = 0.3048;
+  const LEN = L([['mm', 1e-3], ['µm', 1e-6], ['m', 1], ['km', 1e3], ['in', 0.0254], ['ft', FT], ['mi', 1609.344]]);
+  const AREA = L([['mm²', 1e-6], ['cm²', 1e-4], ['m²', 1], ['in²', 0.0254 ** 2], ['ft²', FT ** 2]]);
+  const VEL = L([['m/s', 1], ['ft/s', FT]]);
+  const MOM = L([['Pa', 1], ['kg/(m·s²)', 1], ['lbm/(ft·s²)', LB / FT]]);
+  const ONE = L([['–', 1], ['kg/kmol', 1], ['√(lb/(ft·s²))', 1], ['%', 0.01]]);
+  const VFLOW = Q('vflow');
+  const STD = VFLOW.map((u) => ({ label: `Std ${u.label}`, f: u.f }));
+  const LISTS: Record<string, Unit[]> = {
+    w: Q('mflow'), rho: Q('density'), rhog: Q('density'), t: Q('temp'), p: Q('pressure'), mu: Q('mu'),
+    q: VFLOW, qstd: STD, dpl: Q('dpl'),
+  };
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const REGIME: Record<string, string> = { laminar: 'Laminar', transitional: 'Transitional', turbulent: 'Turbulent' };
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-p1]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const sel = (k: string) => root.querySelector<HTMLSelectElement>(`select[data-u="${k}"]`);
+    const out = (k: string) => $<HTMLOutputElement>(`output[data-o="${k}"]`);
+    const unitOf = (k: string, list?: Unit[]): Unit => {
+      const s = sel(k);
+      const label = s ? s.value : (root.querySelector(`tr[data-row="${k}"] td.u span`)?.textContent ?? '–');
+      const all = list ?? LISTS[k] ?? [...LEN, ...AREA, ...VEL, ...MOM, ...ONE];
+      return all.find((u) => u.label === label) ?? { label, f: 1 };
+    };
+    const phase = () => root.querySelector<HTMLInputElement>('input[type=radio]:checked')!.value as 'liquid' | 'gas';
+    const nps = $<HTMLSelectElement>('select[data-s="nps"]');
+    const sched = $<HTMLSelectElement>('select[data-s="sched"]');
+    const mat = $<HTMLSelectElement>('select[data-s="mat"]');
+    let bad = false;
+    // per-phase mass flow and viscosity (value, unit)
+    const mem: Record<string, Record<string, [string, string]>> = JSON.parse(root.dataset.phaseDef!);
+    let cur = phase();
+    const swapPhase = () => {
+      const next = phase();
+      if (next === cur) return;
+      for (const k of ['w', 'mu']) {
+        mem[cur][k] = [inp(k).value, sel(k)!.value];
+        [inp(k).value, sel(k)!.value] = mem[next][k];
+      }
+      cur = next;
+    };
+
+    const read = (k: string, ok: (x: number) => boolean, list?: Unit[]) => {
+      const el = inp(k);
+      const blank = el.value.trim() === '';
+      const x = blank ? NaN : toSI(unitOf(k, list), parseNumber(el.value));
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      if (invalid) bad = true;
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, si: number | string | undefined, list?: Unit[]) => {
+      const o = out(k);
+      if (typeof si === 'string') { o.textContent = si; return; }
+      o.textContent = si === undefined || !Number.isFinite(si) ? (bad ? '—' : '') : fmt(fromSI(unitOf(k, list), si));
+    };
+
+    const fillSchedules = () => {
+      const cur = sched.value;
+      const list = schedulesFor(nps.value);
+      sched.replaceChildren(...list.map((s) => new Option(s, s)), new Option('own ID', 'own'));
+      sched.value = cur === 'own' ? 'own' : list.includes(cur as Schedule) ? cur : list.includes('40') ? '40' : list.includes('STD') ? 'STD' : list[0];
+    };
+
+    const run = () => {
+      bad = false;
+      const own = sched.value === 'own';
+      const dIn = inp('d');
+      dIn.readOnly = !own;
+      dIn.classList.toggle('calcd', !own);
+      const pos = (x: number) => x > 0;
+      const p = own ? undefined : pipe(nps.value, sched.value as Schedule);
+      let d: number;
+      if (own) d = read('d', pos, LEN);
+      else {
+        d = p ? pipeId(p) * 0.0254 : NaN;
+        dIn.removeAttribute('aria-invalid');
+        dIn.value = Number.isFinite(d) ? fmt(fromSI(unitOf('d', LEN), d)) : '';
+      }
+      for (const k of ['dn', 'od', 'wall', 'aod']) root.querySelector(`tr[data-row="${k}"]`)!.toggleAttribute('hidden', own);
+      show('dn', p ? `DN ${SIZES.find((s) => s.nps === p.nps)!.dn}` : '');
+      show('od', p ? p.od * 0.0254 : undefined, LEN);
+      show('wall', p ? p.wall * 0.0254 : undefined, LEN);
+      show('aod', p ? Math.PI * (p.od * 0.0254) ** 2 / 4 : undefined, AREA);
+      show('area', Math.PI * d * d / 4, AREA);
+
+      const eps = read('eps', (x) => x >= 0, LEN);
+      // the material list follows a typed roughness
+      const hit = [...mat.options].find((o) => o.value && Math.abs(Number(o.value) - eps) <= 1e-9 + 1e-3 * eps);
+      mat.value = hit ? hit.value : '';
+      show('rr', eps / d, ONE);
+
+      const gas = phase() === 'gas';
+      for (const el of root.querySelectorAll<HTMLElement>('[data-phase]')) el.hidden = el.dataset.phase !== (gas ? 'gas' : 'liquid');
+      const w = read('w', pos), mu = read('mu', pos);
+      let rho = NaN, g: Gas | undefined;
+      if (gas) {
+        g = { mw: read('mw', pos, ONE) , z: read('z', pos, ONE), t: read('t', pos), p: read('p', pos), k: read('k', (x) => x > 1, ONE) };
+        rho = g.p * g.mw / 1000 / (g.z * 8.314462618 * g.t);
+      } else rho = read('rho', pos);
+      show('rhog', rho);
+
+      let nld = 0, fitBad = false;
+      for (const f of root.querySelectorAll<HTMLInputElement>('input[data-fit]')) {
+        const blank = f.value.trim() === '';
+        const n = blank ? 0 : parseNumber(f.value);
+        const invalid = !blank && !(Number.isInteger(n) && n >= 0);
+        f.toggleAttribute('aria-invalid', invalid);
+        if (invalid) { bad = true; fitBad = true; } else nld += n * FITTINGS[Number(f.dataset.fit)][1];
+      }
+      $('[data-fitsum]').textContent = nld ? `(Σ n·Le/D = ${nld})` : '(none)';
+      show('nld', fitBad ? NaN : nld, ONE);
+      const la = read('la', (x) => x >= 0, LEN);
+      const c14 = read('c14', pos, ONE);
+
+      const lists = { ...LISTS, dp: L(pressureAbs({ ...DEFAULT_SETTINGS, rhoCol: Number.isFinite(rho) ? rho : 1000 })) };
+      const ok = !fitBad && [d, eps, w, mu, rho, la].every(Number.isFinite) && (!gas || [g!.mw, g!.z, g!.t, g!.p, g!.k].every(Number.isFinite));
+      const r = ok ? solve({ d, eps, w, mu, rho: gas ? undefined : rho, gas: g, la, nLeD: nld, c14e: Number.isFinite(c14) ? c14 : 100 }) : undefined;
+      show('le', r?.le ?? (!fitBad && Number.isFinite(d) && Number.isFinite(la) ? la + d * nld : undefined), LEN);
+      show('q', r?.q); show('qstd', r?.gas?.qStd); show('v', r?.v, VEL); show('re', r?.re, ONE);
+      show('regime', r ? REGIME[r.regime] : bad ? '—' : '');
+      show('f', r?.f, ONE); show('dp', r?.dp, lists.dp); show('dpl', r?.dpPer100 !== undefined ? r.dp / r.le : undefined);
+      show('ratio', r?.gas?.dpRatio, ONE); show('c', r?.gas?.c, VEL); show('mach', r?.gas?.mach, ONE);
+      show('mom', r?.rhoV2, MOM); show('ve', Number.isFinite(c14) ? r?.ve : undefined, VEL);
+      const fRow = root.querySelector('tr[data-row="f"] .eq')!;
+      fRow.innerHTML = r?.regime === 'laminar' ? '<i>f</i> = 64/<i>Re</i>' : '1/√<i>f</i> = −2·log(<i>ε</i>/(3.7·<i>d</i>) + 2.51/(<i>Re</i>·√<i>f</i>))';
+
+      const warn: string[] = [];
+      if (r?.regime === 'transitional') warn.push('Transitional flow (2000 < <i>Re</i> < 4000): the friction factor is uncertain; the turbulent (Colebrook) value is shown, which is the higher, conservative one.');
+      if (r?.gas && r.gas.dpRatio > 0.1) warn.push(`Pressure drop is ${fmt(r.gas.dpRatio * 100)} % of the pressure: the constant-density method is no longer accurate (above 10 %). Split the line into shorter sections, or use a compressible-flow method.`);
+      if (r?.gas && r.gas.mach > 0.3) warn.push(`Mach ${fmt(r.gas.mach)}: compressibility effects are significant above Mach 0.3; the flow chokes at Mach 1.`);
+      if (r && Number.isFinite(c14) && r.v > r.ve) warn.push('Velocity is above the API RP 14E erosional velocity.');
+      $('[data-warn]').innerHTML = warn.map((w) => `<li>${w}</li>`).join('');
+    };
+
+    root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input')) run(); });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLElement;
+      if (t === nps) fillSchedules();
+      if (t === sched && sched.value === 'own') {
+        inp('d').focus();
+        $('[data-status]').textContent = 'Type the inside diameter.';
+      }
+      if (t === mat && mat.value) inp('eps').value = fmt(fromSI(unitOf('eps', LEN), Number(mat.value)));
+      if (t.matches('input[type=radio]')) swapPhase();
+      if (t.matches('select, input[type=radio]')) run();
+    });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]:not([readonly])')) el.value = '';
+      for (const ph of Object.values(mem)) for (const k of ['w', 'mu']) ph[k][0] = '';
+      run();
+      inp('w').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset {
+    height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line);
+    font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .lb { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .ft :global(i) { font-style: italic; padding-right: 0.05em; }
+  .note b { font-weight: 650; color: var(--ink); }
+  .io { max-width: 44rem; }
+  .io .v { width: 9.5rem; }
+  .io .u { width: 8.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io td.wide { width: auto; }
+  .io td.wide select { max-width: 24rem; }
+  .io tr.txt output { background: none; padding-left: 0; font-weight: 600; }
+  .io tr.key output { font-weight: 650; }
+  tr[hidden], [data-phase][hidden] { display: none; }
+
+  input, output, select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  input, output { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  input { background: var(--zoho-in); border-color: var(--muted); }
+  input.calcd { background: var(--zoho-out); border-color: transparent; }
+  input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  output { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+
+  .phase { display: flex; gap: 1.25rem; margin: 0 0 0.5rem; padding: 0; border: 0; }
+  .phase label { display: inline-flex; align-items: center; gap: 0.375rem; cursor: pointer; font-size: 0.9375rem; }
+  .phase input { display: inline-block; width: auto; height: auto; accent-color: var(--line); }
+
+  .fit { margin: 0.5rem 0; max-width: 44rem; }
+  .fit summary { cursor: pointer; padding: 0.25rem 0; font-weight: 600; font-size: 0.9375rem; }
+  .fit summary .muted { color: var(--muted); font-weight: 400; }
+  .ft thead th { color: var(--muted); font-size: 0.8125rem; font-weight: 600; padding-top: 0.25rem; }
+  .ft .ld { width: 4.5rem; text-align: right; padding-right: 0.75rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .ft thead th:nth-child(2) { text-align: right; padding-right: 0.75rem; }
+  .ft .n { width: 5rem; }
+  .ft tbody tr:nth-child(even) th, .ft tbody tr:nth-child(even) td.ld { background: var(--wash); }
+
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 44rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 44rem; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .io .v { width: 7rem; }
+    .io .u { width: 6.5rem; }
+    .ft .ld { width: 3.25rem; padding-right: 0.5rem; }
+    .ft .n { width: 3.5rem; }
+  }
+</style>

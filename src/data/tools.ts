@@ -106,9 +106,10 @@ export const tools: Tool[] = [
     "sub": "1",
     "title": "Pressure Loss: Single Phase",
     "name": "Pressure Loss of Single Phase Flow in Circular Rough Piping",
-    "description": "Pressure drop of liquid or gas in circular rough pipe from pipe size and schedule, including fittings by equivalent length (Le/D).",
-    "standard": "Goudar & Sonnad friction factor, Hydrocarbon Processing (Apr 2007)",
+    "description": "Pressure drop of liquid or gas in circular rough pipe from pipe size and schedule (ASME B36.10M/B36.19M) or any inside diameter, including fittings by equivalent length (Le/D), with velocity, Reynolds number, Mach number and API RP 14E erosional velocity.",
+    "standard": "Darcy–Weisbach with the Colebrook–White friction factor",
     "category": "piping",
+    "native": "pressure1p",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/a5e624f799e372407267e75c5d2ea2d2aa8a0e692e4a1cab09ae6f9e3df66194?type=grid&mode=embed"
   },
   {

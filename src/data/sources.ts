@@ -146,7 +146,7 @@ export const sources: Source[] = [
     url: 'https://www.engineeringtoolbox.com/steel-pipes-dimensions-d_43.html',
     archive: 'https://web.archive.org/web/20261020002132/https://www.engineeringtoolbox.com/steel-pipes-dimensions-d_43.html',
     read: '2026-11-20',
-    use: { 'pipe-size': 'Outside diameters, Schedule STD and 10S walls, NPS 1/8–18.' },
+    use: { 'pipe-size': 'Outside diameters, Schedule STD and 10S walls, NPS 1/8–18.', 'pressure-loss-single-phase': 'Walls of all schedules, NPS 1/8–18: one of three agreeing sources for the pipe table (fixes PIP-1, PIP-2).' },
   },
   {
     id: 'etb-ss-pipes', by: 'The Engineering ToolBox', title: 'Stainless Steel Pipes – Dimensions and Weights (ASME B36.19)',
@@ -160,7 +160,41 @@ export const sources: Source[] = [
     url: 'https://en.wikipedia.org/wiki/Nominal_Pipe_Size',
     archive: 'https://web.archive.org/web/20261109090751/https://en.wikipedia.org/wiki/Nominal_Pipe_Size',
     read: '2026-11-20',
-    use: { 'pipe-size': 'Schedule STD and 10S dimensions, NPS 10–48 (agrees with the ToolBox where both list a size).' },
+    use: { 'pipe-size': 'Schedule STD and 10S dimensions, NPS 10–48 (agrees with the ToolBox where both list a size).', 'pressure-loss-single-phase': 'Walls of all schedules, NPS 1/8–48: one of three agreeing sources for the pipe table.' },
+  },
+  {
+    id: 'fluids', by: 'C. Bell and contributors', title: 'fluids: fluid dynamics component of Chemical Engineering Design Library (ChEDL), version 1.3.1',
+    url: 'https://pypi.org/project/fluids/',
+    archive: 'https://web.archive.org/web/20260414063257/https://pypi.org/project/fluids/',
+    read: '2026-11-22',
+    use: { 'pressure-loss-single-phase': 'Schedule tables (after ASME B36.10M/B36.19M, in mm): the main source of the pipe table, checked against the ToolBox and Wikipedia. Independent check of the Colebrook solution (agrees to 1e-10) and of the API RP 14E formula.' },
+  },
+  {
+    id: 'colebrook-1939', by: 'C. F. Colebrook', title: 'Turbulent flow in pipes, with particular reference to the transition region between the smooth and rough pipe laws',
+    where: 'Journal of the Institution of Civil Engineers, vol. 11, no. 4, pp. 133–156', year: 1939,
+    url: 'https://doi.org/10.1680/ijoti.1939.13150',
+    read: '2026-11-22',
+    use: { 'pressure-loss-single-phase': 'Colebrook–White friction factor, solved exactly (owner\'s choice 2026-11-22); the original sheet used an explicit approximation of it.' },
+  },
+  {
+    id: 'moody-1944', by: 'L. F. Moody', title: 'Friction Factors for Pipe Flow',
+    where: 'Transactions of the ASME, vol. 66, pp. 671–684', year: 1944,
+    url: 'http://user.engineering.uiowa.edu/~me_160/lecture_notes/MoodyLFpaper1944.pdf',
+    archive: 'https://web.archive.org/web/20141121084643/http://user.engineering.uiowa.edu:80/~me_160/lecture_notes/MoodyLFpaper1944.pdf',
+    read: '2026-11-22',
+    use: { 'pressure-loss-single-phase': 'Absolute roughness of commercial pipe materials (the material presets), as tabulated from the paper in the fluids library; the default 0.0457 mm is Moody\'s commercial steel, 0.00015 ft.' },
+  },
+  {
+    id: 'goudar-sonnad-2007', by: 'C. T. Goudar, J. R. Sonnad', title: 'Explicit friction factor correlation for turbulent flow in rough pipe',
+    where: 'Hydrocarbon Processing, April 2007, pp. 103–105', year: 2007,
+    read: '2026-11-22',
+    use: { 'pressure-loss-single-phase': 'Basis of the original sheet: its correlation is kept only to reproduce the Zoho results in the tests (as typed on the sheet, without the −0.31 term).' },
+  },
+  {
+    id: 'api-rp-14e', by: 'American Petroleum Institute', title: 'API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems',
+    where: 'American Petroleum Institute, Washington, 5th ed.',
+    read: '2026-11-22',
+    use: { 'pressure-loss-single-phase': 'Erosional velocity vₑ = C/√ρ (ft/s, lb/ft³) and the suggested C factors, as quoted in the fluids library (not read from the standard itself).' },
   },
   // ── pure-component properties ──
   {

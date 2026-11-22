@@ -1,31 +1,42 @@
-// Standard pipe dimensions: carbon steel Schedule STD (ASME B36.10M) and stainless Schedule 10S (ASME B36.19M).
-// Sources (they agree): engineeringtoolbox.com "ASME/ANSI B36.10/19 Steel Pipes – Dimensions" (NPS 1/8–18) and
-// "Stainless Steel Pipes – Dimensions" (NPS 1/2–12); Wikipedia "Nominal Pipe Size" tables based on B36.10M/B36.19M
-// (NPS 10–48). Read 2026-11-20. Inches; DN in mm.
+// Standard steel pipe dimensions: ASME B36.10M (carbon steel: Sch 5–160, STD, XS, XXS) and B36.19M (stainless:
+// 5S, 10S, 40S, 80S), NPS 1/8–48. The wall table is generated (pipes-data.ts) from three sources that agree:
+// the fluids library's schedule tables, the Engineering ToolBox (NPS 1/8–18) and Wikipedia "Nominal Pipe Size"
+// tables. Inches; DN in mm. Read 2026-11-20 (STD, 10S) and 2026-11-22 (all schedules).
+import { PIPE_DATA, SCHEDULES, type Schedule } from './pipes-data.ts';
 
+export { SCHEDULES, type Schedule };
 export interface Pipe { nps: string; dn: number; od: number; wall: number }
 /** inside diameter, in */
 export const id = (p: Pipe) => p.od - 2 * p.wall;
 
-// NPS, DN, OD (in), STD wall (in), 10S wall (in) or null where 10S does not exist
-const T: [string, number, number, number, number | null][] = [
-  ['1/8', 6, 0.405, 0.068, 0.049], ['1/4', 8, 0.540, 0.088, 0.065], ['3/8', 10, 0.675, 0.091, 0.065],
-  ['1/2', 15, 0.840, 0.109, 0.083], ['3/4', 20, 1.050, 0.113, 0.083], ['1', 25, 1.315, 0.133, 0.109],
-  ['1 1/4', 32, 1.660, 0.140, 0.109], ['1 1/2', 40, 1.900, 0.145, 0.109], ['2', 50, 2.375, 0.154, 0.109],
-  ['2 1/2', 65, 2.875, 0.203, 0.120], ['3', 80, 3.500, 0.216, 0.120], ['3 1/2', 90, 4.000, 0.226, 0.120],
-  ['4', 100, 4.500, 0.237, 0.120], ['5', 125, 5.563, 0.258, 0.134], ['6', 150, 6.625, 0.280, 0.134],
-  ['8', 200, 8.625, 0.322, 0.148], ['10', 250, 10.750, 0.365, 0.165], ['12', 300, 12.750, 0.375, 0.180],
-  ['14', 350, 14.0, 0.375, 0.188], ['16', 400, 16.0, 0.375, 0.188], ['18', 450, 18.0, 0.375, 0.188],
-  ['20', 500, 20.0, 0.375, 0.218], ['22', 550, 22.0, 0.375, 0.218], ['24', 600, 24.0, 0.375, 0.250],
-  ['26', 650, 26.0, 0.375, null], ['28', 700, 28.0, 0.375, null], ['30', 750, 30.0, 0.375, 0.312],
-  ['32', 800, 32.0, 0.375, null], ['34', 850, 34.0, 0.375, null], ['36', 900, 36.0, 0.375, null],
-  ['42', 1050, 42.0, 0.375, null], ['48', 1200, 48.0, 0.375, null],
-];
+export interface Size { nps: string; value: number; dn: number; od: number; walls: Partial<Record<Schedule, number>> }
+export const SIZES: Size[] = PIPE_DATA.map(([nps, value, dn, od, walls]) => ({ nps, value, dn, od, walls }));
 
+/** The schedules that exist for a size, in the order of SCHEDULES. */
+export const schedulesFor = (nps: string): Schedule[] => {
+  const s = SIZES.find((x) => x.nps === nps);
+  return s ? SCHEDULES.filter((k) => s.walls[k] !== undefined) : [];
+};
+
+/** A pipe by NPS label and schedule, or undefined where that schedule does not exist. */
+export function pipe(nps: string, sched: Schedule): Pipe | undefined {
+  const s = SIZES.find((x) => x.nps === nps);
+  const w = s?.walls[sched];
+  return s && w !== undefined ? { nps: s.nps, dn: s.dn, od: s.od, wall: w } : undefined;
+}
+
+/** All sizes of one schedule (optionally only the listed NPS). */
+const series = (sched: Schedule, only?: string[]): Pipe[] =>
+  SIZES.filter((s) => s.walls[sched] !== undefined && (!only || only.includes(s.nps)))
+    .map((s) => ({ nps: s.nps, dn: s.dn, od: s.od, wall: s.walls[sched]! }));
+
+// The Pipe Size tool's lists, unchanged since it went live (2026-11-20): STD without NPS 38, 40, 44, 46.
+const PIPE_SIZE_NPS = ['1/8', '1/4', '3/8', '1/2', '3/4', '1', '1 1/4', '1 1/2', '2', '2 1/2', '3', '3 1/2', '4', '5', '6',
+  '8', '10', '12', '14', '16', '18', '20', '22', '24', '26', '28', '30', '32', '34', '36', '42', '48'];
 /** Carbon steel, Schedule STD (ASME B36.10M) */
-export const CS_STD: Pipe[] = T.map(([nps, dn, od, wall]) => ({ nps, dn, od, wall }));
+export const CS_STD: Pipe[] = series('STD', PIPE_SIZE_NPS);
 /** Stainless steel, Schedule 10S (ASME B36.19M) */
-export const SS_10S: Pipe[] = T.filter((r) => r[4] !== null).map(([nps, dn, od, , w]) => ({ nps, dn, od, wall: w! }));
+export const SS_10S: Pipe[] = series('10S', PIPE_SIZE_NPS);
 
 /** The smallest pipe whose inside diameter is at least d (in), and the size below it. */
 export function pick(list: Pipe[], d: number): { up?: Pipe; down?: Pipe } {
