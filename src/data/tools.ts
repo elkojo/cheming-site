@@ -152,9 +152,10 @@ export const tools: Tool[] = [
     "tag": "CV",
     "title": "CV",
     "name": "Control Valve",
-    "description": "Required control valve Cv for the given flow and pressure drop, with a critical-flow check, valve size selection and opening.",
-    "standard": "Masoneilan Control Valve Sizing Handbook (OZ1000)",
+    "description": "Required control valve Cv and Kv for liquid or gas by IEC 60534-2-1, with choked-flow, cavitation and flashing checks, a suggested valve size, and the flow through a fully open valve for the failed-open relief case.",
+    "standard": "IEC 60534-2-1 as in the Masoneilan Control Valve Sizing Handbook (OZ1000)",
     "category": "piping",
+    "native": "cv",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/a430d7f498321368fb8848caee9ad5c5fcc346b68552cf4395ecb7f11f40632a?type=grid&mode=embed"
   },
   {

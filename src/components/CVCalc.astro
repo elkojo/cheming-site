@@ -1,0 +1,349 @@
+---
+// Native Control Valve (CV) calculator (Phase 7): required Cv / Kv for liquid or gas by IEC 60534-2-1 as given in the
+// Masoneilan OZ1000 handbook, a valve-size suggestion from representative Fisher coefficients (or own FL / xT), and the
+// maximum flow of a fully open valve for the failed-open relief case (API 521, 5.10.3).
+// Inputs start on the Zoho defaults; results are computed in the browser on load.
+import DrawingFrame from './DrawingFrame.astro';
+import { STYLES } from '../lib/calc/cv';
+import { quantity, DEFAULT_SETTINGS } from '../lib/calc/units';
+import { mathHtml } from '../lib/calc/types';
+
+const U = (q: string) => quantity(q).units(DEFAULT_SETTINGS).map((u) => u.label);
+const P = U('pressure').filter((l) => !/column/.test(l));
+const id = (k: string) => `cv-${k}`;
+type Row = { k: string; label: string; sym: string; units?: string[]; unit?: string; value?: string; out?: boolean; phase?: 'liquid' | 'gas'; text?: boolean };
+const service: Row[] = [
+  { k: 'w', label: 'Mass flow', sym: 'W', units: U('mflow'), unit: 'kg/h', value: '9000' },
+  { k: 'p1', label: 'Upstream pressure', sym: 'p_1', units: P, unit: 'bar (A)', value: '41.16' },
+  { k: 'p2', label: 'Downstream pressure', sym: 'p_2', units: P, unit: 'bar (A)', value: '8.34' },
+  { k: 'dp', label: 'Pressure drop', sym: 'Δp = p_1 − p_2', units: ['bar', 'kPa', 'psi', 'kg/cm²'], unit: 'bar', out: true },
+  { k: 'rho', label: 'Liquid density', sym: 'ρ_1', units: U('density'), unit: 'kg/m³', value: '980', phase: 'liquid' },
+  { k: 'pv', label: 'Vapour pressure', sym: 'p_v', units: P, unit: 'bar (A)', value: '0', phase: 'liquid' },
+  { k: 'pc', label: 'Critical pressure', sym: 'p_c', units: P, unit: 'bar (A)', value: '220.48', phase: 'liquid' },
+  { k: 'q', label: 'Volume flow', sym: 'Q = W/ρ_1', units: U('vflow'), unit: 'm³/h', out: true, phase: 'liquid' },
+  { k: 'mw', label: 'Molar mass', sym: 'M', units: ['kg/kmol'], unit: 'kg/kmol', value: '18.02', phase: 'gas' },
+  { k: 't', label: 'Inlet temperature', sym: 'T_1', units: U('temp'), unit: 'K (Kelvin)', value: '672', phase: 'gas' },
+  { k: 'z', label: 'Compressibility factor', sym: 'Z', value: '0.942', phase: 'gas' },
+  { k: 'k', label: 'Heat capacity ratio', sym: 'k = c_p/c_v', value: '1.37', phase: 'gas' },
+  { k: 'v1', label: 'Volume flow, upstream', sym: 'V_1 = W·R·T_1·Z/(M·p_1)', units: U('vflow'), unit: 'm³/h', out: true, phase: 'gas' },
+  { k: 'v2', label: 'Volume flow, downstream', sym: 'V_2 = W·R·T_1·Z/(M·p_2)', units: U('vflow'), unit: 'm³/h', out: true, phase: 'gas' },
+  { k: 'vs', label: 'Standard volume flow', sym: 'V_std (101.325 kPa, 20 °C)', units: U('vflow').map((l) => `Std ${l}`), unit: 'Std m³/h', out: true, phase: 'gas' },
+];
+const results: Row[] = [
+  { k: 'cv', label: 'Required flow coefficient', sym: 'C_v', out: true },
+  { k: 'kv', label: 'Kv', sym: 'K_v = 0.865·C_v', units: ['m³/h'], unit: 'm³/h', out: true },
+  { k: 'reg', label: 'Flow', sym: '', out: true, text: true },
+  { k: 'ff', label: 'Liquid critical pressure ratio factor', sym: 'F_F = 0.96 − 0.28·√(p_v/p_c)', out: true, phase: 'liquid' },
+  { k: 'dpc', label: 'Choked pressure drop', sym: 'Δp_choked = F_L²·(p_1 − F_F·p_v)', units: ['bar', 'kPa', 'psi', 'kg/cm²'], unit: 'bar', out: true, phase: 'liquid' },
+  { k: 'x', label: 'Pressure drop ratio', sym: 'x = Δp/p_1', out: true, phase: 'gas' },
+  { k: 'xc', label: 'Choked pressure drop ratio', sym: 'F_k·x_T, F_k = k/1.40', out: true, phase: 'gas' },
+  { k: 'y', label: 'Expansion factor', sym: 'Y = 1 − x/(3·F_k·x_T)', out: true, phase: 'gas' },
+];
+const VSIZE: Row[] = [
+  { k: 'size', label: 'Suggested valve', sym: '', out: true, text: true },
+  { k: 'rcv', label: 'Rated flow coefficient', sym: 'C_v,rated', out: true },
+  { k: 'frac', label: 'Share of rated Cv', sym: 'C_v/C_v,rated', units: ['%'], unit: '%', out: true },
+  { k: 'fl', label: 'Liquid pressure recovery factor', sym: 'F_L', out: true },
+  { k: 'xt', label: 'Pressure drop ratio factor', sym: 'x_T', out: true },
+];
+const cell = (r: Row) => r.out
+  ? `<output data-o="${r.k}"></output>`
+  : `<input id="${id(r.k)}" data-k="${r.k}" value="${r.value ?? ''}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />`;
+---
+<DrawingFrame>
+  <div class="calc cv" data-cv>
+    <div class="bar">
+      <p>Required flow coefficient of a control valve for liquid or gas, a suggested valve size, and the flow through a fully open valve. Pick the units in the right-hand column.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('svc-h')}>
+      <h2 id={id('svc-h')}>Service</h2>
+      <fieldset class="phase">
+        <legend class="sr">Fluid</legend>
+        <label><input type="radio" name={id('phase')} value="liquid" checked /> Liquid</label>
+        <label><input type="radio" name={id('phase')} value="gas" /> Gas or vapour</label>
+      </fieldset>
+      <table class="io">
+        <tbody>
+          {service.map((r) => (
+            <tr data-row={r.k} data-phase={r.phase}>
+              <th scope="row">{r.out ? <><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></>
+                : <label for={id(r.k)}><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></label>}</th>
+              <td class="v" set:html={cell(r)} />
+              <td class="u">{r.units && r.units.length > 1 ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>{r.units?.[0] ?? '–'}</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note" data-phase="gas">Example: steam at 41.16 bar a and 672 K (<i>k</i> and <i>Z</i> from IAPWS-IF97). Standard volume with <i>Z</i> = 1, <i>R</i> = 8.314462618 J/(mol·K).</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('vl-h')}>
+      <h2 id={id('vl-h')}>Valve</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('style')}><span class="lb">Valve style</span></label></th>
+            <td class="v wide" colspan="2"><select id={id('style')} data-s="style">
+              {STYLES.map((s) => <option value={s.id}>{s.name}</option>)}
+              <option value="custom">Own FL and xT</option>
+            </select></td>
+          </tr>
+          <tr data-custom>
+            <th scope="row"><label for={id('cfl')}><span class="lb">Liquid pressure recovery factor</span> <span class="eq" set:html={mathHtml('F_L')} /></label></th>
+            <td class="v"><input id={id('cfl')} data-k="cfl" value="0.9" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+          <tr data-custom>
+            <th scope="row"><label for={id('cxt')}><span class="lb">Pressure drop ratio factor</span> <span class="eq" set:html={mathHtml('x_T')} /></label></th>
+            <td class="v"><input id={id('cxt')} data-k="cxt" value="0.7" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+          <tr data-std>
+            <th scope="row"><label for={id('mf')}><span class="lb">Design limit, share of rated Cv</span></label></th>
+            <td class="v"><input id={id('mf')} data-k="mf" value="80" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><span>%</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note" data-std>Representative coefficients at rated travel (90° for rotary valves) from the Fisher Control Valve Handbook, 3rd ed.; actual values depend on the make, trim and travel. The suggested size is the smallest whose rated Cv covers the required Cv within the design limit (your choice; 80 % leaves room for control).</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('rs-h')}>
+      <h2 id={id('rs-h')}>Result</h2>
+      <table class="io">
+        <tbody>
+          {[...results, ...VSIZE].map((r) => (
+            <tr data-row={r.k} data-phase={r.phase} data-std={VSIZE.includes(r) ? '' : undefined} class:list={[{ txt: r.text, key: r.k === 'cv' }]}>
+              <th scope="row"><span class="lb">{r.label}</span> {r.sym && <span class="eq" set:html={mathHtml(r.sym)} />}</th>
+              <td class="v" colspan={r.text ? 2 : 1} set:html={cell(r)} />
+              {!r.text && <td class="u">{r.units && r.units.length > 1 ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>{r.units?.[0] ?? '–'}</span>}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <ul class="warn" data-warn aria-live="polite"></ul>
+      <p class="note">IEC 60534-2-1 as given in the Masoneilan Control Valve Sizing Handbook OZ1000: liquid <i>C</i><sub>v</sub> = <i>W</i>/(27.3·√(Δ<i>p</i>·<i>ρ</i><sub>1</sub>)), choked when Δ<i>p</i> ≥ <i>F</i><sub>L</sub>²·(<i>p</i><sub>1</sub> − <i>F</i><sub>F</sub>·<i>p</i><sub>v</sub>); gas <i>C</i><sub>v</sub> = <i>W</i>/(94.8·<i>p</i><sub>1</sub>·<i>Y</i>)·√(<i>T</i><sub>1</sub>·<i>Z</i>/(<i>x</i>·<i>M</i>)) with <i>x</i> limited to <i>F</i><sub>k</sub>·<i>x</i><sub>T</sub> (<i>W</i> in kg/h, <i>p</i> in bar, <i>T</i> in K). Valve size equal to line size (<i>F</i><sub>p</sub> = 1), fully turbulent flow (no viscosity correction). <i>C</i><sub>v</sub> is the flow of 60 °F water in US gal/min at 1 psi pressure drop; <i>K</i><sub>v</sub> the flow of water in m³/h at 1 bar.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('fo-h')}>
+      <h2 id={id('fo-h')}>Valve fully open (failed-open case)</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('icv')}><span class="lb">Rated Cv of the installed valve</span> <span class="eq" set:html={mathHtml('C_v,rated')} /></label></th>
+            <td class="v"><input id={id('icv')} data-k="icv" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="suggested" /></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+          <tr class="key">
+            <th scope="row"><span class="lb">Maximum flow, valve fully open</span> <span class="eq" set:html={mathHtml('W_max')} /></th>
+            <td class="v"><output data-o="wmax" /></td>
+            <td class="u"><select data-u="wmax" aria-label="Maximum flow unit">{U('mflow').map((u) => <option selected={u === 'kg/h'}>{u}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Ratio to the design flow</span> <span class="eq" set:html={mathHtml('W_max/W')} /></th>
+            <td class="v"><output data-o="wr" /></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">Leave the rated Cv empty to use the suggested valve (its Cv is shown greyed). Same pressures and fluid as above; for the relief case enter the relieving conditions.</p>
+      <details class="proc">
+        <summary>Relief load for an inlet control valve failing open (API 521, 5.10)</summary>
+        <ul>
+          <li>Assume one inlet control valve fully open, whatever its failure position (instrument failure or misoperation). Other valves stay in their normal operating position, unless the same failure moves them too (e.g. split range).</li>
+          <li>Required relieving rate = maximum inlet flow (valve fully open) − normal outlet flow, both at relieving conditions.</li>
+          <li>If the manual bypass is partly open in normal operation, add its flow; if it is used only for maintenance, take the larger of the control-valve and bypass flows. Consider inadvertent opening of the bypass.</li>
+          <li>Use the wide-open capacity even where limit stops are fitted.</li>
+          <li>For a liquid letdown, consider loss of liquid level and gas blow-through: the vapour flow is based on the normal operating pressure upstream and the relieving pressure downstream, and is often choked.</li>
+          <li>Check whether the upstream vapour volume can overpressure the downstream system.</li>
+        </ul>
+      </details>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { liquidCv, gasCv, liquidFlow, gasFlow, pickValve, STYLES, kvFromCv, gasVolume, gasVolumeStd, type Size } from '../lib/calc/cv';
+  import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig, type Unit } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+
+  const Q = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
+  const L = (pairs: [string, number][]): Unit[] => pairs.map(([label, f]) => ({ label, f }));
+  const DP = L([['bar', 1e5], ['kPa', 1e3], ['psi', 6894.757293168], ['kg/cm²', 98066.5]]);
+  const VF = Q('vflow');
+  const LISTS: Record<string, Unit[]> = {
+    w: Q('mflow'), wmax: Q('mflow'), p1: Q('pressure'), p2: Q('pressure'), pv: Q('pressure'), pc: Q('pressure'),
+    rho: Q('density'), t: Q('temp'), dp: DP, dpc: DP, q: VF, v1: VF, v2: VF, vs: VF.map((u) => ({ label: `Std ${u.label}`, f: u.f })),
+  };
+  const fmt = (x: number) => formatSig(x, 6, false);
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-cv]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const unit = (k: string) => {
+      const s = root.querySelector<HTMLSelectElement>(`select[data-u="${k}"]`);
+      return (LISTS[k] ?? []).find((u) => u.label === s?.value) ?? { label: '', f: 1 };
+    };
+    const style = $<HTMLSelectElement>('select[data-s="style"]');
+    let bad = false;
+    const read = (k: string, ok: (x: number) => boolean, si = true) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value), x = blank ? NaN : si && LISTS[k] ? toSI(unit(k), raw) : raw;
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      if (invalid) bad = true;
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, v: number | string | undefined, uk?: string) => {
+      const o = $<HTMLOutputElement>(`output[data-o="${k}"]`);
+      if (typeof v === 'string') { o.textContent = v; return; }
+      o.textContent = v === undefined || !Number.isFinite(v) ? (bad ? '—' : '') : fmt(uk ? fromSI(unit(uk), v) : v);
+    };
+    const pos = (x: number) => x > 0;
+
+    const run = () => {
+      bad = false;
+      const gas = root.querySelector<HTMLInputElement>('input[type=radio]:checked')!.value === 'gas';
+      for (const el of root.querySelectorAll<HTMLElement>('[data-phase]')) el.hidden = el.dataset.phase !== (gas ? 'gas' : 'liquid');
+      const custom = style.value === 'custom';
+      for (const el of root.querySelectorAll<HTMLElement>('[data-custom]')) el.hidden = !custom;
+      for (const el of root.querySelectorAll<HTMLElement>('[data-std]')) el.hidden = custom;
+
+      const w = read('w', pos) * 3600;                    // kg/h
+      const p1 = read('p1', pos) / 1e5, p2 = read('p2', pos) / 1e5;   // bar a
+      const dpOk = Number.isFinite(p1) && Number.isFinite(p2) && p2 < p1;
+      if (Number.isFinite(p1) && Number.isFinite(p2) && !dpOk) { inp('p2').setAttribute('aria-invalid', ''); bad = true; }
+      show('dp', dpOk ? (p1 - p2) * 1e5 : undefined, 'dp');
+      const cfl = read('cfl', (x) => x > 0 && x <= 1, false), cxt = read('cxt', (x) => x > 0 && x <= 1, false);
+      const mf = read('mf', (x) => x > 0 && x <= 100, false) / 100;
+
+      let calc: ((s: Size) => { cv: number }) | undefined, flowAt: ((s: Size, cv: number) => number) | undefined;
+      let extra: (r: any, s: Size) => void = () => {};
+      if (!gas) {
+        const rho = read('rho', pos), pv = read('pv', (x) => x >= 0) / 1e5, pc = read('pc', pos) / 1e5;
+        show('q', Number.isFinite(w / rho) ? w / 3600 / rho : undefined, 'q');
+        if ([w, rho, pv, pc].every(Number.isFinite) && dpOk && pv < pc) {
+          const l = { w, p1, p2, rho, pv, pc };
+          calc = (s) => liquidCv(l, s.fl);
+          flowAt = (s, cv) => liquidFlow(l, s.fl, cv);
+          extra = (r, s) => {
+            show('ff', r.ff); show('dpc', r.dpChoked * 1e5, 'dpc');
+            show('reg', r.choked ? (r.flashing ? 'Choked: flashing (p₂ below vapour pressure)' : 'Choked: cavitating') : 'Subcritical (not choked)');
+          };
+        }
+      } else {
+        const mw = read('mw', pos, false), t = read('t', pos), z = read('z', pos, false), k = read('k', (x) => x > 1 && x < 2, false);
+        const vOk = [w, mw, t, z].every(Number.isFinite);
+        show('v1', vOk && Number.isFinite(p1) ? gasVolume(w, mw, t, z, p1) : undefined, 'v1');
+        show('v2', vOk && Number.isFinite(p2) ? gasVolume(w, mw, t, z, p2) : undefined, 'v2');
+        show('vs', Number.isFinite(w) && Number.isFinite(mw) ? gasVolumeStd(w, mw) : undefined, 'vs');
+        if (vOk && Number.isFinite(k) && dpOk) {
+          const g = { w, p1, p2, mw, t, z, k };
+          calc = (s) => gasCv(g, s.xt);
+          flowAt = (s, cv) => gasFlow(g, s.xt, cv);
+          extra = (r) => { show('x', r.x); show('xc', r.xChoked); show('y', r.y); show('reg', r.choked ? 'Choked (sonic at the vena contracta)' : 'Subcritical (not choked)'); };
+        }
+      }
+
+      const warn: string[] = [];
+      let size: Size | undefined, result: any;
+      if (calc && custom && Number.isFinite(cfl) && Number.isFinite(cxt)) {
+        size = { size: '', cv: NaN, fl: cfl, xt: cxt }; result = calc(size);
+      } else if (calc && !custom && Number.isFinite(mf)) {
+        const st = STYLES.find((s) => s.id === style.value)!;
+        const pick = pickValve(st, calc, mf);
+        if (pick) { size = pick.size; result = pick.result; }
+        else { size = st.sizes[st.sizes.length - 1]; result = calc(size); warn.push(`Required Cv exceeds ${fmt(mf * 100)} % of the largest ${st.name.toLowerCase()} in the table (${size.size}″, Cv ${size.cv}): use a larger valve, another style or parallel valves.`); }
+      }
+      show('cv', result?.cv); show('kv', result ? kvFromCv(result.cv) : undefined);
+      if (result && size) extra(result, size); else for (const k of ['ff', 'dpc', 'x', 'xc', 'y', 'reg']) show(k, undefined);
+      const st = STYLES.find((s) => s.id === style.value);
+      const fits = !!(result && size && !custom && result.cv <= mf * size.cv);
+      show('size', size && !custom ? (fits ? `${size.size}″ ${st!.name.toLowerCase()}` : 'none in the table') : bad ? '—' : '');
+      show('rcv', fits ? size!.cv : undefined); show('frac', fits ? result.cv / size!.cv * 100 : undefined);
+      show('fl', size?.fl); show('xt', size?.xt);
+
+      // fully open
+      const icv = read('icv', pos, false);
+      const cvOpen = Number.isFinite(icv) ? icv : fits ? size!.cv : NaN;
+      inp('icv').placeholder = fits ? String(size!.cv) : 'type';
+      const wmax = flowAt && size && Number.isFinite(cvOpen) ? flowAt(size, cvOpen) : undefined;
+      show('wmax', wmax !== undefined ? wmax / 3600 : undefined, 'wmax'); show('wr', wmax !== undefined ? wmax / w : undefined);
+
+      if (result?.flashing) warn.push('Flashing: the outlet is two-phase; check outlet velocity and erosion, and the downstream line as two-phase.');
+      else if (result?.choked && !gas) warn.push('Cavitation: consider a valve with a higher FL, anti-cavitation trim, or a smaller pressure drop.');
+      if (fits && result.cv / size!.cv < 0.1) warn.push('Under 10 % of rated Cv: the valve may be too large for good control at this flow.');
+      $('[data-warn]').innerHTML = warn.map((x) => `<li>${x}</li>`).join('');
+    };
+
+    let cur = root.querySelector<HTMLInputElement>('input[type=radio]:checked')!.value;
+    root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input[type=text]')) run(); });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLElement;
+      if (t.matches('input[type=radio]')) cur = (t as HTMLInputElement).value;
+      if (t.matches('select, input[type=radio]')) run();
+    });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]')) el.value = '';
+      run(); inp('w').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .lb { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 44rem; }
+  .io .v { width: 9.5rem; }
+  .io .u { width: 8.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io td.wide { width: auto; }
+  .io td.wide select { max-width: 24rem; }
+  tr.txt :global(output) { background: none; padding-left: 0; font-weight: 600; white-space: normal; height: auto; }
+  tr.key :global(output) { font-weight: 650; }
+  [hidden] { display: none !important; }
+  .calc :global(input), .calc :global(output), select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input::placeholder) { color: var(--muted); }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+  .phase { display: flex; gap: 1.25rem; margin: 0 0 0.5rem; padding: 0; border: 0; }
+  .phase label { display: inline-flex; align-items: center; gap: 0.375rem; cursor: pointer; font-size: 0.9375rem; }
+  .phase :global(input) { display: inline-block; width: auto; height: auto; accent-color: var(--line); }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 44rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 44rem; }
+  .proc { margin-top: 0.75rem; max-width: 44rem; font-size: 0.875rem; }
+  .proc summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .proc ul { margin: 0.25rem 0 0; padding-left: 1.25rem; color: var(--ink); }
+  .proc li { margin: 0.25rem 0; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .io .v { width: 7rem; }
+    .io .u { width: 6.5rem; }
+  }
+</style>

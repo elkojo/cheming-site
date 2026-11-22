@@ -167,7 +167,7 @@ export const sources: Source[] = [
     url: 'https://pypi.org/project/fluids/',
     archive: 'https://web.archive.org/web/20260414063257/https://pypi.org/project/fluids/',
     read: '2026-11-22',
-    use: { 'pressure-loss-two-phase': 'Independent checks: Churchill friction factor (1e-12), Chisholm with all B branches and Friedel (within 1 %; fluids uses the Colebrook friction factor), Rouhani–Axelsson void fraction (1e-12); pipe table as for Single Phase.', 'pressure-loss-single-phase': 'Schedule tables (after ASME B36.10M/B36.19M, in mm): the main source of the pipe table, checked against the ToolBox and Wikipedia. Independent check of the Colebrook solution (agrees to 1e-10) and of the API RP 14E formula.' },
+    use: { cv: 'Independent check of the IEC 60534-2-1 liquid and gas sizing (size_control_valve_l, size_control_valve_g): agreement within 0.3 % (rounded handbook constants).', 'pressure-loss-two-phase': 'Independent checks: Churchill friction factor (1e-12), Chisholm with all B branches and Friedel (within 1 %; fluids uses the Colebrook friction factor), Rouhani–Axelsson void fraction (1e-12); pipe table as for Single Phase.', 'pressure-loss-single-phase': 'Schedule tables (after ASME B36.10M/B36.19M, in mm): the main source of the pipe table, checked against the ToolBox and Wikipedia. Independent check of the Colebrook solution (agrees to 1e-10) and of the API RP 14E formula.' },
   },
   {
     id: 'colebrook-1939', by: 'C. F. Colebrook', title: 'Turbulent flow in pipes, with particular reference to the transition region between the smooth and rough pipe laws',
@@ -249,6 +249,36 @@ export const sources: Source[] = [
     where: 'International Journal of Heat and Mass Transfer, vol. 13, pp. 383–393', year: 1970,
     read: '2026-11-22',
     use: { 'pressure-loss-two-phase': 'Void fraction for the static head (owner\'s choice 2026-11-22), in the form given by Thome (eq. 13.2.4b).' },
+  },
+  {
+    id: 'masoneilan-oz1000', by: 'Masoneilan (Dresser Industries)', title: 'Control Valve Sizing Handbook, Bulletin OZ1000 7/00',
+    where: 'Dresser Industries, Inc.', year: 2000,
+    url: 'https://docs.ufpr.br/~gazda/valmason.pdf',
+    archive: 'https://web.archive.org/web/20261122113735/https://docs.ufpr.br/~gazda/valmason.pdf',
+    read: '2026-11-22',
+    use: { cv: 'Basis of the original sheet: liquid sizing with N6 = 27.3, choked flow at FL²·(p1 − FF·pv), FF = 0.96 − 0.28·√(pv/pc); gas sizing with Y = 1 − x/(3·Fk·xT) and N8 = 94.8 (ISA S75.01 / IEC 534-2), used here instead of the sheet\'s older Cf method (owner\'s choice); Kv = 0.865·Cv.' },
+  },
+  {
+    id: 'masoneilan-2022', by: 'Baker Hughes (Masoneilan)', title: 'Masoneilan Control Valve Sizing Handbook, GEA19540A, Rev. C',
+    where: 'Baker Hughes', year: 2022,
+    url: 'https://dam.bakerhughes.com/m/47616eb160214a1d/original/MN-Valve-Sizing-Handbook-GEA19540A-English-pdf.pdf',
+    archive: 'https://web.archive.org/web/20261122113740/https://dam.bakerhughes.com/m/47616eb160214a1d/original/MN-Valve-Sizing-Handbook-GEA19540A-English-pdf.pdf',
+    read: '2026-11-22',
+    use: { cv: 'Current edition of the same handbook: equations and constants unchanged.' },
+  },
+  {
+    id: 'fisher-cvh3', by: 'Fisher Controls International (Emerson)', title: 'Control Valve Handbook, 3rd ed., Chapter 5: Representative Sizing Coefficients',
+    where: 'Fisher Controls, Marshalltown, pp. 125–127', year: 1999,
+    url: 'http://www.documentation.emersonprocess.com/groups/public/documents/book/cvh99.pdf',
+    archive: 'https://web.archive.org/web/20160303181623/http://www.documentation.emersonprocess.com/groups/public/documents/book/cvh99.pdf',
+    read: '2026-11-22',
+    use: { cv: 'Representative Cv, FL and xT at rated travel by size for single-port globe (equal percentage, linear), V-notch ball and high-performance butterfly valves: the valve-style data and size suggestion (replacing the sheet\'s unsourced typical table).' },
+  },
+  {
+    id: 'api-521', by: 'American Petroleum Institute', title: 'API Standard 521 / ISO 23251: Pressure-relieving and Depressuring Systems, 5.10 Failure of automatic controls',
+    where: 'American Petroleum Institute, 5th ed.', year: 2007,
+    read: '2026-11-22',
+    use: { cv: 'Failed-open relief case (5.10.2–5.10.4): one inlet valve fully open regardless of its failure position, relieving rate = maximum inlet flow − normal outlet flow, bypass and limit-stop rules, gas blow-through on loss of level.' },
   },
   // ── pure-component properties ──
   {
