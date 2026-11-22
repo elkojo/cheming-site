@@ -298,6 +298,37 @@ export const sources: Source[] = [
     read: '2026-11-22',
     use: { ro: 'Discharge coefficient of choked thick plates against t/d (side note, as quoted on the original sheet; the paper itself was not accessible).' },
   },
+  // ── vessels ──
+  {
+    id: 'crookston-2011', by: 'D. R. Crookston, R. B. Crookston', title: 'Calculate Liquid Volumes in Tanks with Dished Heads',
+    where: 'Chemical Engineering, September 2011, pp. 55–63', year: 2011,
+    url: 'https://chemengonline.com/wp-content/uploads/2017/05/sept11_ep_sas2.pdf',
+    archive: 'https://web.archive.org/web/20180827054506/http://www.chemengonline.com:80/wp-content/uploads/2017/05/sept11_ep_sas2.pdf',
+    read: '2026-11-22',
+    use: { drum: 'Torispherical head geometry (crown and knuckle radii as fractions of D, head depth), ASME F&D parameters; Table 3 head capacities and the Table 4/5 strapping tables (vertical and horizontal tank) as test values.' },
+  },
+  {
+    id: 'perry-7-10-tanks', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 10 (Transport and Storage of Fluids): calculation of tank volume, Table 10-65 Volumes of heads',
+    where: 'McGraw-Hill, New York, pp. 10-139 to 10-140', year: 1997,
+    read: '2026-11-22',
+    use: { drum: 'Check of the head volumes: ASME torispherical (knuckle 0.06·L, crown L = Di) 0.0809·Di³, 2:1 ellipsoidal π·Di³/24, hemispherical π·Di³/12; partially filled horizontal cylinder (Eq. 10-109).' },
+  },
+  {
+    id: 'plaatijzerindustrie-28011', by: 'De Plaatijzerindustrie B.V. (Apeldoorn, NL)', title: 'Klöpperbodem — decimal (torispherical) heads acc. DIN 28011: specifications and stock list',
+    where: 'manufacturer\'s web page and data sheet (July 2025)', year: 2025,
+    url: 'https://plaatijzerindustrie.com/klopperbodem/',
+    archive: 'https://web.archive.org/web/20260810101512/http://plaatijzerindustrie.com/klopperbodem/',
+    read: '2026-11-22',
+    use: { drum: 'Torispherical 10 % (Klöpper) profile per DIN 28011: inside crown radius R = D, inside knuckle radius r = 0.1·D, D = outside diameter (the standard itself is not freely available).' },
+  },
+  {
+    id: 'plaatijzerindustrie-28013', by: 'De Plaatijzerindustrie B.V. (Apeldoorn, NL)', title: 'Korfboogbodem — Korbbogen (ellipsoidal type) heads acc. DIN 28013: specifications and stock list',
+    where: 'manufacturer\'s web page and data sheet (July 2025)', year: 2025,
+    url: 'https://plaatijzerindustrie.com/korfboogbodem/',
+    archive: 'https://web.archive.org/web/20260810103307/https://plaatijzerindustrie.com/korfboogbodem/',
+    read: '2026-11-22',
+    use: { drum: 'Korbbogen profile per DIN 28013: inside crown radius R = 0.8·D, inside knuckle radius r = 0.154·D, D = outside diameter (the standard itself is not freely available).' },
+  },
   // ── pure-component properties ──
   {
     id: 'rps77', by: 'R. C. Reid, J. M. Prausnitz, T. K. Sherwood', title: 'The Properties of Gases and Liquids, 3rd ed., Appendix A: Property data bank',

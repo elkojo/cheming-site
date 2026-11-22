@@ -1,0 +1,591 @@
+---
+// Native Drum calculator (Phase 7): horizontal or vertical drum, six exact head shapes, liquid volume, cross section and
+// surface area at up to five levels (HHLL, HLL, NLL, LLL, LLLL), level-to-level volumes and surge / hold-up times,
+// with one inflow/outflow rate or separate ones. One unit selector per category (length, volume, area, flow, time),
+// owner's choice 2026-11-22; changing a unit converts the typed values. Live sketch to scale (side view, plus end view
+// for a horizontal drum), click to enlarge. Inputs start on the Zoho defaults; results are computed in the browser.
+import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
+import { HEADS } from '../lib/calc/drum';
+import { mathHtml } from '../lib/calc/types';
+import { DRUM_UNITS, DRUM_DEFAULT_UNITS } from '../lib/calc/drum-units';
+
+const id = (k: string) => `dr-${k}`;
+const unitSel = (cat: keyof typeof DRUM_UNITS, label: string) =>
+  `<select data-cat="${cat}" aria-label="${label} unit">${DRUM_UNITS[cat].map((u) => `<option${u.label === DRUM_DEFAULT_UNITS[cat] ? ' selected' : ''}>${u.label}</option>`).join('')}</select>`;
+const unitTxt = (cat: keyof typeof DRUM_UNITS) => `<span data-ut="${cat}">${DRUM_DEFAULT_UNITS[cat]}</span>`;
+const inCell = (k: string, v = '') => `<input id="${id(k)}" data-k="${k}" value="${v}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />`;
+
+const LEVELS = [
+  { k: 'hh', ab: 'HHLL', name: 'high-high liquid level (trip)', value: '', opt: true },
+  { k: 'h', ab: 'HLL', name: 'high liquid level', value: '1.5' },
+  { k: 'n', ab: 'NLL', name: 'normal liquid level', value: '1.0' },
+  { k: 'l', ab: 'LLL', name: 'low liquid level', value: '0.5' },
+  { k: 'll', ab: 'LLLL', name: 'low-low liquid level (trip)', value: '', opt: true },
+];
+const TIMES = [
+  { k: 'hh-h', a: 'HLL', b: 'HHLL', name: 'Alarm to trip, rising', sym: 't = ΔV/Q_in', basis: 'in', opt: 'hh' },
+  { k: 'h-n', a: 'NLL', b: 'HLL', name: 'Surge', sym: 't = ΔV/Q_in', basis: 'in' },
+  { k: 'n-l', a: 'LLL', b: 'NLL', name: 'Hold-up', sym: 't = ΔV/Q_out', basis: 'out' },
+  { k: 'h-l', a: 'LLL', b: 'HLL', name: 'Hold-up + surge (working volume)', sym: 't = ΔV/Q_out', basis: 'out' },
+  { k: 'l-ll', a: 'LLLL', b: 'LLL', name: 'Alarm to trip, falling', sym: 't = ΔV/Q_out', basis: 'out', opt: 'll' },
+];
+---
+<DrawingFrame>
+  <div class="calc drum" data-drum>
+    <div class="bar">
+      <p>Volumes and times between the liquid levels of a horizontal or vertical drum. One unit per kind of quantity: pick it in the column headings; typed values are converted.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('geo-h')}>
+      <h2 id={id('geo-h')}>Drum</h2>
+      <div class="switches">
+        <SegToggle label="Orientation" name="orient" value="horizontal" options={[{ value: 'horizontal', label: 'Horizontal' }, { value: 'vertical', label: 'Vertical' }]} />
+        <div data-datumwrap><SegToggle label="Levels measured from" name="datum" value="tangent" options={[{ value: 'tangent', label: 'Bottom tangent line' }, { value: 'bottom', label: 'Bottom of head' }]} /></div>
+      </div>
+      <p class="note" data-datum-note></p>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('head')}><span class="lb">Heads</span> <span class="eq">both ends alike</span></label></th>
+            <td class="v wide" colspan="2"><select id={id('head')} data-s="head">{HEADS.map((h) => <option value={h.id}>{h.label}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('D')}><span class="lb">Inside diameter</span> <span class="eq" set:html={mathHtml('D')} /></label></th>
+            <td class="v" set:html={inCell('D', '3.0')} />
+            <td class="u" set:html={unitSel('len', 'Length')} />
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('L')}><span class="lb">Length, tangent to tangent</span> <span class="eq" set:html={mathHtml('L')} /></label></th>
+            <td class="v" set:html={inCell('L', '12.0')} />
+            <td class="u" set:html={unitTxt('len')} />
+          </tr>
+          <tr><th scope="row"><span class="lb">Slenderness</span> <span class="eq" set:html={mathHtml('L/D')} /></th><td class="v"><output data-o="ld" /></td><td class="u"><span>–</span></td></tr>
+          <tr><th scope="row"><span class="lb">Head depth</span> <span class="eq" set:html={mathHtml('h_d')} /></th><td class="v"><output data-o="hd" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+          <tr><th scope="row"><span class="lb">Overall length</span> <span class="eq" set:html={mathHtml('L + 2·h_d')} /></th><td class="v"><output data-o="ov" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+          <tr><th scope="row"><span class="lb">Volume of one head</span> <span class="eq" set:html={mathHtml('V_h')} /></th><td class="v"><output data-o="vh" /></td><td class="u" set:html={unitSel('vol', 'Volume')} /></tr>
+          <tr><th scope="row"><span class="lb">Volume of the shell</span> <span class="eq" set:html={mathHtml('V_s = π·D²/4·L')} /></th><td class="v"><output data-o="vs" /></td><td class="u" set:html={unitTxt('vol')} /></tr>
+          <tr><th scope="row"><span class="lb">Total volume</span> <span class="eq" set:html={mathHtml('V = V_s + 2·V_h')} /></th><td class="v"><output data-o="vt" /></td><td class="u" set:html={unitTxt('vol')} /></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="grp" aria-labelledby={id('sk-h')}>
+      <h2 id={id('sk-h')}>Sketch to scale</h2>
+      <button type="button" class="sk" data-zoom aria-haspopup="dialog" aria-label="Enlarge the drum sketch">
+        <span class="skimg" data-sketch role="img" aria-label="Drum sketch to scale with the liquid levels"></span>
+        <span class="zoom" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 10l4 4M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" stroke-width="1.5"/></svg>
+          Enlarge
+        </span>
+      </button>
+      <p class="note">Inside contour, filled up to NLL; dashed lines are the levels, dash-dot lines the tangent lines.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('lv-h')}>
+      <h2 id={id('lv-h')}>Liquid levels</h2>
+      <table class="lv">
+        <thead>
+          <tr>
+            <th scope="col">Level</th>
+            <th scope="col"><span class="ch" data-hcap>Height</span> <span class="hu" set:html={unitSel('len', 'Length')} /></th>
+            <th scope="col"><span class="ch">Volume</span> <span class="hu" set:html={unitSel('vol', 'Volume')} /></th>
+            <th scope="col" data-orient="horizontal"><span class="ch">Cross section</span> <span class="hu" set:html={unitSel('area', 'Area')} /></th>
+            <th scope="col"><span class="ch" data-scap>Liquid surface</span> <span class="hu" data-orient="vertical" set:html={unitSel('area', 'Area')} /><span class="hu" data-orient="horizontal" set:html={unitTxt('area')} /></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="vap">
+            <th scope="row"><span class="lb">Vapour space</span> <span class="nm" data-vapcap>above HLL</span></th>
+            <td><output data-o="vap-h" /></td>
+            <td><output data-o="vap-v" /></td>
+            <td data-orient="horizontal"><output data-o="vap-a" /></td>
+            <td><output data-o="vap-s" /></td>
+          </tr>
+          {LEVELS.map((l) => (
+            <tr data-lvl={l.k}>
+              <th scope="row"><label for={id(l.k)}><span class="lb">{l.ab}</span> <span class="nm">{l.name}{l.opt && ', optional'}</span></label></th>
+              <td set:html={inCell(l.k, l.value)} />
+              <td><output data-o={`${l.k}-v`} /></td>
+              <td data-orient="horizontal"><output data-o={`${l.k}-a`} /></td>
+              <td><output data-o={`${l.k}-s`} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note" data-lv-note></p>
+      <ul class="warn" data-warn aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('t-h')}>
+      <h2 id={id('t-h')}>Hold-up and surge</h2>
+      <div class="switches">
+        <SegToggle label="Flow rates" name="flow" value="one" options={[{ value: 'one', label: 'One rate', hint: '(in = out)' }, { value: 'two', label: 'Inflow and outflow' }]} />
+      </div>
+      <table class="io">
+        <tbody>
+          <tr data-flow="one">
+            <th scope="row"><label for={id('q')}><span class="lb">Draw-off / surge flow rate</span> <span class="eq" set:html={mathHtml('Q = Q_in = Q_out')} /></label></th>
+            <td class="v" set:html={inCell('q', '200')} />
+            <td class="u" set:html={unitSel('flow', 'Flow')} />
+          </tr>
+          <tr data-flow="two">
+            <th scope="row"><label for={id('qin')}><span class="lb">Inflow</span> <span class="eq" set:html={mathHtml('Q_in')} /></label></th>
+            <td class="v" set:html={inCell('qin', '200')} />
+            <td class="u" set:html={unitSel('flow', 'Flow')} />
+          </tr>
+          <tr data-flow="two">
+            <th scope="row"><label for={id('qout')}><span class="lb">Outflow (draw-off)</span> <span class="eq" set:html={mathHtml('Q_out')} /></label></th>
+            <td class="v" set:html={inCell('qout', '200')} />
+            <td class="u" set:html={unitTxt('flow')} />
+          </tr>
+        </tbody>
+      </table>
+      <table class="tm">
+        <thead>
+          <tr>
+            <th scope="col">Between levels</th>
+            <th scope="col"><span class="ch">Volume</span> <span class="hu" set:html={unitSel('vol', 'Volume')} /></th>
+            <th scope="col"><span class="ch">Time</span> <span class="hu" set:html={unitSel('time', 'Time')} /></th>
+          </tr>
+        </thead>
+        <tbody>
+          {TIMES.map((t) => (
+            <tr data-t={t.k} data-opt={t.opt}>
+              <th scope="row"><span class="lb">{t.a}–{t.b}</span> <span class="nm">{t.name}</span> <span class="eq" set:html={mathHtml(t.sym)} /></th>
+              <td><output data-o={`${t.k}-v`} /></td>
+              <td><output data-o={`${t.k}-t`} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note">Rising times assume the outlet is blocked (the level rises at the inflow), falling times that the inflow is lost (the level falls at the outflow): the usual design basis for surge and hold-up. With one rate the results are those of the original sheet.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('basis-h')}>
+      <h2 id={id('basis-h')}>Calculation basis</h2>
+      <details class="basis" open>
+        <summary>Equations</summary>
+        <ol class="eqs">
+          <li><b>Heads</b>, referred to the inside diameter <i>D</i>: 2:1 semi-ellipsoidal, depth <i>h</i><sub>d</sub> = <i>D</i>/4, <i>V</i><sub>h</sub> = π·<i>D</i><sup>3</sup>/24; hemispherical, <i>h</i><sub>d</sub> = <i>D</i>/2, <i>V</i><sub>h</sub> = π·<i>D</i><sup>3</sup>/12; flat, <i>h</i><sub>d</sub> = 0.
+            Torispherical: crown radius <i>f</i><sub>d</sub>·<i>D</i> and knuckle radius <i>f</i><sub>k</sub>·<i>D</i> — 10 % / Klöpper <i>f</i><sub>d</sub> = 1, <i>f</i><sub>k</sub> = 0.1 (DIN 28011); ASME F&amp;D 1 and 0.06; Korbbogen 0.8 and 0.154 (DIN 28013; both DIN profiles from the manufacturer's data sheets) —
+            with <i>h</i><sub>d</sub> = <i>f</i><sub>d</sub>·<i>D</i> − √((<i>f</i><sub>d</sub>·<i>D</i> − <i>f</i><sub>k</sub>·<i>D</i>)<sup>2</sup> − (<i>D</i>/2 − <i>f</i><sub>k</sub>·<i>D</i>)<sup>2</sup>) (Crookston &amp; Crookston, 2011).</li>
+          <li><b>Head profile</b> <i>ρ</i>(<i>z</i>): radius of the head at distance <i>z</i> from the tangent plane (ellipse, or knuckle torus then spherical crown).</li>
+          <li><b>Horizontal drum</b>, level <i>h</i> from the bottom of the shell, <i>R</i> = <i>D</i>/2, <i>y</i> = <i>h</i> − <i>R</i>:
+            cross section <i>A</i> = <i>R</i><sup>2</sup>·arccos(−<i>y</i>/<i>R</i>) + <i>y</i>·√(<i>R</i><sup>2</sup> − <i>y</i><sup>2</sup>);
+            volume <i>V</i> = <i>A</i>·<i>L</i> + 2·<i>V</i><sub>h</sub>(<i>h</i>), with <i>V</i><sub>h</sub>(<i>h</i>) = ∫<sub>0</sub><sup><i>h</i><sub>d</sub></sup> <i>A</i>(<i>ρ</i>(<i>z</i>), <i>y</i>)·d<i>z</i>;
+            for ellipsoidal and hemispherical heads 2·<i>V</i><sub>h</sub>(<i>h</i>) = π·(<i>h</i><sub>d</sub>/<i>R</i>)·<i>h</i><sup>2</sup>·(3<i>R</i> − <i>h</i>)/3, torispherical heads are integrated numerically (Gauss–Legendre);
+            liquid surface (shell) <i>S</i> = 2·√(<i>h</i>·(<i>D</i> − <i>h</i>))·<i>L</i>.</li>
+          <li><b>Vertical drum</b>, level <i>h</i> above the bottom tangent line (or from the bottom of the head, <i>h</i> − <i>h</i><sub>d</sub>):
+            in the shell <i>V</i> = <i>V</i><sub>h</sub> + π·<i>D</i><sup>2</sup>/4·<i>h</i>; in the bottom head (<i>h</i> &lt; 0) <i>V</i> = ∫<sub>−<i>h</i></sub><sup><i>h</i><sub>d</sub></sup> π·<i>ρ</i><sup>2</sup>·d<i>z</i>;
+            in the top head (<i>h</i> &gt; <i>L</i>) <i>V</i> = 2·<i>V</i><sub>h</sub> + <i>V</i><sub>s</sub> − ∫<sub><i>h</i> − <i>L</i></sub><sup><i>h</i><sub>d</sub></sup> π·<i>ρ</i><sup>2</sup>·d<i>z</i>; liquid surface <i>S</i> = π·<i>ρ</i><sup>2</sup> at the level (π·<i>D</i><sup>2</sup>/4 in the shell).</li>
+          <li><b>Vapour space</b> above HLL: height to the top of the shell (horizontal) or to the top tangent line (vertical), volume <i>V</i> − <i>V</i>(HLL), area: vapour cross section π·<i>D</i><sup>2</sup>/4 − <i>A</i>(HLL) (horizontal) or π·<i>D</i><sup>2</sup>/4 (vertical).</li>
+          <li><b>Times</b>, Δ<i>V</i> = volume between two levels:
+            rising (NLL → HLL surge, HLL → HHLL): <i>t</i> = Δ<i>V</i>/<i>Q</i><sub>in</sub>, the outlet blocked;
+            falling (NLL → LLL hold-up, HLL → LLL, LLL → LLLL): <i>t</i> = Δ<i>V</i>/<i>Q</i><sub>out</sub>, the inflow lost.</li>
+        </ol>
+      </details>
+      <details class="basis">
+        <summary>Notes</summary>
+        <ol>
+          <li>Inside dimensions, wall thickness not included; the head shapes are the nominal ones (straight flange counted in <i>L</i>).</li>
+          <li>DIN 28011 and DIN 28013 give the crown and knuckle radii as fractions of the <b>outside</b> diameter (manufacturer's data sheets); applied here to the inside diameter <i>D</i>, the head volume comes out about 0.2 % low for a wall of 1 % of <i>D</i> and 1 % low for 3 %. ASME F&amp;D and 2:1 heads as in Crookston &amp; Crookston (inside diameter).</li>
+          <li>Vertical drum: levels are usually given from the bottom tangent line (as the original sheet), so the bottom head is always full below zero; levels below the tangent line are negative. A level above the top tangent line fills the top head.</li>
+          <li>Horizontal drum: levels from the bottom of the shell (inside). The liquid surface counts the shell only, as used for the liquid–vapour disengagement area; the heads add a little.</li>
+          <li>A rising level at the inflow and a falling level at the outflow are the limiting cases (outlet blocked, inflow lost). With both flows running, the level moves at <i>Q</i><sub>in</sub> − <i>Q</i><sub>out</sub>.</li>
+          <li>Internals (demister, baffles, boot, nozzles) are not deducted.</li>
+        </ol>
+      </details>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+
+    <dialog class="zd" aria-labelledby={id('zd-title')}>
+      <div class="zhead">
+        <h2 id={id('zd-title')}>Drum sketch to scale</h2>
+        <button type="button" class="zclose" data-zd-close aria-label="Close">
+          <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+      </div>
+      <div class="zimg" data-zd-img></div>
+    </dialog>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { geometry, level, profile, type Drum, type HeadId, type Geometry } from '../lib/calc/drum';
+  import { DRUM_UNITS, DRUM_DEFAULT_UNITS, type DrumCat } from '../lib/calc/drum-units';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('\u2212', '-');   // typed fields take an ASCII minus
+  const CAT: Record<string, DrumCat> = { D: 'len', L: 'len', hh: 'len', h: 'len', n: 'len', l: 'len', ll: 'len', q: 'flow', qin: 'flow', qout: 'flow' };
+  const LV = [['hh', 'HHLL'], ['h', 'HLL'], ['n', 'NLL'], ['l', 'LLL'], ['ll', 'LLLL']] as const;
+
+  interface Mark { ab: string; h: number }
+  // ── sketch to scale (inline SVG) ──
+  function sketch(d: Drum, g: Geometry, marks: Mark[], nll: number | undefined, W: number, pre: string): string {
+    const R = d.D / 2, dep = g.head.depth, prof = profile(g.head);
+    const n = (x: number) => x.toFixed(1);
+    const zAt = (r: number) => {   // z where the head radius equals r
+      if (dep === 0) return 0;
+      for (let i = 1; i < prof.length; i++) if (prof[i][1] <= r) {
+        const [z0, r0] = prof[i - 1], [z1, r1] = prof[i];
+        return r0 === r1 ? z0 : z0 + (z1 - z0) * (r0 - r) / (r0 - r1);
+      }
+      return dep;
+    };
+    const parts: string[] = [];
+    const defs = `<defs><marker id="${pre}a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 z" class="arr"/></marker>`;
+    const dimLine = (x1: number, y1: number, x2: number, y2: number) => `<line x1="${n(x1)}" y1="${n(y1)}" x2="${n(x2)}" y2="${n(y2)}" class="dim" marker-start="url(#${pre}a)" marker-end="url(#${pre}a)"/>`;
+    const ext = (x1: number, y1: number, x2: number, y2: number) => `<line x1="${n(x1)}" y1="${n(y1)}" x2="${n(x2)}" y2="${n(y2)}" class="ext"/>`;
+    const labels = (ys: { ab: string; y: number }[], xLine: number, xText: number) => {
+      // labels beside their line, pushed apart so none overlaps another; a short leader joins label and line
+      const s = [...ys].sort((a, b) => a.y - b.y), gap = 14;
+      const ty = s.map((m) => m.y);
+      for (let i = 1; i < ty.length; i++) ty[i] = Math.max(ty[i], ty[i - 1] + gap);
+      for (let i = ty.length - 2; i >= 0; i--) ty[i] = Math.min(ty[i], ty[i + 1] - gap);
+      return s.map((m, i) => `<path d="M${n(xLine)},${n(m.y)} L${n(xLine + 6)},${n(m.y)} L${n(xText - 3)},${n(ty[i])}" class="lead"/><text x="${n(xText)}" y="${n(ty[i] + 4)}" class="lab">${m.ab}</text>`).join('');
+    };
+
+    if (d.orient === 'horizontal') {
+      const ML = 34, MR = 10, MT = 10, MB = 34, LW = 54, GAP = 10;
+      const sc = Math.min((W - ML - MR - LW - GAP) / (d.L + 2 * dep + d.D), (W < 500 ? 150 : 230) / d.D);
+      const Dp = d.D * sc, x0 = ML, xt1 = x0 + dep * sc, xt2 = xt1 + d.L * sc, xe = xt2 + dep * sc;
+      const yc = MT + Dp / 2, yb = MT + Dp, cx = xe + LW + GAP + Dp / 2;
+      const vbW = cx + Dp / 2 + MR, vbH = yb + MB;
+      const top = prof.map(([z, r]) => [xt2 + z * sc, yc - r * sc]);
+      const out = [
+        `M${n(xt1)},${n(yc - R * sc)} L${n(xt2)},${n(yc - R * sc)}`,
+        ...top.map(([x, y]) => `L${n(x)},${n(y)}`),
+        ...[...prof].reverse().map(([z, r]) => `L${n(xt2 + z * sc)},${n(yc + r * sc)}`),
+        `L${n(xt1)},${n(yc + R * sc)}`,
+        ...prof.map(([z, r]) => `L${n(xt1 - z * sc)},${n(yc + r * sc)}`),
+        ...[...prof].reverse().map(([z, r]) => `L${n(xt1 - z * sc)},${n(yc - r * sc)}`), 'Z'].join(' ');
+      parts.push(`<clipPath id="${pre}c"><path d="${out}"/></clipPath><clipPath id="${pre}e"><circle cx="${n(cx)}" cy="${n(yc)}" r="${n(Dp / 2)}"/></clipPath></defs>`);
+      if (nll !== undefined) {
+        const y = yb - nll * sc;
+        parts.push(`<rect x="${n(x0 - 1)}" y="${n(y)}" width="${n(xe - x0 + 2)}" height="${n(yb - y + 1)}" class="liq" clip-path="url(#${pre}c)"/>`);
+        parts.push(`<rect x="${n(cx - Dp / 2 - 1)}" y="${n(y)}" width="${n(Dp + 2)}" height="${n(yb - y + 1)}" class="liq" clip-path="url(#${pre}e)"/>`);
+      }
+      parts.push(`<path d="${out}" class="wall"/><circle cx="${n(cx)}" cy="${n(yc)}" r="${n(Dp / 2)}" class="wall"/>`);
+      if (dep > 0) for (const x of [xt1, xt2]) parts.push(`<line x1="${n(x)}" y1="${n(MT - 5)}" x2="${n(x)}" y2="${n(yb + 5)}" class="tl"/>`);
+      parts.push(`<line x1="${n(cx)}" y1="${n(MT - 5)}" x2="${n(cx)}" y2="${n(yb + 5)}" class="cl"/><line x1="${n(x0 - 5)}" y1="${n(yc)}" x2="${n(cx + Dp / 2 + 5)}" y2="${n(yc)}" class="cl"/>`);
+      const ys: { ab: string; y: number }[] = [];
+      for (const m of marks) {
+        const y = yb - m.h * sc, r = Math.abs(m.h - R);
+        if (r > R) continue;
+        const zx = zAt(r) * sc;
+        parts.push(`<line x1="${n(xt1 - zx)}" y1="${n(y)}" x2="${n(xt2 + zx)}" y2="${n(y)}" class="lvl"/>`);
+        const hc = Math.sqrt(Math.max(0, R * R - r * r)) * sc;
+        parts.push(`<line x1="${n(cx - hc)}" y1="${n(y)}" x2="${n(cx + hc)}" y2="${n(y)}" class="lvl"/>`);
+        parts.push(`<line x1="${n(xt2 + zx)}" y1="${n(y)}" x2="${n(xe)}" y2="${n(y)}" class="lvl"/>`);
+        ys.push({ ab: m.ab, y });
+      }
+      parts.push(labels(ys, xe, xe + 16));
+      // dimensions: L between the tangent lines below, D at the left
+      const yd = yb + 20;
+      parts.push(ext(xt1, yb + 6, xt1, yd + 4), ext(xt2, yb + 6, xt2, yd + 4), dimLine(xt1, yd, xt2, yd));
+      parts.push(`<text x="${n((xt1 + xt2) / 2)}" y="${n(yd - 4)}" class="dt" text-anchor="middle">L</text>`);
+      const xd = 14;
+      parts.push(dimLine(xd, MT, xd, yb), ext(xd - 4, MT, xt1 - (dep > 0 ? 0 : 0), MT), ext(xd - 4, yb, xt1, yb));
+      parts.push(`<text x="${n(xd - 5)}" y="${n(yc)}" class="dt" text-anchor="middle" transform="rotate(-90 ${n(xd - 5)} ${n(yc)})">D</text>`);
+      parts.push(`<text x="${n(cx)}" y="${n(yb + 26)}" class="cap" text-anchor="middle">end view</text>`);
+      return `<svg viewBox="0 0 ${n(vbW)} ${n(vbH)}" width="${n(vbW)}" xmlns="http://www.w3.org/2000/svg">${defs}${parts.join('')}</svg>`;
+    }
+
+    // vertical
+    const ML = 36, MR = 12, MT = 10, MB = 34, LW = 62;
+    const Hmax = W < 500 ? 320 : 420;
+    const sc = Math.min(Hmax / (d.L + 2 * dep), (W - ML - MR - LW) / d.D, (W < 500 ? 150 : 220) / d.D);
+    const Dp = d.D * sc, x0 = ML, xc = x0 + Dp / 2, x1 = x0 + Dp;
+    const ytt = MT + dep * sc, ybt = ytt + d.L * sc, yB = ybt + dep * sc;
+    const vbW = x1 + LW + MR, vbH = yB + MB;
+    const out = [
+      `M${n(x0)},${n(ybt)} L${n(x0)},${n(ytt)}`,
+      ...prof.map(([z, r]) => `L${n(xc - r * sc)},${n(ytt - z * sc)}`),
+      ...[...prof].reverse().map(([z, r]) => `L${n(xc + r * sc)},${n(ytt - z * sc)}`),
+      `L${n(x1)},${n(ybt)}`,
+      ...prof.map(([z, r]) => `L${n(xc + r * sc)},${n(ybt + z * sc)}`),
+      ...[...prof].reverse().map(([z, r]) => `L${n(xc - r * sc)},${n(ybt + z * sc)}`), 'Z'].join(' ');
+    parts.push(`<clipPath id="${pre}c"><path d="${out}"/></clipPath></defs>`);
+    const yOf = (h: number) => (d.datum === 'bottom' ? yB : ybt) - h * sc;
+    if (nll !== undefined) {
+      const y = yOf(nll);
+      parts.push(`<rect x="${n(x0 - 1)}" y="${n(y)}" width="${n(Dp + 2)}" height="${n(yB - y + 1)}" class="liq" clip-path="url(#${pre}c)"/>`);
+    }
+    parts.push(`<path d="${out}" class="wall"/>`);
+    if (dep > 0) for (const y of [ytt, ybt]) parts.push(`<line x1="${n(x0 - 5)}" y1="${n(y)}" x2="${n(x1 + 5)}" y2="${n(y)}" class="tl"/>`);
+    parts.push(`<line x1="${n(xc)}" y1="${n(MT - 5)}" x2="${n(xc)}" y2="${n(yB + 5)}" class="cl"/>`);
+    const ys: { ab: string; y: number }[] = [];
+    for (const m of marks) {
+      const y = yOf(m.h);
+      if (y < MT - 0.5 || y > yB + 0.5) continue;
+      const half = y < ytt ? (dep > 0 ? (() => { const z = (ytt - y) / sc; return g.head.rho(z); })() : 0)
+        : y > ybt ? (dep > 0 ? g.head.rho((y - ybt) / sc) : 0) : R;
+      parts.push(`<line x1="${n(xc - half * sc)}" y1="${n(y)}" x2="${n(x1)}" y2="${n(y)}" class="lvl"/>`);
+      if (half < R) parts.push(`<line x1="${n(xc + half * sc)}" y1="${n(y)}" x2="${n(x1)}" y2="${n(y)}" class="lvl"/>`);
+      ys.push({ ab: m.ab, y });
+    }
+    parts.push(labels(ys, x1, x1 + 18));
+    const xd = 14;
+    if (dep > 0) parts.push(ext(xd - 4, ytt, x0, ytt), ext(xd - 4, ybt, x0, ybt));
+    else parts.push(ext(xd - 4, ytt, x0, ytt), ext(xd - 4, ybt, x0, ybt));
+    parts.push(dimLine(xd, ytt, xd, ybt), `<text x="${n(xd - 5)}" y="${n((ytt + ybt) / 2)}" class="dt" text-anchor="middle" transform="rotate(-90 ${n(xd - 5)} ${n((ytt + ybt) / 2)})">L</text>`);
+    const yd = yB + 22;
+    parts.push(ext(x0, ybt + 6, x0, yd + 4), ext(x1, ybt + 6, x1, yd + 4), dimLine(x0, yd, x1, yd), `<text x="${n(xc)}" y="${n(yd - 4)}" class="dt" text-anchor="middle">D</text>`);
+    return `<svg viewBox="0 0 ${n(vbW)} ${n(vbH)}" width="${n(vbW)}" xmlns="http://www.w3.org/2000/svg">${defs}${parts.join('')}</svg>`;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-drum]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const units: Record<DrumCat, string> = { ...DRUM_DEFAULT_UNITS };
+    const unit = (c: DrumCat) => DRUM_UNITS[c].find((u) => u.label === units[c])!;
+    const headSel = $<HTMLSelectElement>('select[data-s="head"]');
+    let orient: 'horizontal' | 'vertical' = 'horizontal', datum: 'tangent' | 'bottom' = 'tangent', flow: 'one' | 'two' = 'one';
+    let bad = false;
+    let last: { d: Drum; g: Geometry; marks: Mark[]; nll?: number } | undefined;
+
+    const read = (k: string, ok: (x: number) => boolean) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const x = blank ? NaN : toSI(unit(CAT[k]), parseNumber(el.value));
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      if (invalid) bad = true;
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, v: number | undefined, c?: DrumCat) => {
+      const o = $<HTMLOutputElement>(`output[data-o="${k}"]`);
+      o.textContent = v === undefined || !Number.isFinite(v) ? '' : fmt(c ? fromSI(unit(c), v) : v);
+    };
+
+    const draw = () => {
+      const box = $<HTMLElement>('[data-sketch]');
+      if (!last) { box.innerHTML = ''; return; }
+      const W = Math.max(320, Math.min(760, box.clientWidth || 760));
+      box.innerHTML = sketch(last.d, last.g, last.marks, last.nll, W, 'dr');
+    };
+
+    const run = () => {
+      bad = false;
+      const vert = orient === 'vertical';
+      for (const el of root.querySelectorAll<HTMLElement>('[data-orient]')) el.hidden = el.dataset.orient !== orient;
+      for (const el of root.querySelectorAll<HTMLElement>('[data-flow]')) el.hidden = el.dataset.flow !== flow;
+      $<HTMLElement>('[data-datumwrap]').hidden = !vert;
+      $('[data-datum-note]').innerHTML = vert
+        ? (datum === 'tangent' ? 'Levels from the bottom tangent line (as the original sheet); below it, in the bottom head, they are negative.' : 'Levels from the inside bottom of the lower head.')
+        : 'Horizontal drum: levels from the inside bottom of the shell.';
+      $('[data-scap]').textContent = vert ? 'Liquid surface' : 'Liquid surface (shell)';
+      $('[data-vapcap]').textContent = vert ? 'above HLL, to the top tangent line' : 'above HLL';
+
+      const D = read('D', (x) => x > 0), L = read('L', (x) => x >= 0);
+      const ok = Number.isFinite(D) && Number.isFinite(L);
+      const d: Drum = { orient, head: headSel.value as HeadId, D, L, datum };
+      const g = ok ? geometry(d) : undefined;
+      show('ld', ok ? L / D : undefined); show('hd', g?.head.depth, 'len'); show('ov', g?.overall, 'len');
+      show('vh', g?.head.volume, 'vol'); show('vs', g?.shell, 'vol'); show('vt', g?.total, 'vol');
+
+      const warn: string[] = [];
+      const hv: Record<string, number> = {}, vv: Record<string, number> = {};
+      const marks: Mark[] = [];
+      for (const [k, ab] of LV) {
+        const h = read(k, (x) => (vert && datum === 'tangent') || x >= 0);
+        const row = $<HTMLElement>(`[data-lvl="${k}"]`);
+        if (!g || !Number.isFinite(h)) { for (const s of ['v', 'a', 's']) show(`${k}-${s}`, undefined); continue; }
+        const r = level(d, g, h);
+        if (r.outside) { inp(k).setAttribute('aria-invalid', ''); warn.push(`${ab} is outside the drum (${fmt(fromSI(unit('len'), g.hMin))} to ${fmt(fromSI(unit('len'), g.hMax))} ${units.len}${vert && datum === 'tangent' ? ' from the bottom tangent line' : ''}); results shown for the nearest end.`); }
+        hv[k] = h; vv[k] = r.volume; marks.push({ ab, h });
+        show(`${k}-v`, r.volume, 'vol'); show(`${k}-a`, r.section, 'area'); show(`${k}-s`, r.surface, 'area');
+        row.classList.toggle('given', true);
+      }
+      // level order
+      const order = LV.map(([k]) => k).filter((k) => k in hv);
+      for (let i = 0; i + 1 < order.length; i++) if (!(hv[order[i]] > hv[order[i + 1]])) {
+        const a = LV.find(([k]) => k === order[i])![1], b = LV.find(([k]) => k === order[i + 1])![1];
+        warn.push(`${a} should be above ${b}.`);
+      }
+      // vapour space above HLL
+      if (g && 'h' in hv) {
+        const R = D / 2, ht = vert && datum === 'bottom' ? hv.h - g.head.depth : hv.h;
+        const r = level(d, g, hv.h);
+        show('vap-h', vert ? L - ht : D - hv.h, 'len'); show('vap-v', g.total - r.volume, 'vol');
+        show('vap-a', vert ? undefined : Math.PI * R * R - r.section, 'area'); show('vap-s', vert ? Math.PI * R * R : undefined, 'area');
+      } else for (const s of ['h', 'v', 'a', 's']) show(`vap-${s}`, undefined);
+
+      // flows and times
+      let qin: number, qout: number;
+      if (flow === 'one') { qin = qout = read('q', (x) => x > 0); }
+      else { qin = read('qin', (x) => x > 0); qout = read('qout', (x) => x > 0); }
+      const pairs: Record<string, [string, string, 'in' | 'out']> = { 'hh-h': ['hh', 'h', 'in'], 'h-n': ['h', 'n', 'in'], 'n-l': ['n', 'l', 'out'], 'h-l': ['h', 'l', 'out'], 'l-ll': ['l', 'll', 'out'] };
+      for (const [k, [a, b, basis]] of Object.entries(pairs)) {
+        const tr = $<HTMLElement>(`[data-t="${k}"]`);
+        if (tr.dataset.opt) tr.hidden = inp(tr.dataset.opt).value.trim() === '';
+        const dv = a in vv && b in vv ? vv[a] - vv[b] : NaN;
+        const q = basis === 'in' ? qin : qout;
+        show(`${k}-v`, Number.isFinite(dv) ? dv : undefined, 'vol');
+        show(`${k}-t`, Number.isFinite(dv) && Number.isFinite(q) ? dv / q : undefined, 'time');
+      }
+      $('[data-warn]').innerHTML = warn.map((x) => `<li>${x}</li>`).join('');
+      last = g ? { d, g, marks, nll: 'n' in hv ? Math.min(g.hMax, Math.max(g.hMin, hv.n)) : undefined } : undefined;
+      draw();
+    };
+
+    // one unit per category: every selector of that category follows; typed values are converted, not reinterpreted
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      const c = t.dataset.cat as DrumCat | undefined;
+      if (c) {
+        const from = unit(c);
+        units[c] = t.value;
+        const to = unit(c);
+        for (const s of root.querySelectorAll<HTMLSelectElement>(`select[data-cat="${c}"]`)) s.value = t.value;
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-ut="${c}"]`)) s.textContent = t.value;
+        for (const [k, kc] of Object.entries(CAT)) {
+          if (kc !== c) continue;
+          const el = inp(k), x = parseNumber(el.value);
+          if (el.value.trim() !== '' && Number.isFinite(x)) el.value = fmtIn(fromSI(to, toSI(from, x)));
+        }
+        $('[data-status]').textContent = `Unit changed to ${t.value}; values converted.`;
+      }
+      if (t.matches('select')) run();
+    });
+    root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input[type=text]')) run(); });
+    segInit(root, 'orient', (v) => { orient = v as typeof orient; run(); });
+    segInit(root, 'datum', (v) => {
+      const hd = last?.g.head.depth;
+      const prev = datum;
+      datum = v as typeof datum;
+      // keep the physical levels: shift the typed values by the head depth
+      if (hd !== undefined && prev !== datum) for (const [k] of LV) {
+        const el = inp(k), x = parseNumber(el.value);
+        if (el.value.trim() !== '' && Number.isFinite(x)) el.value = fmtIn(fromSI(unit('len'), toSI(unit('len'), x) + (datum === 'bottom' ? hd : -hd)));
+      }
+      run();
+    });
+    segInit(root, 'flow', (v) => {
+      flow = v as typeof flow;
+      if (flow === 'two') { if (inp('qin').value.trim() === '') inp('qin').value = inp('q').value; if (inp('qout').value.trim() === '') inp('qout').value = inp('q').value; }
+      else if (inp('q').value.trim() === '') inp('q').value = inp('qout').value;
+      run();
+    });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]')) el.value = '';
+      run(); inp('D').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    const dlg = $<HTMLDialogElement>('dialog.zd');
+    $('[data-zoom]').addEventListener('click', () => {
+      if (!last) return;
+      const W = Math.min(1100, Math.max(320, window.innerWidth - 64));
+      $('[data-zd-img]').innerHTML = sketch(last.d, last.g, last.marks, last.nll, W, 'drz');
+      dlg.showModal();
+    });
+    $('[data-zd-close]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    let rt = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); }).observe($('[data-sketch]'));
+    segSet(root, 'orient', orient);
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .lb { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 44rem; }
+  .io .v { width: 9.5rem; }
+  .io .v.wide select { max-width: 18rem; }
+  .io .u { width: 8.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io .u :global(select) { max-width: 8.5rem; }
+  [hidden] { display: none !important; }
+  .calc :global(input), .calc :global(output), select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .calc :global(select:focus) { outline: 2px solid var(--line); outline-offset: 1px; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 44rem; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 44rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+
+  /* level and time tables: one unit selector per column */
+  .lv, .tm { max-width: 52rem; table-layout: fixed; }
+  .tm { max-width: 40rem; margin-top: 0.75rem; }
+  .lv thead th, .tm thead th { font-weight: 600; font-size: 0.8125rem; vertical-align: bottom; padding: 0 0.25rem 0.25rem 0; }
+  .lv thead th:first-child { width: 30%; }
+  .tm thead th:first-child { width: 50%; }
+  .ch { display: block; }
+  .hu :global(select) { height: 1.75rem; margin-top: 0.125rem; }
+  .hu > :global(span) { display: block; height: 1.75rem; line-height: 1.75rem; color: var(--muted); font-weight: 400; }
+  .lv td, .tm td { padding: 0.125rem 0.25rem 0.125rem 0; }
+  .nm { color: var(--muted); font-size: 0.8125rem; }
+  .lv tbody th .lb, .tm tbody th .lb { font-weight: 600; margin-right: 0.375rem; }
+  .tm .eq { margin-left: 0.25rem; }
+
+  /* sketch */
+  .sk { display: block; width: 100%; max-width: 52rem; padding: 0.5rem 0 0; border: 0; background: none; text-align: left; cursor: zoom-in; }
+  .skimg { display: block; }
+  .skimg :global(svg), .zimg :global(svg) { display: block; max-width: 100%; height: auto; }
+  .zoom { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .drum :global(.wall) { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+  .drum :global(.liq) { fill: color-mix(in srgb, var(--line) 24%, #fff); stroke: none; }
+  .drum :global(.lvl) { stroke: var(--line); stroke-width: 1.1; stroke-dasharray: 6 3; }
+  .drum :global(.lead) { fill: none; stroke: var(--line); stroke-width: 0.8; }
+  .drum :global(.lab) { font: 600 12px var(--font-ui); fill: var(--line); }
+  .drum :global(.tl) { stroke: var(--muted); stroke-width: 0.8; stroke-dasharray: 10 3 2 3; }
+  .drum :global(.cl) { stroke: var(--rule); stroke-width: 0.8; stroke-dasharray: 10 3 2 3; }
+  .drum :global(.dim) { stroke: var(--ink); stroke-width: 0.8; }
+  .drum :global(.ext) { stroke: var(--muted); stroke-width: 0.6; }
+  .drum :global(.arr) { fill: var(--ink); }
+  .drum :global(.dt) { font: italic 12px var(--font-ui); fill: var(--ink); }
+  .drum :global(.cap) { font: 400 11px var(--font-ui); fill: var(--muted); }
+  .zd { width: min(72rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1.5px solid var(--ink); border-radius: 0; background: #fff; color: var(--ink); }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .zhead h2 { margin: 0; font-size: 1.25rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zclose:hover { background: var(--line); color: var(--paper); }
+  .zimg { padding: 1rem 1.25rem 1.5rem; display: grid; place-items: center; }
+
+  .basis { margin-top: 0.5rem; max-width: 52rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .basis i { font-style: italic; }
+  .basis sup, .basis sub { font-size: 0.75em; line-height: 0; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .io .v { width: 7rem; }
+    .io .u { width: 6.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .lv { font-size: 0.75rem; }
+    .lv thead th:first-child { width: 17%; }
+    .lv tbody th .lb { margin-right: 0; }
+    .lv .nm, .tm .nm { display: none; }
+    .lv :global(input), .lv :global(output), .tm :global(output) { padding: 0 0.1875rem; }
+    .lv td { padding-right: 0.125rem; }
+    .hu :global(select) { font-size: 0.75rem; padding: 0; }
+  }
+</style>

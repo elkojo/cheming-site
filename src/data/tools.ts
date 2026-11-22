@@ -205,8 +205,10 @@ export const tools: Tool[] = [
     "tag": "D",
     "title": "Drum",
     "name": "Drum Geometry, Hold-up & Surge Rate",
-    "description": "Total and level volumes of a horizontal or vertical drum, with hold-up and surge times between the LLL, NLL and HLL.",
+    "description": "Total and level volumes of a horizontal or vertical drum with elliptical, torispherical, hemispherical or flat heads, a sketch to scale, and hold-up and surge times between the liquid levels.",
+    "standard": "Exact head geometry (Crookston & Crookston, 2011)",
     "category": "equipment",
+    "native": "drum",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/057f035821f5b6762307ea37b329156892d37b5a05e60cb2ccb314a8b3aa1878?type=grid&mode=embed"
   },
   {
