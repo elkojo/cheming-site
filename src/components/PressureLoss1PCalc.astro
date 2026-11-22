@@ -6,6 +6,7 @@
 // area + wetted perimeter), D_h = 4·A/P replaces d, and laminar flow uses the shape's f·Re (Shah & London).
 // Inputs start on the Zoho defaults; results are computed in the browser on load.
 import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
 import { FITTINGS, ROUGHNESS } from '../lib/calc/pressure1p';
 import { SIZES, schedulesFor } from '../lib/calc/pipes';
 import { SHAPES } from '../lib/calc/noncircular';
@@ -192,11 +193,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
 
     <section class="grp" aria-labelledby={id('fluid-h')}>
       <h2 id={id('fluid-h')}>Fluid</h2>
-      <fieldset class="phase">
-        <legend class="sr">Phase</legend>
-        <label><input type="radio" name={id('phase')} value="liquid" checked /> Liquid</label>
-        <label><input type="radio" name={id('phase')} value="gas" /> Gas</label>
-      </fieldset>
+      <SegToggle label="Fluid" name="phase" value="liquid" options={[{ value: 'liquid', label: 'Liquid' }, { value: 'gas', label: 'Gas or vapour' }]} />
       <table class="io">
         <tbody>
           {fluidRows.map((r) => (
@@ -288,6 +285,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
   import { section, type Shape } from '../lib/calc/noncircular';
   import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig, pressureAbs, type Unit } from '../lib/calc/units';
   import { parseNumber } from '../lib/calc/types';
+  import { segInit } from '../lib/ui/seg';
 
   const Q = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
   const L = (pairs: [string, number][]): Unit[] => pairs.map(([label, f]) => ({ label, f }));
@@ -317,7 +315,8 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
       const all = list ?? LISTS[k] ?? [...LEN, ...AREA, ...VEL, ...MOM, ...ONE];
       return all.find((u) => u.label === label) ?? { label, f: 1 };
     };
-    const phase = () => root.querySelector<HTMLInputElement>('input[type=radio]:checked')!.value as 'liquid' | 'gas';
+    let picked: 'liquid' | 'gas' = 'liquid';
+    const phase = () => picked;
     const nc = root.dataset.mode === 'noncircular';
     const nps = root.querySelector<HTMLSelectElement>('select[data-s="nps"]')!;
     const sched = root.querySelector<HTMLSelectElement>('select[data-s="sched"]')!;
@@ -477,9 +476,9 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
         $('[data-status]').textContent = 'Type the inside diameter.';
       }
       if (t === mat && mat.value) inp('eps').value = fmt(fromSI(unitOf('eps', LEN), Number(mat.value)));
-      if (t.matches('input[type=radio]')) swapPhase();
-      if (t.matches('select, input[type=radio]')) run();
+      if (t.matches('select')) run();
     });
+    segInit(root, 'phase', (v) => { picked = v as 'liquid' | 'gas'; swapPhase(); run(); });
     $('[data-reset]').addEventListener('click', () => {
       for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]:not([readonly])')) el.value = '';
       for (const ph of Object.values(mem)) for (const k of ['w', 'mu']) ph[k][0] = '';
@@ -532,9 +531,6 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
   select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
   select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
 
-  .phase { display: flex; gap: 1.25rem; margin: 0 0 0.5rem; padding: 0; border: 0; }
-  .phase label { display: inline-flex; align-items: center; gap: 0.375rem; cursor: pointer; font-size: 0.9375rem; }
-  .phase input { display: inline-block; width: auto; height: auto; accent-color: var(--line); }
 
   .fit { margin: 0.5rem 0; max-width: 44rem; }
   .fit summary { cursor: pointer; padding: 0.25rem 0; font-weight: 600; font-size: 0.9375rem; }

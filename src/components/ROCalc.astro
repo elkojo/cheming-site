@@ -5,6 +5,7 @@
 // (plate thickness and edge Cd, equivalent valve Cv) and the full calculation basis.
 // Inputs start on the Zoho defaults; results are computed in the browser on load.
 import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
 import { SIZES, schedulesFor } from '../lib/calc/pipes';
 import { quantity, DEFAULT_SETTINGS } from '../lib/calc/units';
 import { mathHtml } from '../lib/calc/types';
@@ -69,16 +70,8 @@ const unitCell = (r: Row) => (r.units && r.units.length > 1
     <section class="grp" aria-labelledby={id('mode-h')}>
       <h2 id={id('mode-h')} class="sr">Mode</h2>
       <div class="switches">
-        <div class="seg" role="radiogroup" aria-label="Calculate">
-          <span class="seg-l">Calculate</span>
-          <button type="button" role="radio" aria-checked="true" data-mode="size">Orifice diameter <span class="muted">(sizing)</span></button>
-          <button type="button" role="radio" aria-checked="false" data-mode="rate">Flow rate <span class="muted">(rating)</span></button>
-        </div>
-        <div class="seg" role="radiogroup" aria-label="Fluid">
-          <span class="seg-l">Fluid</span>
-          <button type="button" role="radio" aria-checked="true" data-phase-btn="gas">Vapour or gas</button>
-          <button type="button" role="radio" aria-checked="false" data-phase-btn="liquid">Liquid</button>
-        </div>
+        <SegToggle label="Calculate" name="mode" value="size" options={[{ value: 'size', label: 'Orifice diameter', hint: '(sizing)' }, { value: 'rate', label: 'Flow rate', hint: '(rating)' }]} />
+        <SegToggle label="Fluid" name="phase" value="gas" options={[{ value: 'gas', label: 'Vapour or gas' }, { value: 'liquid', label: 'Liquid' }]} />
       </div>
       <p class="note" data-mode-note></p>
     </section>
@@ -234,6 +227,7 @@ const unitCell = (r: Row) => (r.units && r.units.length > 1
   import { pipe, id as pipeId, schedulesFor, type Schedule } from '../lib/calc/pipes';
   import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig, type Unit } from '../lib/calc/units';
   import { parseNumber } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
 
   const Q = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
   const L = (pairs: [string, number][]): Unit[] => pairs.map(([label, f]) => ({ label, f }));
@@ -276,7 +270,7 @@ const unitCell = (r: Row) => (r.units && r.units.length > 1
 
     const setMode = (m: 'size' | 'rate', announce = false) => {
       mode = m;
-      for (const b of root.querySelectorAll<HTMLButtonElement>('[data-mode]')) b.setAttribute('aria-checked', String(b.dataset.mode === m));
+      segSet(root, 'mode', m);
       const given = m === 'size' ? 'w' : 'd', calc = m === 'size' ? 'd' : 'w';
       inp(given).classList.remove('calcd'); inp(calc).classList.add('calcd');
       $(`[data-tag="${given}"]`).textContent = 'input'; $(`[data-tag="${calc}"]`).textContent = 'calculated';
@@ -288,7 +282,7 @@ const unitCell = (r: Row) => (r.units && r.units.length > 1
     const setPhase = (p: 'gas' | 'liquid') => {
       if (p !== phase) for (const k of ['w', 'mu']) { mem[phase][k] = [inp(k).value, sel(k)!.value]; [inp(k).value, sel(k)!.value] = mem[p][k]; }
       phase = p;
-      for (const b of root.querySelectorAll<HTMLButtonElement>('[data-phase-btn]')) b.setAttribute('aria-checked', String(b.dataset.phaseBtn === p));
+      segSet(root, 'phase', p);
       for (const el of root.querySelectorAll<HTMLElement>('[data-phase]')) el.hidden = el.dataset.phase !== p;
     };
     const fillSchedules = () => {
@@ -388,8 +382,8 @@ const unitCell = (r: Row) => (r.units && r.units.length > 1
       if (t === sched && sched.value === 'own') inp('D').focus();
       if (t.matches('select')) run();
     });
-    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-mode]')) b.addEventListener('click', () => { setMode(b.dataset.mode as 'size' | 'rate', true); run(); });
-    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-phase-btn]')) b.addEventListener('click', () => { setPhase(b.dataset.phaseBtn as 'gas' | 'liquid'); run(); });
+    segInit(root, 'mode', (v) => { setMode(v as 'size' | 'rate', true); run(); });
+    segInit(root, 'phase', (v) => { setPhase(v as 'gas' | 'liquid'); run(); });
     $('[data-reset]').addEventListener('click', () => {
       for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]:not([readonly])')) el.value = '';
       for (const ph of Object.values(mem)) for (const k of ['w', 'mu']) ph[k][0] = '';
@@ -434,15 +428,7 @@ const unitCell = (r: Row) => (r.units && r.units.length > 1
   select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
   select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
 
-  .switches { display: flex; flex-wrap: wrap; gap: 0.75rem 2rem; }
-  .seg { display: inline-flex; align-items: stretch; flex-wrap: wrap; gap: 0; }
-  .seg-l { align-self: center; margin-right: 0.625rem; font-weight: 600; font-size: 0.9375rem; }
-  .seg button { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: #fff; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; }
-  .seg button + button { border-left: 0; }
-  .seg button[aria-checked='true'] { background: var(--line); color: var(--paper); }
-  .seg button[aria-checked='true'] .muted { color: var(--paper); opacity: 0.85; }
-  .seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .seg .muted { color: var(--muted); font-weight: 400; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; }
   .tag { display: inline-block; margin-left: 0.25rem; padding: 0 0.375rem; border: 1px solid var(--rule); color: var(--muted); font-size: 0.6875rem; line-height: 1.25rem; text-transform: uppercase; letter-spacing: 0.04em; }
   .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 44rem; }
   .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
@@ -461,8 +447,5 @@ const unitCell = (r: Row) => (r.units && r.units.length > 1
     .io .v { width: 7rem; }
     .io .u { width: 6.5rem; }
     .switches { flex-direction: column; gap: 0.625rem; }
-    .seg { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
-    .seg-l { grid-column: 1 / -1; margin: 0 0 0.25rem; }
-    .seg button { padding-inline: 0.5rem; height: auto; min-height: 2.5rem; line-height: 1.2; }
   }
 </style>

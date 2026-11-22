@@ -1,9 +1,10 @@
 ---
 // Native Pipe Size calculator (Phase 7): economic inside diameter and velocity for carbon steel and stainless
 // steel (one fluid, both materials side by side), plus the standard pipe at or above the economic diameter
-// (CS Schedule STD, SS Schedule 10S) and the size below. Mass or volume flow can be typed; both are yellow
-// until one is typed (as in Gas Equation and Steam). Rendered with the Zoho defaults filled in.
+// (CS Schedule STD, SS Schedule 10S) and the size below. Mass or volume flow is given (visible toggle, owner 2026-11-22),
+// synced with typing (as in Gas Equation and Steam). Rendered with the Zoho defaults filled in.
 import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
 import { econPipe, type Result } from '../lib/calc/pipesize';
 import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig } from '../lib/calc/units';
 import { mathHtml } from '../lib/calc/types';
@@ -68,18 +69,19 @@ const id = (k: string) => `ps-${k}`;
 
     <section class="grp" aria-labelledby={id('in-title')}>
       <h2 id={id('in-title')}>Fluid</h2>
+      <SegToggle label="Given" name="given" value="W" options={[{ value: 'W', label: 'Mass flow' }, { value: 'Q', label: 'Volume flow' }]} />
       <table class="io">
         <tbody>
           {inputs.map((r) => (
             <tr>
               <th scope="row"><label for={id(r.key)}><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></label></th>
-              <td class="v"><input id={id(r.key)} data-k={r.key} data-flow={r.flow ? r.key : undefined} value={r.value} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+              <td class="v"><input id={id(r.key)} data-k={r.key} data-flow={r.flow ? r.key : undefined} value={r.value} class:list={[{ calcd: r.key === 'Q' }]} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
               <td class="u"><select data-u={r.key} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u.label === r.unit}>{u.label}</option>)}</select></td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p class="note">Type the mass flow <b>or</b> the volume flow: the one you type stays yellow (input), the other turns green and follows through the density.</p>
+      <p class="note">Pick mass or volume flow with the switch, or simply type into one: it becomes the input (yellow) and the other follows through the density (green).</p>
     </section>
 
     <section class="grp" aria-labelledby={id('out-title')}>
@@ -113,6 +115,7 @@ const id = (k: string) => `ps-${k}`;
   import { econPipe, type Result } from '../lib/calc/pipesize';
   import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig } from '../lib/calc/units';
   import { parseNumber } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
 
   const U = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
   const LISTS: Record<string, ReturnType<typeof U>> = { W: U('mflow'), Q: U('vflow'), rho: U('density'), mu: U('mu') };
@@ -124,7 +127,7 @@ const id = (k: string) => `ps-${k}`;
     const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
     const unit = (k: string) => LISTS[k].find((u) => u.label === $<HTMLSelectElement>(`select[data-u="${k}"]`).value)!;
     let given: 'W' | 'Q' = 'W';
-    let chosen = false;   // both flows yellow until one is typed
+    const chosen = true;   // the given flow is always shown by the toggle (owner 2026-11-22)
 
     const run = () => {
       let bad = false;
@@ -169,8 +172,8 @@ const id = (k: string) => `ps-${k}`;
 
     root.addEventListener('input', (e) => {
       const f = (e.target as HTMLElement).dataset.flow as 'W' | 'Q' | undefined;
-      if (f && (f !== given || !chosen)) {
-        given = f; chosen = true;
+      if (f && f !== given) {
+        given = f; segSet(root, 'given', f);
         $('[data-status]').textContent = `${f === 'W' ? 'Mass' : 'Volume'} flow is now the input; the other is calculated.`;
       }
       run();
@@ -178,10 +181,14 @@ const id = (k: string) => `ps-${k}`;
     root.addEventListener('change', (e) => { if ((e.target as HTMLElement).matches('select')) run(); });
     $('[data-reset]').addEventListener('click', () => {
       for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) el.value = '';
-      chosen = false;
       run();
       inp('W').focus();
       $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    segInit(root, 'given', (v) => {
+      given = v as 'W' | 'Q';
+      run(); inp(given).focus();
+      $('[data-status]').textContent = `${given === 'W' ? 'Mass' : 'Volume'} flow is now the input; the other is calculated.`;
     });
     run();
   }

@@ -4,6 +4,7 @@
 // maximum flow of a fully open valve for the failed-open relief case (API 521, 5.10.3).
 // Inputs start on the Zoho defaults; results are computed in the browser on load.
 import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
 import { STYLES } from '../lib/calc/cv';
 import { quantity, DEFAULT_SETTINGS } from '../lib/calc/units';
 import { mathHtml } from '../lib/calc/types';
@@ -59,11 +60,7 @@ const cell = (r: Row) => r.out
 
     <section class="grp" aria-labelledby={id('svc-h')}>
       <h2 id={id('svc-h')}>Service</h2>
-      <fieldset class="phase">
-        <legend class="sr">Fluid</legend>
-        <label><input type="radio" name={id('phase')} value="liquid" checked /> Liquid</label>
-        <label><input type="radio" name={id('phase')} value="gas" /> Gas or vapour</label>
-      </fieldset>
+      <SegToggle label="Fluid" name="phase" value="liquid" options={[{ value: 'liquid', label: 'Liquid' }, { value: 'gas', label: 'Gas or vapour' }]} />
       <table class="io">
         <tbody>
           {service.map((r) => (
@@ -169,6 +166,7 @@ const cell = (r: Row) => r.out
   import { liquidCv, gasCv, liquidFlow, gasFlow, pickValve, STYLES, kvFromCv, gasVolume, gasVolumeStd, type Size } from '../lib/calc/cv';
   import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig, type Unit } from '../lib/calc/units';
   import { parseNumber } from '../lib/calc/types';
+  import { segInit } from '../lib/ui/seg';
 
   const Q = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
   const L = (pairs: [string, number][]): Unit[] => pairs.map(([label, f]) => ({ label, f }));
@@ -189,6 +187,7 @@ const cell = (r: Row) => r.out
     };
     const style = $<HTMLSelectElement>('select[data-s="style"]');
     let bad = false;
+    let picked: 'liquid' | 'gas' = 'liquid';
     const read = (k: string, ok: (x: number) => boolean, si = true) => {
       const el = inp(k), blank = el.value.trim() === '';
       const raw = parseNumber(el.value), x = blank ? NaN : si && LISTS[k] ? toSI(unit(k), raw) : raw;
@@ -206,7 +205,7 @@ const cell = (r: Row) => r.out
 
     const run = () => {
       bad = false;
-      const gas = root.querySelector<HTMLInputElement>('input[type=radio]:checked')!.value === 'gas';
+      const gas = picked === 'gas';
       for (const el of root.querySelectorAll<HTMLElement>('[data-phase]')) el.hidden = el.dataset.phase !== (gas ? 'gas' : 'liquid');
       const custom = style.value === 'custom';
       for (const el of root.querySelectorAll<HTMLElement>('[data-custom]')) el.hidden = !custom;
@@ -279,12 +278,11 @@ const cell = (r: Row) => r.out
       $('[data-warn]').innerHTML = warn.map((x) => `<li>${x}</li>`).join('');
     };
 
-    let cur = root.querySelector<HTMLInputElement>('input[type=radio]:checked')!.value;
+    segInit(root, 'phase', (v) => { picked = v as 'liquid' | 'gas'; run(); });
     root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input[type=text]')) run(); });
     root.addEventListener('change', (e) => {
       const t = e.target as HTMLElement;
-      if (t.matches('input[type=radio]')) cur = (t as HTMLInputElement).value;
-      if (t.matches('select, input[type=radio]')) run();
+      if (t.matches('select')) run();
     });
     $('[data-reset]').addEventListener('click', () => {
       for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]')) el.value = '';
@@ -329,9 +327,6 @@ const cell = (r: Row) => r.out
   .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
   select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
-  .phase { display: flex; gap: 1.25rem; margin: 0 0 0.5rem; padding: 0; border: 0; }
-  .phase label { display: inline-flex; align-items: center; gap: 0.375rem; cursor: pointer; font-size: 0.9375rem; }
-  .phase :global(input) { display: inline-block; width: auto; height: auto; accent-color: var(--line); }
   .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 44rem; }
   .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
   .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 44rem; }

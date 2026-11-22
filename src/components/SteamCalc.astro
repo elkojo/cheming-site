@@ -4,8 +4,9 @@
 //    follows (green), as in the Gas Equation. The Zoho sheet had a pressure column and a temperature column.
 // 2. Subcooled water / superheated steam at a given p and t (new, approved by the owner 2026-11-20).
 // Rendered with the Zoho default (0 bar (G)) filled in, so section 1 shows results before the script runs.
-// On load and after Clear, pressure and temperature are both yellow: either can be typed (owner, 2026-11-20).
+// The given quantity (p or t) is shown by a visible toggle (site-wide rule, owner 2026-11-22), synced with typing.
 import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
 import { saturated, PROPS, UNITS, pressure, temperature, toSI, fromSI, show, type Props } from '../lib/calc/steam';
 import { formatSig } from '../lib/calc/units';
 import { mathHtml } from '../lib/calc/types';
@@ -31,6 +32,7 @@ const opts = (list: { label: string }[], sel: string) => list.map((u) => ({ labe
 
     <section class="grp" data-sec="sat" aria-labelledby={id('sat-title')}>
       <h2 id={id('sat-title')}>Saturated water and steam</h2>
+      <SegToggle label="Given" name="given" value="p" options={[{ value: 'p', label: 'Pressure' }, { value: 't', label: 'Temperature' }]} />
       <table class="io">
         <tbody>
           <tr>
@@ -40,13 +42,13 @@ const opts = (list: { label: string }[], sel: string) => list.map((u) => ({ labe
           </tr>
           <tr>
             <th scope="row"><label for={id('t')}><span class="lb">Temperature</span> <span class="eq" set:html={mathHtml('t')} /></label></th>
-            <td class="v"><input id={id('t')} data-sat="t" value={t0} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="v"><input id={id('t')} data-sat="t" value={t0} class="calcd" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
             <td class="u"><select data-u="t" aria-label="Temperature unit">{opts(temperature, '°C').map((o) => <option selected={o.selected}>{o.label}</option>)}</select></td>
           </tr>
         </tbody>
       </table>
       <p class="note">
-        Type a pressure <b>or</b> a temperature: the one you type stays yellow (input), the other turns green and follows.
+        Pick pressure or temperature with the switch, or simply type into one: it becomes the input (yellow) and the other is calculated (green).
         Range: triple point 0.00611657 bar a (0.01 °C) to critical point 220.64 bar a (373.946 °C). Gauge (G) units add 1.01325 bar.
       </p>
 
@@ -128,6 +130,7 @@ const opts = (list: { label: string }[], sel: string) => list.map((u) => ({ labe
   import { saturated, atPT, PROPS, pressure, temperature, toSI, fromSI, show, PHASE_NAME, type Props } from '../lib/calc/steam';
   import { parseNumber } from '../lib/calc/types';
   import { formatSig } from '../lib/calc/units';
+  import { segInit, segSet } from '../lib/ui/seg';
 
   const fmt = (x: number) => formatSig(x, 6, false);
   const unitOf = (list: { label: string }[], label: string) => list.find((u) => u.label === label)! as Parameters<typeof toSI>[0];
@@ -137,8 +140,8 @@ const opts = (list: { label: string }[], sel: string) => list.map((u) => ({ labe
     const sel = (k: string) => $<HTMLSelectElement>(`select[data-u="${k}"]`).value;
     const status = (t: string) => { $('[data-status]').textContent = t; };
     let given: 'p' | 't' = root.dataset.given === 't' ? 't' : 'p';
-    // both fields stay yellow (either can be typed) until the visitor types into one of them
-    let chosen = false;
+    // the given quantity is always shown by the toggle (owner 2026-11-22; replaces 'both yellow until typed')
+    const chosen = true;
 
     /** reads an input: NaN when blank, null when filled in but not a number */
     const read = (el: HTMLInputElement) => (el.value.trim() === '' ? NaN : (Number.isFinite(parseNumber(el.value)) ? parseNumber(el.value) : null));
@@ -170,8 +173,10 @@ const opts = (list: { label: string }[], sel: string) => list.map((u) => ({ labe
       }
       const bad = x === null || (Number.isFinite(x) && !res);
       inEl.toggleAttribute('aria-invalid', bad);
+      // tiny residues from the rounded input (e.g. 0 bar (G) → 99.9743 °C → −1.7·10⁻¹¹ bar (G)) are shown as 0
+      const snap = (v: number) => (Math.abs(v) < 1e-7 ? 0 : v);
       outEl.value = res
-        ? fmt(given === 'p' ? fromSI(unitOf(temperature, sel('t')), res.T) : fromSI(unitOf(pressure, sel('p')), res.p))
+        ? fmt(snap(given === 'p' ? fromSI(unitOf(temperature, sel('t')), res.T) : fromSI(unitOf(pressure, sel('p')), res.p)))
         : bad ? '—' : '';
       fill($('[data-props="sat"]'), res ? { water: res.water, steam: res.steam } : null, bad);
     };
@@ -202,7 +207,7 @@ const opts = (list: { label: string }[], sel: string) => list.map((u) => ({ labe
       const t = e.target as HTMLInputElement;
       if (t.dataset.sat) {
         const g = t.dataset.sat as 'p' | 't';
-        if (g !== given || !chosen) { given = g; chosen = true; status(`${g === 'p' ? 'Pressure' : 'Temperature'} is now the input; the other is calculated.`); }
+        if (g !== given) { given = g; segSet(root, 'given', g); status(`${g === 'p' ? 'Pressure' : 'Temperature'} is now the input; the other is calculated.`); }
         runSat();
       } else if (t.dataset.pt) runPT();
     });
@@ -213,10 +218,16 @@ const opts = (list: { label: string }[], sel: string) => list.map((u) => ({ labe
     });
     $('[data-reset]').addEventListener('click', () => {
       for (const el of root.querySelectorAll<HTMLInputElement>('input[data-sat], input[data-pt]')) el.value = '';
-      chosen = false;
       runSat(); runPT();
       $<HTMLInputElement>(`input[data-sat="${given}"]`).focus();
       status('All input fields cleared.');
+    });
+
+    segInit(root, 'given', (v) => {
+      given = v as 'p' | 't';
+      runSat();
+      $<HTMLInputElement>(`input[data-sat="${given}"]`).focus();
+      status(`${given === 'p' ? 'Pressure' : 'Temperature'} is now the input; the other is calculated.`);
     });
 
     // Values or units kept by the browser after "back" or a soft reload: recalculate them.

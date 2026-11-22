@@ -1,0 +1,37 @@
+---
+// Visible switch for alternative modes ("Calculate: diameter | flow", "Fluid: liquid | gas", "Given: p | t").
+// Site-wide rule (owner 2026-11-22): every mode or "type either" choice is shown as an explicit labelled toggle,
+// kept in sync with the field the visitor types into. Behaviour: src/lib/ui/seg.ts (segInit / segSet).
+interface Option { value: string; label: string; hint?: string }
+interface Props { label: string; name: string; options: Option[]; value: string }
+const { label, name, options, value } = Astro.props;
+---
+<div class="seg" role="radiogroup" aria-label={label} data-seg={name} data-cols={options.length}>
+  <span class="seg-l">{label}</span>
+  {options.map((o) => (
+    <button type="button" role="radio" aria-checked={o.value === value ? 'true' : 'false'} tabindex={o.value === value ? 0 : -1} data-value={o.value}>
+      {o.label}{o.hint && <> <span class="hint">{o.hint}</span></>}
+    </button>
+  ))}
+</div>
+
+<style>
+  .seg { display: inline-flex; align-items: stretch; flex-wrap: wrap; margin: 0 0 0.5rem; }
+  .seg-l { align-self: center; margin-right: 0.625rem; font-weight: 600; font-size: 0.9375rem; }
+  button { min-height: 2.25rem; padding: 0.375rem 0.875rem; border: 1px solid var(--line); background: #fff; color: var(--line); font: 600 0.875rem/1.2 var(--font-ui); cursor: pointer; }
+  button + button { border-left: 0; }
+  button[aria-checked='true'] { background: var(--line); color: var(--paper); }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .hint { font-weight: 400; color: var(--muted); }
+  button[aria-checked='true'] .hint { color: var(--paper); opacity: 0.85; }
+  @media (max-width: 48rem) {
+    .seg { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+    .seg[data-cols='3'] { grid-template-columns: 1fr 1fr 1fr; }
+    .seg-l { grid-column: 1 / -1; margin: 0 0 0.25rem; }
+    button { padding-inline: 0.5rem; min-height: 2.5rem; }
+    button + button { border-left: 1px solid var(--line); }
+    .seg[data-cols='2'] button + button, .seg[data-cols='3'] button + button { border-left: 0; }
+    .seg[data-cols='4'] button:nth-of-type(even) { border-left: 0; }
+    .seg[data-cols='4'] button:nth-of-type(n + 3) { border-top: 0; }
+  }
+</style>
