@@ -57,12 +57,17 @@ export function goudarSonnadSheet(re: number, rr: number): number {
 
 export type Regime = 'laminar' | 'transitional' | 'turbulent';
 export const regime = (re: number): Regime => (re <= 2000 ? 'laminar' : re < 4000 ? 'transitional' : 'turbulent');
-export const friction = (re: number, rr: number) => (re <= 2000 ? 64 / re : colebrook(re, rr));
+/** Darcy friction factor: laminar (fRe)/Re (64 for a circle, the shape's constant for other channels), else Colebrook. */
+export const friction = (re: number, rr: number, fRe = 64) => (re <= 2000 ? fRe / re : colebrook(re, rr));
 
 export interface Gas { mw: number; z: number; t: number; p: number; k: number }
 export interface Input {
-  /** inside diameter, m */
+  /** inside diameter, or hydraulic diameter 4·A/P of a non-circular channel, m */
   d: number;
+  /** flow area, m² (default π·d²/4) */
+  area?: number;
+  /** laminar Darcy f·Re (default 64, circle) */
+  fRe?: number;
   /** absolute roughness, m */
   eps: number;
   /** mass flow, kg/s */
@@ -93,10 +98,10 @@ export const erosional = (rho: number, C: number) => C / Math.sqrt(rho / LBFT3) 
 
 export function solve(i: Input): Result {
   const rho = i.gas ? gasDensity(i.gas) : i.rho!;
-  const area = Math.PI * i.d * i.d / 4;
+  const area = i.area ?? Math.PI * i.d * i.d / 4;
   const q = i.w / rho, v = q / area;
   const re = rho * v * i.d / i.mu, rr = i.eps / i.d;
-  const f = friction(re, rr);
+  const f = friction(re, rr, i.fRe ?? 64);
   const le = i.la + i.d * (i.nLeD ?? 0);
   const dp = f * le / i.d * rho * v * v / 2;
   const res: Result = {

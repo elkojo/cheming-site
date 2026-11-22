@@ -118,9 +118,10 @@ export const tools: Tool[] = [
     "sub": "NC",
     "title": "Pressure Loss: Non-Circular Piping",
     "name": "Pressure Loss of Single Phase Flow in Non-Circular Rough Piping",
-    "description": "Pressure drop of single-phase flow in non-circular channels using the hydraulic diameter, including fittings by equivalent length.",
-    "standard": "Goudar & Sonnad (2007); Perry’s Handbook 7th ed., 6-12",
+    "description": "Pressure drop of liquid or gas in rectangular, annular, triangular, elliptical or any other channel: hydraulic diameter with Colebrook in turbulent flow, the shape's exact laminar friction constant, fittings by equivalent length.",
+    "standard": "Darcy–Weisbach with Colebrook (hydraulic diameter); laminar f·Re after Shah & London",
     "category": "piping",
+    "native": "pressurenc",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/258da99aa8f3f8da7c392c614e3df2081b2f2f8b8408deda2c677ba76adfca7b?type=grid&mode=embed"
   },
   {

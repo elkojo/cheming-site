@@ -59,6 +59,7 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
       : tool.native === 'pipesize' ? <PipeSizeCalc />
       : tool.native === 'properties' ? <PropertiesCalc />
       : tool.native === 'pressure1p' ? <PressureLoss1PCalc />
+      : tool.native === 'pressurenc' ? <PressureLoss1PCalc mode="noncircular" />
       : tool.native ? <NativeCalc id={tool.native} title={tool.title} />
       : <ZohoEmbed src={tool.zoho} title={tool.title} />}
   </div>

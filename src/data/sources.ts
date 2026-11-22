@@ -174,7 +174,7 @@ export const sources: Source[] = [
     where: 'Journal of the Institution of Civil Engineers, vol. 11, no. 4, pp. 133–156', year: 1939,
     url: 'https://doi.org/10.1680/ijoti.1939.13150',
     read: '2026-11-22',
-    use: { 'pressure-loss-single-phase': 'Colebrook–White friction factor, solved exactly (owner\'s choice 2026-11-22); the original sheet used an explicit approximation of it.' },
+    use: { 'pressure-loss-non-circular-piping': 'Colebrook–White friction factor with the hydraulic diameter, solved exactly (turbulent and transitional flow).', 'pressure-loss-single-phase': 'Colebrook–White friction factor, solved exactly (owner\'s choice 2026-11-22); the original sheet used an explicit approximation of it.' },
   },
   {
     id: 'moody-1944', by: 'L. F. Moody', title: 'Friction Factors for Pipe Flow',
@@ -182,19 +182,33 @@ export const sources: Source[] = [
     url: 'http://user.engineering.uiowa.edu/~me_160/lecture_notes/MoodyLFpaper1944.pdf',
     archive: 'https://web.archive.org/web/20141121084643/http://user.engineering.uiowa.edu:80/~me_160/lecture_notes/MoodyLFpaper1944.pdf',
     read: '2026-11-22',
-    use: { 'pressure-loss-single-phase': 'Absolute roughness of new pipe (the material presets): Fig. 2 and the table in Fig. 7 (H. Rouse\'s discussion, p. 681), drawn tubing 0.000005 ft (p. 677); the default 0.0457 mm is commercial steel, 0.00015 ft. Also the laminar f = 64/R and the critical zone between R = 2000 and 3000–4000 (p. 674).' },
+    use: { 'pressure-loss-non-circular-piping': 'Absolute roughness presets and the default 0.0457 mm (commercial steel), as for Single Phase.', 'pressure-loss-single-phase': 'Absolute roughness of new pipe (the material presets): Fig. 2 and the table in Fig. 7 (H. Rouse\'s discussion, p. 681), drawn tubing 0.000005 ft (p. 677); the default 0.0457 mm is commercial steel, 0.00015 ft. Also the laminar f = 64/R and the critical zone between R = 2000 and 3000–4000 (p. 674).' },
   },
   {
     id: 'goudar-sonnad-2007', by: 'C. T. Goudar, J. R. Sonnad', title: 'Explicit friction factor correlation for turbulent flow in rough pipe',
     where: 'Hydrocarbon Processing, April 2007, pp. 103–105', year: 2007,
     read: '2026-11-22',
-    use: { 'pressure-loss-single-phase': 'Basis of the original sheet: its correlation is kept only to reproduce the Zoho results in the tests (as typed on the sheet, without the −0.31 term).' },
+    use: { 'pressure-loss-non-circular-piping': 'Basis of the original sheet; its correlation is kept only to reproduce the Zoho results in the tests.', 'pressure-loss-single-phase': 'Basis of the original sheet: its correlation is kept only to reproduce the Zoho results in the tests (as typed on the sheet, without the −0.31 term).' },
   },
   {
     id: 'api-rp-14e', by: 'American Petroleum Institute', title: 'API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems',
     where: 'American Petroleum Institute, Washington, 5th ed.',
     read: '2026-11-22',
-    use: { 'pressure-loss-single-phase': 'Erosional velocity vₑ = C/√ρ (ft/s, lb/ft³) and the suggested C factors, as quoted in the fluids library (not read from the standard itself).' },
+    use: { 'pressure-loss-non-circular-piping': 'Erosional velocity, as for Single Phase.', 'pressure-loss-single-phase': 'Erosional velocity vₑ = C/√ρ (ft/s, lb/ft³) and the suggested C factors, as quoted in the fluids library (not read from the standard itself).' },
+  },
+  {
+    id: 'shah-london-1971', by: 'R. K. Shah, A. L. London', title: 'Laminar Flow Forced Convection Heat Transfer and Flow Friction in Straight and Curved Ducts – A Summary of Analytical Solutions',
+    where: 'Technical Report No. 75, Department of Mechanical Engineering, Stanford University (DTIC AD0736260)', year: 1971,
+    url: 'https://apps.dtic.mil/sti/pdfs/AD0736260.pdf',
+    archive: 'https://web.archive.org/web/20240415164215/https://apps.dtic.mil/sti/pdfs/AD0736260.pdf',
+    read: '2026-11-22',
+    use: { 'pressure-loss-non-circular-piping': 'Laminar friction constants f·Re (Fanning; ×4 for Darcy): rectangle Eq. 148–149 (exact series, checked against Table 13 to 7 digits), equilateral triangle Eq. 155 (40/3), ellipse Eq. 172, concentric annulus Eq. 187. Table 33 (ellipse) is not used: it evaluates E at the modulus instead of the parameter (e.g. 17.055 at α = 0.99 instead of 16.00); Eq. 172 agrees with the exact flow rate and a finite-difference check.' },
+  },
+  {
+    id: 'perry-7-6', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 6 (Fluid and Particle Dynamics): non-circular channels',
+    where: 'McGraw-Hill, New York, p. 6-12', year: 1997,
+    read: '2026-11-22',
+    use: { 'pressure-loss-non-circular-piping': 'Basis of the original sheet: the hydraulic diameter D_h = 4·A/P for turbulent flow in non-circular channels, not valid on its own for laminar flow (cited from the sheet; not read again).' },
   },
   // ── pure-component properties ──
   {

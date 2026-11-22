@@ -2,13 +2,20 @@
 // Native Pressure Loss: Single Phase calculator (Phase 7). Pipe by NPS + schedule (ASME B36.10M/B36.19M) or an own
 // inside diameter; roughness typed or picked (Moody 1944); liquid (typed density) or gas (density from p, T, M, Z);
 // straight length plus fittings by Le/D; Darcy–Weisbach with exact Colebrook (64/Re laminar); API RP 14E velocity.
+// mode="noncircular" (Pressure Loss: Non-Circular): the pipe section becomes a channel section (shape picker or any
+// area + wetted perimeter), D_h = 4·A/P replaces d, and laminar flow uses the shape's f·Re (Shah & London).
 // Inputs start on the Zoho defaults; results are computed in the browser on load.
 import DrawingFrame from './DrawingFrame.astro';
 import { FITTINGS, ROUGHNESS } from '../lib/calc/pressure1p';
 import { SIZES, schedulesFor } from '../lib/calc/pipes';
+import { SHAPES } from '../lib/calc/noncircular';
 import { quantity, DEFAULT_SETTINGS, pressureAbs } from '../lib/calc/units';
 import { mathHtml } from '../lib/calc/types';
 
+interface Props { mode?: 'circular' | 'noncircular' }
+const { mode = 'circular' } = Astro.props;
+const nc = mode === 'noncircular';
+const D = nc ? 'D_h' : 'd';
 const U = (q: string) => quantity(q).units(DEFAULT_SETTINGS).map((u) => u.label);
 const LEN = ['mm', 'm', 'in', 'ft'];
 const AREA = ['mm²', 'cm²', 'm²', 'in²', 'ft²'];
@@ -45,10 +52,10 @@ const resRows: Row[] = [
   { t: 'out', k: 'q', label: 'Volume flow', sym: 'Q = W/ρ', units: VFLOW, unit: 'm³/min' },
   { t: 'out', k: 'qstd', label: 'Standard volume flow', sym: 'Q_std = W·R·T_std/(M·p_std)', units: STDFLOW, unit: 'Std m³/min', phase: 'gas' },
   { t: 'out', k: 'v', label: 'Velocity', sym: 'v = Q/A', units: VEL, unit: 'm/s' },
-  { t: 'out', k: 're', label: 'Reynolds number', sym: 'Re = ρ·v·d/μ' },
+  { t: 'out', k: 're', label: 'Reynolds number', sym: `Re = ρ·v·${D}/μ` },
   { t: 'out', k: 'regime', label: 'Flow regime', sym: 'laminar ≤ 2000 < transitional < 4000 ≤ turbulent', text: true },
-  { t: 'out', k: 'f', label: 'Friction factor (Darcy)', sym: '1/√f = −2·log(ε/(3.7·d) + 2.51/(Re·√f))' },
-  { t: 'out', k: 'dp', label: 'Pressure drop', sym: 'Δp = f·(L_e/d)·ρ·v²/2', units: DP, unit: 'bar' },
+  { t: 'out', k: 'f', label: 'Friction factor (Darcy)', sym: `1/√f = −2·log(ε/(3.7·${D}) + 2.51/(Re·√f))` },
+  { t: 'out', k: 'dp', label: 'Pressure drop', sym: `Δp = f·(L_e/${D})·ρ·v²/2`, units: DP, unit: 'bar' },
   { t: 'out', k: 'dpl', label: 'Pressure drop per length', sym: 'Δp/L_e', units: DPL, unit: DPL.includes('bar/100 m') ? 'bar/100 m' : DPL[0] },
   { t: 'out', k: 'ratio', label: 'Pressure drop / pressure', sym: 'Δp/p', units: ['%'], unit: '%', phase: 'gas' },
   { t: 'out', k: 'c', label: 'Speed of sound', sym: 'c = √(k·R·T/M)', units: VEL, unit: 'm/s', phase: 'gas' },
@@ -57,18 +64,83 @@ const resRows: Row[] = [
   { t: 'in', k: 'c14', label: 'API RP 14E factor', sym: 'C', units: ['√(lb/(ft·s²))'], unit: '√(lb/(ft·s²))', value: '100' },
   { t: 'out', k: 've', label: 'Erosional velocity', sym: 'v_e = C/√ρ', units: VEL, unit: 'm/s' },
 ];
-const id = (k: string) => `p1-${k}`;
+const id = (k: string) => `${nc ? 'pn' : 'p1'}-${k}`;
+// channel shapes (non-circular): inputs per shape, defaults; 'any' starts on the Zoho defaults
+type ShapeRow = { k: string; shape: string; label: string; sym: string; units: string[]; unit: string; value: string };
+const shapeRows: ShapeRow[] = [
+  { k: 'sa', shape: 'any', label: 'Flow area', sym: 'A', units: AREA, unit: 'mm²', value: '32275.423' },
+  { k: 'sp', shape: 'any', label: 'Wetted perimeter', sym: 'P', units: LEN, unit: 'mm', value: '638' },
+  { k: 'sf', shape: 'any', label: 'Laminar friction constant', sym: 'f·Re', units: ['–'], unit: '–', value: '64' },
+  { k: 'rw', shape: 'rect', label: 'Width', sym: 'a', units: LEN, unit: 'mm', value: '300' },
+  { k: 'rh', shape: 'rect', label: 'Height', sym: 'b', units: LEN, unit: 'mm', value: '150' },
+  { k: 'ao', shape: 'annulus', label: 'Outer diameter', sym: 'D_o', units: LEN, unit: 'mm', value: '200' },
+  { k: 'ai', shape: 'annulus', label: 'Inner diameter', sym: 'D_i', units: LEN, unit: 'mm', value: '100' },
+  { k: 'ts', shape: 'triangle', label: 'Side', sym: 's', units: LEN, unit: 'mm', value: '250' },
+  { k: 'ea', shape: 'ellipse', label: 'Major axis', sym: '2a', units: LEN, unit: 'mm', value: '300' },
+  { k: 'eb', shape: 'ellipse', label: 'Minor axis', sym: '2b', units: LEN, unit: 'mm', value: '150' },
+];
+const shapeOut: Row[] = [
+  { t: 'out', k: 'area', label: 'Flow area', sym: 'A', units: AREA, unit: 'mm²' },
+  { t: 'out', k: 'per', label: 'Wetted perimeter', sym: 'P', units: LEN, unit: 'mm' },
+  { t: 'out', k: 'dh', label: 'Hydraulic diameter', sym: 'D_h = 4·A/P', units: LEN, unit: 'mm' },
+  { t: 'out', k: 'fre', label: 'Laminar friction constant', sym: 'f·Re' },
+];
 const DEF = { nps: '8', sched: '40' };
 // mass flow and viscosity are remembered per phase; the gas example is steam at 370 °C, 1.5 bar a (IAPWS-IF97)
 const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: { w: ['0.5', 'kg/s'], mu: ['0.0232', 'cP'] } };
 ---
 <DrawingFrame>
-  <div class="calc p1" data-p1 data-phase-def={JSON.stringify(PHASE_DEF)}>
+  <div class="calc p1" data-p1 data-mode={mode} data-phase-def={JSON.stringify(PHASE_DEF)}>
     <div class="bar">
-      <p>Frictional pressure drop of a liquid or a gas in a straight pipe with fittings. Pick the units in the right-hand column.</p>
+      <p>{nc ? 'Frictional pressure drop of a liquid or a gas in a straight channel of any cross-section, with fittings.' : 'Frictional pressure drop of a liquid or a gas in a straight pipe with fittings.'} Pick the units in the right-hand column.</p>
       <button type="button" class="reset" data-reset>Clear all inputs</button>
     </div>
 
+    {nc ? (
+    <section class="grp" aria-labelledby={id('pipe-h')}>
+      <h2 id={id('pipe-h')}>Channel</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('shape')}><span class="lb">Cross-section</span></label></th>
+            <td class="v wide" colspan="2"><select id={id('shape')} data-s="shape">{SHAPES.map(([v, n]) => <option value={v}>{n}</option>)}</select></td>
+          </tr>
+          {shapeRows.map((r) => (
+            <tr data-row={r.k} data-shape={r.shape} hidden={r.shape !== 'any'}>
+              <th scope="row"><label for={id(r.k)}><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></label></th>
+              <td class="v"><input id={id(r.k)} data-k={r.k} value={r.value} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+              <td class="u">{r.units.length > 1 ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>{r.units[0]}</span>}</td>
+            </tr>
+          ))}
+          {shapeOut.map((r) => (
+            <tr data-row={r.k}>
+              <th scope="row"><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym!)} /> {r.k === 'fre' && <span class="eq muted" data-fresrc></span>}</th>
+              <td class="v"><output data-o={r.k} /></td>
+              <td class="u">{r.units ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>–</span>}</td>
+            </tr>
+          ))}
+          <tr>
+            <th scope="row"><label for={id('mat')}><span class="lb">Wall material</span> <span class="eq">(Moody 1944)</span></label></th>
+            <td class="v wide" colspan="2"><select id={id('mat')} data-s="mat">
+              <option value="">— type ε below —</option>
+              {ROUGHNESS.map(([n, e]) => <option value={String(e)}>{n} ({+(e * 1000).toPrecision(3)} mm)</option>)}
+            </select></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('eps')}><span class="lb">Absolute roughness</span> <span class="eq" set:html={mathHtml('ε')} /></label></th>
+            <td class="v"><input id={id('eps')} data-k="eps" value="0.0457" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="eps" aria-label="Roughness unit">{['mm', 'µm', 'm', 'in', 'ft'].map((u) => <option selected={u === 'mm'}>{u}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Relative roughness</span> <span class="eq" set:html={mathHtml('ε/D_h')} /></th>
+            <td class="v"><output data-o="rr" /></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">Turbulent flow uses the hydraulic diameter <i>D</i><sub>h</sub> = 4·<i>A</i>/<i>P</i> (Perry's Handbook): a good approximation for turbulent flow, less so for very narrow or sharp-cornered shapes. Laminar flow needs the shape's own constant: <i>f</i> = (<i>f</i>·<i>Re</i>)/<i>Re</i>, with <i>f</i>·<i>Re</i> = 64 for a circle, 56.9 for a square, 96 for a wide slot (Shah &amp; London). For <b>any shape</b> type it if known; 64 is a first estimate.</p>
+    </section>
+    ) : (
     <section class="grp" aria-labelledby={id('pipe-h')}>
       <h2 id={id('pipe-h')}>Pipe</h2>
       <table class="io">
@@ -116,6 +188,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
       </table>
       <p class="note">Choose <b>own ID</b> under Schedule to type any inside diameter. Pick a material to fill in its roughness, or type your own <i>ε</i> (corroded or lined pipe can be much rougher).</p>
     </section>
+    )}
 
     <section class="grp" aria-labelledby={id('fluid-h')}>
       <h2 id={id('fluid-h')}>Fluid</h2>
@@ -147,7 +220,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
       <table class="io">
         <tbody>
           <tr>
-            <th scope="row"><label for={id('la')}><span class="lb">Straight pipe length</span> <span class="eq" set:html={mathHtml('L_a')} /></label></th>
+            <th scope="row"><label for={id('la')}><span class="lb">{nc ? 'Straight length' : 'Straight pipe length'}</span> <span class="eq" set:html={mathHtml('L_a')} /></label></th>
             <td class="v"><input id={id('la')} data-k="la" value="100" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
             <td class="u"><select data-u="la" aria-label="Length unit">{['m', 'km', 'ft', 'mi'].map((u) => <option selected={u === 'm'}>{u}</option>)}</select></td>
           </tr>
@@ -167,7 +240,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
             ))}
           </tbody>
         </table>
-        <p class="note">Equivalent lengths in pipe diameters as on the original sheet. Typical values for fully turbulent flow; they vary with size and maker.</p>
+        <p class="note">Equivalent lengths in pipe diameters as on the original sheet. Typical values for fully turbulent flow; they vary with size and maker.{nc && ' Measured on round pipe: with the hydraulic diameter they are only an estimate.'}</p>
       </details>
       <table class="io">
         <tbody>
@@ -177,7 +250,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
             <td class="u"><span>–</span></td>
           </tr>
           <tr>
-            <th scope="row"><span class="lb">Equivalent length</span> <span class="eq" set:html={mathHtml('L_e = L_a + d·Σ n·Le/D')} /></th>
+            <th scope="row"><span class="lb">Equivalent length</span> <span class="eq" set:html={mathHtml(`L_e = L_a + ${D}·Σ n·Le/D`)} /></th>
             <td class="v"><output data-o="le" /></td>
             <td class="u"><select data-u="le" aria-label="Equivalent length unit">{['m', 'km', 'ft', 'mi'].map((u) => <option selected={u === 'm'}>{u}</option>)}</select></td>
           </tr>
@@ -203,7 +276,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
         </tbody>
       </table>
       <ul class="warn" data-warn aria-live="polite"></ul>
-      <p class="note">Darcy–Weisbach with the Colebrook–White friction factor solved exactly (turbulent and transitional flow), <i>f</i> = 64/<i>Re</i> for laminar flow. API RP 14E: <i>v</i><sub>e</sub> in ft/s with <i>ρ</i> in lb/ft³; <i>C</i> = 100 for continuous service, 125 intermittent, 150–200 for non-corrosive or inhibited fluids (written for production piping; a rule of thumb elsewhere).</p>
+      <p class="note">Darcy–Weisbach with the Colebrook–White friction factor solved exactly (turbulent and transitional flow), <i>f</i> = {nc ? <>(<i>f</i>·<i>Re</i>)/<i>Re</i></> : <>64/<i>Re</i></>} for laminar flow. API RP 14E: <i>v</i><sub>e</sub> in ft/s with <i>ρ</i> in lb/ft³; <i>C</i> = 100 for continuous service, 125 intermittent, 150–200 for non-corrosive or inhibited fluids (written for production piping; a rule of thumb elsewhere).</p>
     </section>
     <p class="sr" aria-live="polite" data-status></p>
   </div>
@@ -212,6 +285,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
 <script>
   import { solve, FITTINGS, type Gas } from '../lib/calc/pressure1p';
   import { pipe, id as pipeId, schedulesFor, SIZES, type Schedule } from '../lib/calc/pipes';
+  import { section, type Shape } from '../lib/calc/noncircular';
   import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig, pressureAbs, type Unit } from '../lib/calc/units';
   import { parseNumber } from '../lib/calc/types';
 
@@ -244,8 +318,11 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
       return all.find((u) => u.label === label) ?? { label, f: 1 };
     };
     const phase = () => root.querySelector<HTMLInputElement>('input[type=radio]:checked')!.value as 'liquid' | 'gas';
-    const nps = $<HTMLSelectElement>('select[data-s="nps"]');
-    const sched = $<HTMLSelectElement>('select[data-s="sched"]');
+    const nc = root.dataset.mode === 'noncircular';
+    const nps = root.querySelector<HTMLSelectElement>('select[data-s="nps"]')!;
+    const sched = root.querySelector<HTMLSelectElement>('select[data-s="sched"]')!;
+    const shapeSel = root.querySelector<HTMLSelectElement>('select[data-s="shape"]');
+    const FRESRC: Record<string, string> = { rect: 'exact series in <i>b</i>/<i>a</i>', annulus: 'exact, in <i>D</i><sub>i</sub>/<i>D</i><sub>o</sub>', triangle: '= 160/3', ellipse: 'exact, in <i>b</i>/<i>a</i>', any: '(typed)' };
     const mat = $<HTMLSelectElement>('select[data-s="mat"]');
     let bad = false;
     // per-phase mass flow and viscosity (value, unit)
@@ -283,8 +360,41 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
       sched.value = cur === 'own' ? 'own' : list.includes(cur as Schedule) ? cur : list.includes('40') ? '40' : list.includes('STD') ? 'STD' : list[0];
     };
 
+    const channel = () => {
+      const shape = shapeSel!.value as Shape;
+      for (const tr of root.querySelectorAll<HTMLElement>('tr[data-shape]')) tr.hidden = tr.dataset.shape !== shape;
+      const pos = (x: number) => x > 0;
+      const L2 = (k: string) => read(k, (x) => x >= 0, LEN);
+      let s;
+      switch (shape) {
+        case 'rect': s = section('rect', L2('rw'), L2('rh')); break;
+        case 'annulus': {
+          const o = L2('ao'), i = L2('ai');
+          s = section('annulus', o, i);
+          if (Number.isFinite(o) && Number.isFinite(i) && !s && o > 0) { inp('ai').setAttribute('aria-invalid', ''); bad = true; }
+          break;
+        }
+        case 'triangle': s = section('triangle', L2('ts')); break;
+        case 'ellipse': s = section('ellipse', L2('ea'), L2('eb')); break;
+        default: s = section('any', read('sa', pos, AREA), read('sp', pos, LEN), read('sf', pos, ONE));
+      }
+      show('area', s?.area, AREA); show('per', s?.perimeter, LEN); show('dh', s?.dh, LEN); show('fre', s?.fRe, ONE);
+      root.querySelector('[data-fresrc]')!.innerHTML = FRESRC[shape];
+      return s;
+    };
+
     const run = () => {
       bad = false;
+      let d: number, area: number | undefined, fRe = 64;
+      if (nc) {
+        const s = channel();
+        d = s ? s.dh : NaN; area = s?.area; fRe = s?.fRe ?? 64;
+      } else d = pipeSection();
+      const pos = (x: number) => x > 0;
+      runFlow(d, area, fRe, pos);
+    };
+
+    const pipeSection = (): number => {
       const own = sched.value === 'own';
       const dIn = inp('d');
       dIn.readOnly = !own;
@@ -304,7 +414,10 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
       show('wall', p ? p.wall * 0.0254 : undefined, LEN);
       show('aod', p ? Math.PI * (p.od * 0.0254) ** 2 / 4 : undefined, AREA);
       show('area', Math.PI * d * d / 4, AREA);
+      return d;
+    };
 
+    const runFlow = (d: number, area: number | undefined, fRe: number, pos: (x: number) => boolean) => {
       const eps = read('eps', (x) => x >= 0, LEN);
       // the material list follows a typed roughness
       const hit = [...mat.options].find((o) => o.value && Math.abs(Number(o.value) - eps) <= 1e-9 + 1e-3 * eps);
@@ -336,7 +449,7 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
 
       const lists = { ...LISTS, dp: L(pressureAbs({ ...DEFAULT_SETTINGS, rhoCol: Number.isFinite(rho) ? rho : 1000 })) };
       const ok = !fitBad && [d, eps, w, mu, rho, la].every(Number.isFinite) && (!gas || [g!.mw, g!.z, g!.t, g!.p, g!.k].every(Number.isFinite));
-      const r = ok ? solve({ d, eps, w, mu, rho: gas ? undefined : rho, gas: g, la, nLeD: nld, c14e: Number.isFinite(c14) ? c14 : 100 }) : undefined;
+      const r = ok ? solve({ d, area, fRe, eps, w, mu, rho: gas ? undefined : rho, gas: g, la, nLeD: nld, c14e: Number.isFinite(c14) ? c14 : 100 }) : undefined;
       show('le', r?.le ?? (!fitBad && Number.isFinite(d) && Number.isFinite(la) ? la + d * nld : undefined), LEN);
       show('q', r?.q); show('qstd', r?.gas?.qStd); show('v', r?.v, VEL); show('re', r?.re, ONE);
       show('regime', r ? REGIME[r.regime] : bad ? '—' : '');
@@ -344,7 +457,8 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
       show('ratio', r?.gas?.dpRatio, ONE); show('c', r?.gas?.c, VEL); show('mach', r?.gas?.mach, ONE);
       show('mom', r?.rhoV2, MOM); show('ve', Number.isFinite(c14) ? r?.ve : undefined, VEL);
       const fRow = root.querySelector('tr[data-row="f"] .eq')!;
-      fRow.innerHTML = r?.regime === 'laminar' ? '<i>f</i> = 64/<i>Re</i>' : '1/√<i>f</i> = −2·log(<i>ε</i>/(3.7·<i>d</i>) + 2.51/(<i>Re</i>·√<i>f</i>))';
+      const dd = nc ? '<i>D</i><sub>h</sub>' : '<i>d</i>';
+      fRow.innerHTML = r?.regime === 'laminar' ? (nc ? '<i>f</i> = (<i>f</i>·<i>Re</i>)/<i>Re</i>' : '<i>f</i> = 64/<i>Re</i>') : `1/√<i>f</i> = −2·log(<i>ε</i>/(3.7·${dd}) + 2.51/(<i>Re</i>·√<i>f</i>))`;
 
       const warn: string[] = [];
       if (r?.regime === 'transitional') warn.push('Transitional flow (2000 < <i>Re</i> < 4000): the friction factor is uncertain; the turbulent (Colebrook) value is shown, which is the higher, conservative one.');
@@ -357,8 +471,8 @@ const PHASE_DEF = { liquid: { w: ['36.5', 'kg/s'], mu: ['0.6503', 'cP'] }, gas: 
     root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input')) run(); });
     root.addEventListener('change', (e) => {
       const t = e.target as HTMLElement;
-      if (t === nps) fillSchedules();
-      if (t === sched && sched.value === 'own') {
+      if (nps && t === nps) fillSchedules();
+      if (sched && t === sched && sched.value === 'own') {
         inp('d').focus();
         $('[data-status]').textContent = 'Type the inside diameter.';
       }
