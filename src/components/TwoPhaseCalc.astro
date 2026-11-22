@@ -1,0 +1,642 @@
+---
+// Native Pressure Loss: Two-Phase calculator (Phase 7). Pipe by NPS + schedule or own ID; liquid and gas side by side;
+// straight length, inclination and fittings; each phase alone, the no-slip mixture, the three correlations (chosen one
+// by Whalley's rule highlighted), static head with the Rouhani–Axelsson void fraction, and the Baker flow-pattern map
+// drawn as SVG with the calculated point and the site's own sketches of the seven patterns.
+// Inputs start on the Zoho defaults; results are computed in the browser on load.
+import DrawingFrame from './DrawingFrame.astro';
+import { FITTINGS, ROUGHNESS } from '../lib/calc/pressure1p';
+import { SIZES, schedulesFor } from '../lib/calc/pipes';
+import { BOUNDARIES, PATTERNS, FRAME } from '../lib/calc/baker';
+import { quantity, DEFAULT_SETTINGS, pressureAbs } from '../lib/calc/units';
+import { mathHtml } from '../lib/calc/types';
+
+const U = (q: string) => quantity(q).units(DEFAULT_SETTINGS).map((u) => u.label);
+const LEN = ['mm', 'm', 'in', 'ft'];
+const VEL = ['m/s', 'ft/s'];
+const DP = pressureAbs(DEFAULT_SETTINGS).slice(0, 11).map(([l]) => l);
+const DPL = U('dpl').filter((l) => !/column/.test(l));
+const DPL0 = DPL.includes('bar/100 m') ? 'bar/100 m' : DPL[0];
+const MOM = ['Pa', 'kg/(m·s²)', 'lbm/(ft·s²)'];
+const id = (k: string) => `tp-${k}`;
+const DEF = { nps: '12', sched: '40' };
+
+type In2 = { k: string; label: string; sym: [string, string]; units: string[]; unit: string; value: [string, string] };
+const fluid: In2[] = [
+  { k: 'w', label: 'Mass flow', sym: ['W_L', 'W_G'], units: U('mflow'), unit: 'kg/h', value: ['58174', '12260'] },
+  { k: 'rho', label: 'Density', sym: ['ρ_L', 'ρ_G'], units: U('density'), unit: 'kg/m³', value: ['746', '0.9'] },
+  { k: 'mu', label: 'Viscosity', sym: ['μ_L', 'μ_G'], units: U('mu'), unit: 'cP', value: ['1.05', '0.01'] },
+];
+type Out2 = { k: string; label: string; sym: string; units?: string[]; unit?: string; text?: boolean };
+const alone: Out2[] = [
+  { k: 'v', label: 'Superficial velocity', sym: 'v = W/(ρ·A)', units: VEL, unit: 'm/s' },
+  { k: 're', label: 'Reynolds number', sym: 'Re = W·d/(A·μ)' },
+  { k: 'reg', label: 'Flow regime', sym: '&lt; 2100 laminar, ≥ 4000 turbulent', text: true },
+  { k: 'f', label: 'Friction factor (Churchill)', sym: 'f' },
+  { k: 'dpl', label: 'Pressure drop, phase alone', sym: 'Δp/L', units: DPL, unit: DPL0 },
+  { k: 'mom', label: 'Momentum flux', sym: 'ρ·v²', units: MOM, unit: 'Pa' },
+];
+type Out = { k: string; label: string; sym: string; units?: string[]; unit?: string; text?: boolean; key?: boolean };
+const mixRows: Out[] = [
+  { k: 'x', label: 'Gas mass fraction (quality)', sym: 'x = W_G/(W_L + W_G)' },
+  { k: 'G', label: 'Mass flux', sym: 'G = (W_L + W_G)/A', units: ['kg/(m²·s)', 'lbm/(ft²·s)', 'lbm/(ft²·h)'], unit: 'kg/(m²·s)' },
+  { k: 'rhom', label: 'Density, no slip', sym: 'ρ_m = 1/(x/ρ_G + (1 − x)/ρ_L)', units: U('density'), unit: 'kg/m³' },
+  { k: 'vm', label: 'Mixture velocity', sym: 'v_m = G/ρ_m', units: VEL, unit: 'm/s' },
+  { k: 'mum', label: 'Viscosity (McAdams)', sym: 'μ_m = 1/(x/μ_G + (1 − x)/μ_L)', units: U('mu'), unit: 'cP' },
+  { k: 'rem', label: 'Reynolds number', sym: 'Re_m = G·d/μ_m' },
+  { k: 'momm', label: 'Momentum flux', sym: 'ρ_m·v_m²', units: MOM, unit: 'Pa' },
+  { k: 'mur', label: 'Viscosity ratio', sym: 'μ_L/μ_G' },
+];
+const CORR: [string, string, string][] = [
+  ['friedel', 'Friedel (1979)', 'Δp = φ_LO²·Δp_LO'],
+  ['friedeld', 'Friedel, vertical down-flow', 'Δp = φ_LO,down²·Δp_LO'],
+  ['chisholm', 'Chisholm–Baroczy (1973)', 'Δp = φ_LO²·Δp_LO'],
+  ['lm', 'Lockhart–Martinelli (1949)', 'Δp = max(φ_L²·Δp_L, φ_G²·Δp_G)'],
+];
+
+// Baker chart geometry: plot area in SVG units
+const W = 560, H = 360, PL = 56, PT = 14;
+const lx = (x: number) => PL + (Math.log10(x) - Math.log10(FRAME.x[0])) / (Math.log10(FRAME.x[1]) - Math.log10(FRAME.x[0])) * W;
+const ly = (y: number) => PT + (Math.log10(FRAME.y[1]) - Math.log10(y)) / (Math.log10(FRAME.y[1]) - Math.log10(FRAME.y[0])) * H;
+const path = (pts: [number, number][]) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${lx(x).toFixed(1)},${ly(y).toFixed(1)}`).join('');
+const decX = [0.1, 1, 10, 100, 1000, 10000], decY = [0.01, 0.1, 1, 10, 100];
+const minor = (decs: number[]) => decs.slice(0, -1).flatMap((d) => [2, 3, 4, 5, 6, 7, 8, 9].map((m) => d * m));
+const tick = (v: number) => (v >= 1 ? v.toLocaleString('en-US') : String(v));
+const LABELS: Record<string, [number, number]> = {
+  dispersed: [12, 19], annular: [12, 3.6], wavy: [0.55, 3.2], stratified: [1.2, 0.3], slug: [42, 0.72], plug: [1500, 0.068], bubble: [1600, 3],
+};
+const NAME: Record<string, string> = Object.fromEntries(PATTERNS.map(([k, n]) => [k, n]));
+const SHORT: Record<string, string> = { ...NAME, bubble: 'Bubble or froth', dispersed: 'Dispersed' };
+
+// sketches of the seven patterns (own drawings): pipe walls at y = 6 and 38, liquid shaded
+const bubbles = (n: number, seed: number, yMin: number, yMax: number, r: [number, number]) => Array.from({ length: n }, (_, i) => {
+  const a = Math.sin(i * 12.9898 + seed) * 43758.5453, b = Math.sin(i * 78.233 + seed) * 12345.678;
+  const fx = a - Math.floor(a), fy = b - Math.floor(b);
+  return { cx: 6 + fx * 108, cy: yMin + fy * (yMax - yMin), r: r[0] + (r[1] - r[0]) * ((fx * 7) % 1) };
+});
+---
+<DrawingFrame>
+  <div class="calc tp" data-tp>
+    <div class="bar">
+      <p>Frictional and static pressure drop of a gas–liquid flow, with its flow pattern on the Baker map. Pick the units in the right-hand column.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('pipe-h')}>
+      <h2 id={id('pipe-h')}>Pipe</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('nps')}><span class="lb">Nominal pipe size</span> <span class="eq" set:html={mathHtml('NPS')} /></label></th>
+            <td class="v"><select id={id('nps')} data-s="nps">{SIZES.map((s) => <option value={s.nps} selected={s.nps === DEF.nps}>{s.nps}</option>)}</select></td>
+            <td class="u"><span>in</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('sched')}><span class="lb">Schedule</span> <span class="eq">ASME B36.10M / B36.19M</span></label></th>
+            <td class="v"><select id={id('sched')} data-s="sched">{schedulesFor(DEF.nps).map((s) => <option selected={s === DEF.sched}>{s}</option>)}<option value="own">own ID</option></select></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('d')}><span class="lb">Inside diameter</span> <span class="eq" set:html={mathHtml('d')} /></label></th>
+            <td class="v"><input id={id('d')} data-k="d" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" readonly class="calcd" /></td>
+            <td class="u"><select data-u="d" aria-label="Inside diameter unit">{LEN.map((u) => <option selected={u === 'mm'}>{u}</option>)}</select></td>
+          </tr>
+          <tr data-row="area">
+            <th scope="row"><span class="lb">Flow area</span> <span class="eq" set:html={mathHtml('A = π·d²/4')} /></th>
+            <td class="v"><output data-o="area" /></td>
+            <td class="u"><select data-u="area" aria-label="Area unit">{['mm²', 'cm²', 'm²', 'in²', 'ft²'].map((u) => <option selected={u === 'mm²'}>{u}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('mat')}><span class="lb">Pipe material</span> <span class="eq">(Moody 1944)</span></label></th>
+            <td class="v wide" colspan="2"><select id={id('mat')} data-s="mat">
+              <option value="">— type ε below —</option>
+              {ROUGHNESS.map(([n, e]) => <option value={String(e)}>{n} ({+(e * 1000).toPrecision(3)} mm)</option>)}
+            </select></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('eps')}><span class="lb">Absolute roughness</span> <span class="eq" set:html={mathHtml('ε')} /></label></th>
+            <td class="v"><input id={id('eps')} data-k="eps" value="0.0457" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="eps" aria-label="Roughness unit">{['mm', 'µm', 'm', 'in', 'ft'].map((u) => <option selected={u === 'mm'}>{u}</option>)}</select></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="grp" aria-labelledby={id('fl-h')}>
+      <h2 id={id('fl-h')}>Fluids</h2>
+      <table class="two">
+        <thead><tr><th scope="col"><span class="sr">Property</span></th><th scope="col">Liquid</th><th scope="col">Gas</th><th scope="col">Unit</th></tr></thead>
+        <tbody>
+          {fluid.map((r) => (
+            <tr>
+              <th scope="row"><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(`${r.sym[0]}, ${r.sym[1]}`)} /></th>
+              <td class="o" data-label="Liquid"><input id={id(`${r.k}l`)} data-k={`${r.k}l`} aria-label={`${r.label}, liquid`} value={r.value[0]} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+              <td class="o" data-label="Gas"><input id={id(`${r.k}g`)} data-k={`${r.k}g`} aria-label={`${r.label}, gas`} value={r.value[1]} type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+              <td class="u"><select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select></td>
+            </tr>
+          ))}
+          <tr>
+            <th scope="row"><label for={id('sig')}><span class="lb">Surface tension</span> <span class="eq" set:html={mathHtml('σ')} /></label></th>
+            <td class="o" data-label="Liquid"><input id={id('sig')} data-k="sig" value="13.5" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="o empty" data-label=""></td>
+            <td class="u"><select data-u="sig" aria-label="Surface tension unit">{['mN/m', 'dyn/cm', 'N/m'].map((u) => <option selected={u === 'mN/m'}>{u}</option>)}</select></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="grp" aria-labelledby={id('len-h')}>
+      <h2 id={id('len-h')}>Line</h2>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><label for={id('la')}><span class="lb">Straight pipe length</span> <span class="eq" set:html={mathHtml('L_a')} /></label></th>
+            <td class="v"><input id={id('la')} data-k="la" value="100" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><select data-u="la" aria-label="Length unit">{['m', 'km', 'ft', 'mi'].map((u) => <option selected={u === 'm'}>{u}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('th')}><span class="lb">Inclination from horizontal</span> <span class="eq" set:html={mathHtml('θ')} /></label></th>
+            <td class="v"><input id={id('th')} data-k="th" value="0" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><span>° (+ up, − down)</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Elevation change</span> <span class="eq" set:html={mathHtml('Δz = L_a·sin θ')} /></th>
+            <td class="v"><output data-o="dz" /></td>
+            <td class="u"><select data-u="dz" aria-label="Elevation unit">{['m', 'ft'].map((u) => <option selected={u === 'm'}>{u}</option>)}</select></td>
+          </tr>
+        </tbody>
+      </table>
+      <details class="fit">
+        <summary>Fittings and valves <span class="muted" data-fitsum></span></summary>
+        <table class="ft">
+          <thead><tr><th scope="col">Fitting</th><th scope="col">Le/D</th><th scope="col">Number <i>n</i></th></tr></thead>
+          <tbody>
+            {FITTINGS.map(([n, l], i) => (
+              <tr>
+                <th scope="row"><label for={id(`f${i}`)}>{n}</label></th>
+                <td class="ld">{l}</td>
+                <td class="n"><input id={id(`f${i}`)} data-fit={i} type="text" inputmode="numeric" autocomplete="off" spellcheck="false" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="note">Single-phase equivalent lengths (as in the Single Phase tool), applied to the two-phase friction gradient: a rough estimate, since losses in fittings are larger and less certain in two-phase flow.</p>
+      </details>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><span class="lb">Equivalent length</span> <span class="eq" set:html={mathHtml('L_e = L_a + d·Σ n·Le/D')} /></th>
+            <td class="v"><output data-o="le" /></td>
+            <td class="u"><select data-u="le" aria-label="Equivalent length unit">{['m', 'km', 'ft', 'mi'].map((u) => <option selected={u === 'm'}>{u}</option>)}</select></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="grp" aria-labelledby={id('al-h')}>
+      <h2 id={id('al-h')}>Each phase flowing alone</h2>
+      <table class="two">
+        <thead><tr><th scope="col"><span class="sr">Result</span></th><th scope="col">Liquid</th><th scope="col">Gas</th><th scope="col">Unit</th></tr></thead>
+        <tbody>
+          {alone.map((r) => (
+            <tr class:list={[{ txt: r.text }]}>
+              <th scope="row"><span class="lb">{r.label}</span> <span class="eq" set:html={r.text ? r.sym : mathHtml(r.sym)} /></th>
+              <td class="o" data-label="Liquid"><output data-o={`${r.k}l`} /></td>
+              <td class="o" data-label="Gas"><output data-o={`${r.k}g`} /></td>
+              <td class="u">{r.units ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>{r.text ? '' : '–'}</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note">Churchill (1977) friction factor for all regimes, <i>f</i> = 64/<i>Re</i> below 2100, as on the original sheet.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('mx-h')}>
+      <h2 id={id('mx-h')}>Mixture</h2>
+      <table class="io">
+        <tbody>
+          {mixRows.map((r) => (
+            <tr>
+              <th scope="row"><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></th>
+              <td class="v"><output data-o={r.k} /></td>
+              <td class="u">{r.units ? <select data-u={r.k} aria-label={`${r.label} unit`}>{r.units.map((u) => <option selected={u === r.unit}>{u}</option>)}</select> : <span>–</span>}</td>
+            </tr>
+          ))}
+          <tr>
+            <th scope="row"><label for={id('c14')}><span class="lb">API RP 14E factor</span> <span class="eq" set:html={mathHtml('C')} /></label></th>
+            <td class="v"><input id={id('c14')} data-k="c14" value="100" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+            <td class="u"><span>√(lb/(ft·s²))</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Erosional velocity</span> <span class="eq" set:html={mathHtml('v_e = C/√ρ_m')} /></th>
+            <td class="v"><output data-o="ve" /></td>
+            <td class="u"><select data-u="ve" aria-label="Erosional velocity unit">{VEL.map((u) => <option selected={u === 'm/s'}>{u}</option>)}</select></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">API RP 14E (for two-phase production piping): <i>v</i><sub>e</sub> in ft/s with the no-slip density in lb/ft³; <i>C</i> = 100 continuous, 125 intermittent, 150–200 non-corrosive or inhibited service.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('dp-h')}>
+      <h2 id={id('dp-h')}>Pressure drop</h2>
+      <table class="corr">
+        <thead><tr><th scope="col">Correlation</th><th scope="col">φ²</th><th scope="col">Gradient</th><th scope="col">Over <i>L</i><sub>e</sub></th></tr></thead>
+        <tbody>
+          {CORR.map(([k, n, s]) => (
+            <tr data-corr={k}>
+              <th scope="row"><span class="lb">{n}</span> <span class="eq" set:html={mathHtml(s)} /> <span class="chosen" aria-hidden="true">chosen</span></th>
+              <td class="o" data-label="φ²"><output data-o={`phi_${k}`} /></td>
+              <td class="o" data-label="Gradient"><output data-o={`g_${k}`} /></td>
+              <td class="o" data-label="Over Le"><output data-o={`dp_${k}`} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div class="units-row">
+        <label>Gradient <select data-u="grad" aria-label="Pressure gradient unit">{DPL.map((u) => <option selected={u === DPL0}>{u}</option>)}</select></label>
+        <label>Pressure drop <select data-u="dp" aria-label="Pressure drop unit">{DP.map((u) => <option selected={u === 'bar'}>{u}</option>)}</select></label>
+      </div>
+      <p class="note" data-reason></p>
+      <table class="io">
+        <tbody>
+          <tr>
+            <th scope="row"><span class="lb">Frictional pressure drop</span> <span class="eq" set:html={mathHtml('Δp_f = (Δp/L)·L_e')} /></th>
+            <td class="v"><output data-o="dpf" /></td><td class="u"><span data-dpu>bar</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Void fraction (Rouhani–Axelsson)</span> <span class="eq" set:html={mathHtml('ε_G')} /></th>
+            <td class="v"><output data-o="void" /></td><td class="u"><span>–</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Two-phase density</span> <span class="eq" set:html={mathHtml('ρ_tp = ρ_L·(1 − ε_G) + ρ_G·ε_G')} /></th>
+            <td class="v"><output data-o="rhotp" /></td>
+            <td class="u"><select data-u="rhotp" aria-label="Two-phase density unit">{U('density').map((u) => <option selected={u === 'kg/m³'}>{u}</option>)}</select></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="lb">Static head</span> <span class="eq" set:html={mathHtml('Δp_s = ρ_tp·g·Δz')} /></th>
+            <td class="v"><output data-o="dps" /></td><td class="u"><span data-dpu>bar</span></td>
+          </tr>
+          <tr class="key">
+            <th scope="row"><span class="lb">Total pressure drop</span> <span class="eq" set:html={mathHtml('Δp = Δp_f + Δp_s')} /></th>
+            <td class="v"><output data-o="dpt" /></td><td class="u"><span data-dpu>bar</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <ul class="warn" data-warn aria-live="polite"></ul>
+      <p class="note">Correlation chosen after Whalley (1980): Friedel if <i>μ</i><sub>L</sub>/<i>μ</i><sub>G</sub> &lt; 1000; otherwise Chisholm–Baroczy if <i>G</i> ≥ 100 kg/(m²·s), else Lockhart–Martinelli. Expect ±30–50 %. Friedel uses smooth-tube friction factors as published (rough pipe can give about 10 % more). Momentum (acceleration) pressure drop is not included: it matters only when the gas fraction changes along the line.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('bk-h')}>
+      <h2 id={id('bk-h')}>Flow pattern (Baker map, horizontal flow)</h2>
+      <table class="io">
+        <tbody>
+          <tr><th scope="row"><span class="lb">Gas parameter</span> <span class="eq" set:html={mathHtml('λ = √[(ρ_G/1.20)·(ρ_L/1000)]')} /></th><td class="v"><output data-o="lambda" /></td><td class="u"><span>–</span></td></tr>
+          <tr><th scope="row"><span class="lb">Liquid parameter</span> <span class="eq" set:html={mathHtml('ψ = (0.073/σ)·∛[(μ_L/0.001)·(1000/ρ_L)²]')} /></th><td class="v"><output data-o="psi" /></td><td class="u"><span>–</span></td></tr>
+          <tr><th scope="row"><span class="lb">Map abscissa</span> <span class="eq" set:html={mathHtml('(W_L/W_G)·λ·ψ')} /></th><td class="v"><output data-o="bx" /></td><td class="u"><span>–</span></td></tr>
+          <tr><th scope="row"><span class="lb">Map ordinate</span> <span class="eq" set:html={mathHtml('G_G/λ')} /></th><td class="v"><output data-o="by" /></td><td class="u"><span>lbm/(ft²·s)</span></td></tr>
+          <tr class="txt key"><th scope="row"><span class="lb">Flow pattern</span></th><td class="v wide" colspan="2"><output data-o="pattern" /></td></tr>
+        </tbody>
+      </table>
+
+      <figure class="baker">
+        <svg viewBox={`0 0 ${W + PL + 16} ${H + PT + 44}`} role="img" aria-labelledby={id('bk-cap')}>
+          <rect x={PL} y={PT} width={W} height={H} class="plot" />
+          <rect x={PL} y={PT} width={W} height={ly(27.8) - PT} class="off" />
+          <rect x={PL} y={ly(0.0278)} width={W} height={PT + H - ly(0.0278)} class="off" />
+          {minor(decX).map((v) => <line x1={lx(v)} x2={lx(v)} y1={PT} y2={PT + H} class="grid minor" />)}
+          {minor(decY).map((v) => <line y1={ly(v)} y2={ly(v)} x1={PL} x2={PL + W} class="grid minor" />)}
+          {decX.map((v) => <line x1={lx(v)} x2={lx(v)} y1={PT} y2={PT + H} class="grid" />)}
+          {decY.map((v) => <line y1={ly(v)} y2={ly(v)} x1={PL} x2={PL + W} class="grid" />)}
+          {Object.values(BOUNDARIES).map((p) => <path d={path(p)} class="bnd" />)}
+          {decX.map((v, i) => <text x={lx(v)} y={PT + H + 16} class="tick" text-anchor={i === 0 ? 'start' : i === decX.length - 1 ? 'end' : 'middle'}>{tick(v)}</text>)}
+          {decY.map((v) => <text x={PL - 6} y={ly(v) + 4} class="tick" text-anchor="end">{tick(v)}</text>)}
+          <text x={PL + W / 2} y={PT + H + 36} class="axis" text-anchor="middle">(<tspan>W</tspan><tspan class="sb" dy="3">L</tspan><tspan dy="-3">/</tspan><tspan>W</tspan><tspan class="sb" dy="3">G</tspan><tspan dy="-3">)·λ·ψ</tspan></text>
+          <text x={14} y={PT + H / 2} class="axis" text-anchor="middle" transform={`rotate(-90 14 ${PT + H / 2})`}><tspan>G</tspan><tspan class="sb" dy="3">G</tspan><tspan dy="-3">/λ</tspan><tspan class="up">, lbm/(ft²·s)</tspan></text>
+          {Object.entries(LABELS).map(([k, [x, y]]) => <text x={lx(x)} y={ly(y)} class="reg" data-reg={k} text-anchor="middle">{SHORT[k]}</text>)}
+          <g data-point class="pt" hidden><circle r="7" /><circle r="2" class="dot" /></g>
+        </svg>
+        <figcaption id={id('bk-cap')}>Baker (1954) map for horizontal pipes, boundaries as on the original sheet (checked against Perry's Fig. 6-25 and Baker's chart). Shaded bands lie outside the published chart. The ring marks this case.</figcaption>
+      </figure>
+
+      <ul class="sketches" aria-label="Flow patterns">
+        {PATTERNS.map(([k, n, desc], pi) => (
+          <li data-sk={k} tabindex="0">
+            <svg viewBox="0 0 120 44" aria-hidden="true">
+              {k === 'stratified' && <rect x="2" y="25" width="116" height="13" class="liq" />}
+              {k === 'stratified' && <line x1="2" x2="118" y1="25" y2="25" class="ifc" />}
+              {k === 'wavy' && <path d="M2,26 Q8,21 14,26 T26,26 T38,26 T50,26 T62,26 T74,26 T86,26 T98,26 T110,26 T122,26 L118,38 L2,38 Z" class="liq" />}
+              {k === 'wavy' && <path d="M2,26 Q8,21 14,26 T26,26 T38,26 T50,26 T62,26 T74,26 T86,26 T98,26 T110,26" class="ifc" />}
+              {(k === 'bubble' || k === 'plug') && <rect x="2" y="6" width="116" height="32" class="liq" />}
+              {k === 'bubble' && bubbles(26, pi, 9, 30, [1.2, 2.6]).map((b) => <circle cx={b.cx} cy={b.cy} r={b.r} class="gasb" />)}
+              {k === 'plug' && [[10, 34], [52, 28], [90, 24]].map(([x, w]) => <rect x={x} y="7.5" width={w} height="9" rx="4.5" class="gasb" />)}
+              {k === 'slug' && <path d="M2,30 Q20,29 30,27 L36,6 L62,6 L68,28 Q90,31 118,30 L118,38 L2,38 Z" class="liq" />}
+              {k === 'slug' && bubbles(10, pi, 10, 30, [0.9, 1.8]).filter((b) => b.cx > 38 && b.cx < 64).map((b) => <circle cx={b.cx} cy={b.cy} r={b.r} class="gasb" />)}
+              {k === 'annular' && <path d="M2,6 L118,6 L118,9 Q60,11 2,9 Z" class="liq" />}
+              {k === 'annular' && <path d="M2,32 Q60,30 118,32 L118,38 L2,38 Z" class="liq" />}
+              {(k === 'annular' || k === 'dispersed') && bubbles(k === 'annular' ? 9 : 34, pi, 12, 30, [0.6, 1.1]).map((b) => <circle cx={b.cx} cy={b.cy} r={b.r} class="drop" />)}
+              <line x1="0" x2="120" y1="6" y2="6" class="wall" /><line x1="0" x2="120" y1="38" y2="38" class="wall" />
+            </svg>
+            <span class="skn">{n}</span>
+            <span class="skd">{desc}</span>
+          </li>
+        ))}
+      </ul>
+      <p class="note">Baker's map is for horizontal flow and was drawn from oil–gas and air–water data in pipes of 1–10 in; treat boundaries as broad bands. For inclined or vertical lines the pattern can differ.</p>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { solve, type Result } from '../lib/calc/twophase';
+  import { bakerPoint, FRAME, PATTERNS } from '../lib/calc/baker';
+  import { FITTINGS } from '../lib/calc/pressure1p';
+  import { pipe, id as pipeId, schedulesFor, type Schedule } from '../lib/calc/pipes';
+  import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig, pressureAbs, type Unit } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+
+  const Q = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
+  const L = (pairs: [string, number][]): Unit[] => pairs.map(([label, f]) => ({ label, f }));
+  const LB = 0.45359237, FT = 0.3048;
+  const LEN = L([['mm', 1e-3], ['µm', 1e-6], ['m', 1], ['km', 1e3], ['in', 0.0254], ['ft', FT], ['mi', 1609.344]]);
+  const LISTS: Record<string, Unit[]> = {
+    d: LEN, eps: LEN, la: LEN, le: LEN, dz: LEN,
+    area: L([['mm²', 1e-6], ['cm²', 1e-4], ['m²', 1], ['in²', 0.0254 ** 2], ['ft²', FT ** 2]]),
+    w: Q('mflow'), rho: Q('density'), mu: Q('mu'), sig: L([['mN/m', 1e-3], ['dyn/cm', 1e-3], ['N/m', 1]]),
+    v: L([['m/s', 1], ['ft/s', FT]]), vm: L([['m/s', 1], ['ft/s', FT]]), ve: L([['m/s', 1], ['ft/s', FT]]),
+    dpl: Q('dpl'), grad: Q('dpl'), dp: L(pressureAbs(DEFAULT_SETTINGS).slice(0, 11)),
+    mom: L([['Pa', 1], ['kg/(m·s²)', 1], ['lbm/(ft·s²)', LB / FT]]), momm: L([['Pa', 1], ['kg/(m·s²)', 1], ['lbm/(ft·s²)', LB / FT]]),
+    G: L([['kg/(m²·s)', 1], ['lbm/(ft²·s)', LB / FT ** 2], ['lbm/(ft²·h)', LB / FT ** 2 / 3600]]),
+    rhom: Q('density'), rhotp: Q('density'), mum: Q('mu'),
+  };
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const REG: Record<string, string> = { laminar: 'Laminar', transition: 'Transition', turbulent: 'Turbulent' };
+  const NAME: Record<string, string> = Object.fromEntries(PATTERNS.map(([k, n]) => [k, n]));
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-tp]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const unit = (k: string) => {
+      const s = root.querySelector<HTMLSelectElement>(`select[data-u="${k}"]`);
+      return (LISTS[k] ?? []).find((u) => u.label === s?.value) ?? { label: '', f: 1 };
+    };
+    const out = (k: string) => $<HTMLOutputElement>(`output[data-o="${k}"]`);
+    const nps = $<HTMLSelectElement>('select[data-s="nps"]'), sched = $<HTMLSelectElement>('select[data-s="sched"]');
+    const mat = $<HTMLSelectElement>('select[data-s="mat"]');
+    let bad = false;
+    const read = (k: string, uk: string | null, ok: (x: number) => boolean) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value);
+      const x = blank ? NaN : uk ? toSI(unit(uk), raw) : raw;
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      if (invalid) bad = true;
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, si: number | string | undefined, uk?: string) => {
+      const o = out(k);
+      if (typeof si === 'string') { o.textContent = si; return; }
+      o.textContent = si === undefined || !Number.isFinite(si) ? (bad ? '—' : '') : fmt(uk ? fromSI(unit(uk), si) : si);
+    };
+    const fillSchedules = () => {
+      const cur = sched.value, list = schedulesFor(nps.value);
+      sched.replaceChildren(...list.map((s) => new Option(s, s)), new Option('own ID', 'own'));
+      sched.value = cur === 'own' ? 'own' : list.includes(cur as Schedule) ? cur : list.includes('40') ? '40' : list.includes('STD') ? 'STD' : list[0];
+    };
+    const pos = (x: number) => x > 0;
+
+    const run = () => {
+      bad = false;
+      const own = sched.value === 'own', dIn = inp('d');
+      dIn.readOnly = !own; dIn.classList.toggle('calcd', !own);
+      let d: number;
+      if (own) d = read('d', 'd', pos);
+      else {
+        const p = pipe(nps.value, sched.value as Schedule);
+        d = p ? pipeId(p) * 0.0254 : NaN;
+        dIn.removeAttribute('aria-invalid');
+        dIn.value = Number.isFinite(d) ? fmt(fromSI(unit('d'), d)) : '';
+      }
+      show('area', Math.PI * d * d / 4, 'area');
+      const eps = read('eps', 'eps', (x) => x >= 0);
+      const hit = [...mat.options].find((o) => o.value && Math.abs(Number(o.value) - eps) <= 1e-9 + 1e-3 * eps);
+      mat.value = hit ? hit.value : '';
+      const wl = read('wl', 'w', (x) => x >= 0), wg = read('wg', 'w', (x) => x >= 0);
+      const rhol = read('rhol', 'rho', pos), rhog = read('rhog', 'rho', pos);
+      const mul = read('mul', 'mu', pos), mug = read('mug', 'mu', pos);
+      const sigma = read('sig', 'sig', pos);
+      const la = read('la', 'la', (x) => x >= 0);
+      const th = read('th', null, (x) => x >= -90 && x <= 90);
+      const c14 = read('c14', null, pos);
+      let nld = 0, fitBad = false;
+      for (const f of root.querySelectorAll<HTMLInputElement>('input[data-fit]')) {
+        const blank = f.value.trim() === '', n = blank ? 0 : parseNumber(f.value);
+        const invalid = !blank && !(Number.isInteger(n) && n >= 0);
+        f.toggleAttribute('aria-invalid', invalid);
+        if (invalid) { bad = true; fitBad = true; } else nld += n * FITTINGS[Number(f.dataset.fit)][1];
+      }
+      $('[data-fitsum]').textContent = nld ? `(Σ n·Le/D = ${nld})` : '(none)';
+      if (rhog >= rhol) { inp('rhog').setAttribute('aria-invalid', ''); bad = true; }
+      const ok = !fitBad && [d, eps, wl, wg, rhol, rhog, mul, mug, sigma, la].every(Number.isFinite) && wl > 0 && wg > 0 && rhog < rhol;
+      const r: Result | undefined = ok ? solve({ d, eps, wl, wg, rhol, rhog, mul, mug, sigma, la, nLeD: nld, theta: Number.isFinite(th) ? th : 0, c14e: Number.isFinite(c14) ? c14 : 100 }) : undefined;
+
+      show('le', r?.le ?? (!fitBad && Number.isFinite(d) && Number.isFinite(la) ? la + d * nld : undefined), 'le');
+      show('dz', Number.isFinite(la) && Number.isFinite(th) ? la * Math.sin(th * Math.PI / 180) : undefined, 'dz');
+      for (const [s, ph] of [['l', r?.liq], ['g', r?.gas]] as const) {
+        show(`v${s}`, ph?.v, 'v'); show(`re${s}`, ph?.re); show(`reg${s}`, ph ? REG[ph.regime] : bad ? '—' : '');
+        show(`f${s}`, ph?.f); show(`dpl${s}`, ph?.dpdz, 'dpl'); show(`mom${s}`, ph?.rhoV2, 'mom');
+      }
+      show('x', r?.x); show('G', r?.G, 'G'); show('rhom', r?.mix.rho, 'rhom'); show('vm', r?.mix.v, 'vm'); show('mum', r?.mix.mu, 'mum');
+      show('rem', r?.mix.re); show('momm', r?.mix.rhoV2, 'momm'); show('mur', r?.mix.muRatio);
+      show('ve', Number.isFinite(c14) ? r?.ve : undefined, 've');
+
+      const down = Number.isFinite(th) && th < 0;
+      const rows: Record<string, [number | undefined, number | undefined]> = {
+        friedel: [r?.friedel.phi2, r?.friedel.dpdz], friedeld: [r?.friedel.phi2Down, r?.friedel.dpdzDown],
+        chisholm: [r?.chisholm.phi2, r?.chisholm.dpdz], lm: [r?.lm.phiL2, r?.lm.dpdz],
+      };
+      for (const [k, [phi, g]] of Object.entries(rows)) {
+        show(`phi_${k}`, phi); show(`g_${k}`, g, 'grad'); show(`dp_${k}`, g !== undefined && r ? g * r.le : undefined, 'dp');
+        const tr = root.querySelector<HTMLElement>(`tr[data-corr="${k}"]`)!;
+        const isChosen = !!r && (k === r.chosen && !(k === 'friedel' && down) || (k === 'friedeld' && r.chosen === 'friedel' && down));
+        tr.classList.toggle('is-chosen', isChosen);
+        tr.hidden = k === 'friedeld' && !down;
+      }
+      const lmRow = root.querySelector('tr[data-corr="lm"] .eq')!;
+      if (r) lmRow.innerHTML = `Δ<i>p</i> = max(<i>φ</i><sub>L</sub>²·Δ<i>p</i><sub>L</sub>, <i>φ</i><sub>G</sub>²·Δ<i>p</i><sub>G</sub>), regimes ${r.lm.pair}`;
+      $('[data-reason]').innerHTML = r ? `Chosen: <b>${r.chosen === 'friedel' ? (down ? 'Friedel, down-flow' : 'Friedel') : r.chosen === 'chisholm' ? 'Chisholm–Baroczy' : 'Lockhart–Martinelli'}</b>, because ${r.reason.replace('μL/μG', '<i>μ</i><sub>L</sub>/<i>μ</i><sub>G</sub>')} (${fmt(r.mix.muRatio)}; <i>G</i> = ${fmt(r.G)} kg/(m²·s)).` : '';
+      const dpu = unit('dp');
+      for (const s of root.querySelectorAll('[data-dpu]')) s.textContent = dpu.label;
+      show('dpf', r?.dpFric, 'dp'); show('void', r?.voidFraction); show('rhotp', r?.rhoTp, 'rhotp');
+      show('dps', r?.dpStatic, 'dp'); show('dpt', r?.dpTotal, 'dp');
+
+      // Baker map
+      const b = r ? bakerPoint(wl, wg, rhol, rhog, mul, sigma, r.area) : undefined;
+      show('lambda', b?.lambda); show('psi', b?.psi); show('bx', b?.x); show('by', b?.y);
+      show('pattern', b ? `${NAME[b.pattern]}${b.outside ? ' (outside the published chart: extrapolated)' : ''}` : bad ? '—' : '');
+      const pt = $<SVGGElement>('[data-point]');
+      if (b) {
+        const W = 560, H = 360, PL = 56, PT = 14;
+        const cl = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+        const x = PL + (Math.log10(cl(b.x, FRAME.x[0], FRAME.x[1])) + 1) / 5 * W;
+        const y = PT + (2 - Math.log10(cl(b.y, FRAME.y[0], FRAME.y[1]))) / 4 * H;
+        pt.setAttribute('transform', `translate(${x.toFixed(1)},${y.toFixed(1)})`);
+        pt.removeAttribute('hidden');
+      } else pt.setAttribute('hidden', '');
+      for (const el of root.querySelectorAll<HTMLElement | SVGElement>('[data-reg],[data-sk]')) {
+        el.classList.toggle('is-on', !!b && (el.dataset.reg ?? el.dataset.sk) === b.pattern);
+      }
+
+      const warn: string[] = [];
+      if (r && (r.liq.regime === 'transition' || r.gas.regime === 'transition')) warn.push('A phase flowing alone is in the transition range (2100 ≤ <i>Re</i> &lt; 4000): friction factors are uncertain.');
+      if (r && r.chosen === 'friedel' && r.G > 2000) warn.push('Mass flux above 2000 kg/(m²·s): outside the range Whalley recommended for Friedel.');
+      if (r && Number.isFinite(c14) && r.mix.v > r.ve) warn.push('Mixture velocity is above the API RP 14E erosional velocity.');
+      if (r && r.x > 0.999) warn.push('Almost all gas: a single-phase calculation is more appropriate.');
+      if (r && r.x < 0.001) warn.push('Almost all liquid: a single-phase calculation is more appropriate.');
+      $('[data-warn]').innerHTML = warn.map((w) => `<li>${w}</li>`).join('');
+    };
+
+    // hovering a sketch highlights its region on the map, and the other way round
+    const hl = (k: string | null) => { for (const el of root.querySelectorAll<HTMLElement | SVGElement>('[data-reg],[data-sk]')) el.classList.toggle('is-hover', (el.dataset.reg ?? el.dataset.sk) === k); };
+    for (const el of root.querySelectorAll<HTMLElement | SVGElement>('[data-sk],[data-reg]')) {
+      const k = el.dataset.sk ?? el.dataset.reg!;
+      el.addEventListener('mouseenter', () => hl(k)); el.addEventListener('mouseleave', () => hl(null));
+      el.addEventListener('focus', () => hl(k)); el.addEventListener('blur', () => hl(null));
+    }
+
+    root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input')) run(); });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLElement;
+      if (t === nps) fillSchedules();
+      if (t === sched && sched.value === 'own') { inp('d').focus(); $('[data-status]').textContent = 'Type the inside diameter.'; }
+      if (t === mat && mat.value) inp('eps').value = fmt(fromSI(unit('eps'), Number(mat.value)));
+      if (t.matches('select')) run();
+    });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]:not([readonly])')) el.value = '';
+      run();
+      inp('wl').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  thead th { padding-top: 0.5rem; color: var(--muted); font-size: 0.8125rem; font-weight: 600; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .lb { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .ft :global(i), thead :global(i) { font-style: italic; padding-right: 0.05em; }
+  .note b, .note :global(b) { font-weight: 650; color: var(--ink); }
+  .io { max-width: 44rem; }
+  .io .v { width: 9.5rem; }
+  .io .u { width: 8.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io td.wide { width: auto; }
+  .io td.wide select { max-width: 24rem; }
+  tr.txt output { background: none; padding-left: 0; font-weight: 600; }
+  tr.key output { font-weight: 650; }
+  tr[hidden] { display: none !important; }
+  .two, .corr { max-width: 52rem; }
+  .two .o, .corr .o { width: 9.5rem; padding-left: 0.375rem; }
+  .two .u { width: 7.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .corr tr.is-chosen th, .corr tr.is-chosen output { font-weight: 650; }
+  .corr tr.is-chosen th { box-shadow: inset 3px 0 0 var(--line); padding-left: 0.5rem; }
+  .chosen { display: none; margin-left: 0.375rem; padding: 0 0.375rem; border: 1px solid var(--line); color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .corr tr.is-chosen .chosen { display: inline-block; }
+  .units-row { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin-top: 0.5rem; color: var(--muted); font-size: 0.8125rem; }
+  .units-row label { display: inline-flex; align-items: center; gap: 0.375rem; }
+  .units-row select { width: auto; }
+
+  input, output, select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  input, output { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  input { background: var(--zoho-in); border-color: var(--muted); }
+  input.calcd { background: var(--zoho-out); border-color: transparent; }
+  input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  output { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+
+  .fit { margin: 0.5rem 0; max-width: 44rem; }
+  .fit summary { cursor: pointer; padding: 0.25rem 0; font-weight: 600; font-size: 0.9375rem; }
+  .fit summary .muted { color: var(--muted); font-weight: 400; }
+  .ft thead th:nth-child(2) { text-align: right; padding-right: 0.75rem; }
+  .ft .ld { width: 4.5rem; text-align: right; padding-right: 0.75rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .ft .n { width: 5rem; }
+  .ft tbody tr:nth-child(even) th, .ft tbody tr:nth-child(even) td.ld { background: var(--wash); }
+
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 44rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 44rem; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  .baker { margin: 1rem 0 0; max-width: 44rem; }
+  .baker svg { display: block; width: 100%; height: auto; }
+  .baker .plot { fill: #fff; stroke: var(--ink); stroke-width: 1; }
+  .baker .off { fill: var(--wash); }
+  .baker .grid { stroke: var(--rule); stroke-width: 0.8; }
+  .baker .grid.minor { stroke-width: 0.4; }
+  .baker .bnd { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+  .baker .tick { font: 400 11px var(--font-ui); fill: var(--muted); }
+  .baker .axis { font: italic 12px var(--font-ui); fill: var(--ink); }
+  .baker .axis .sb { font-size: 9px; font-style: normal; }
+  .baker .axis .up { font-style: normal; }
+  .baker .reg { font: 600 12px var(--font-ui); fill: var(--muted); cursor: default; }
+  .baker .reg.is-on { fill: var(--line); font-size: 13px; }
+  .baker .reg.is-hover { fill: var(--ink); text-decoration: underline; }
+  .baker .pt circle { fill: none; stroke: var(--markup); stroke-width: 2.2; }
+  .baker .pt .dot { fill: var(--markup); stroke: none; }
+  .baker figcaption { margin-top: 0.25rem; color: var(--muted); font-size: 0.8125rem; }
+  .baker [hidden] { display: none; }
+
+  .sketches { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0.75rem; margin: 1rem 0 0; padding: 0; list-style: none; max-width: 52rem; }
+  .sketches li { padding: 0.375rem 0.5rem 0.5rem; border: 1px solid var(--rule); outline-offset: 2px; }
+  .sketches li.is-on { border-color: var(--line); box-shadow: inset 0 0 0 1px var(--line); }
+  .sketches li.is-hover { background: var(--wash); }
+  .sketches svg { display: block; width: 100%; height: auto; }
+  .sketches .wall { stroke: var(--ink); stroke-width: 1.4; }
+  .sketches .liq { fill: color-mix(in srgb, var(--line) 22%, #fff); stroke: none; }
+  .sketches .ifc { fill: none; stroke: var(--line); stroke-width: 1; }
+  .sketches .gasb { fill: #fff; stroke: var(--line); stroke-width: 0.8; }
+  .sketches .drop { fill: var(--line); }
+  .skn { display: block; margin-top: 0.25rem; font-weight: 600; font-size: 0.875rem; }
+  .sketches li.is-on .skn { color: var(--line); }
+  .skd { display: block; color: var(--muted); font-size: 0.75rem; line-height: 1.3; }
+
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .io .v { width: 7rem; }
+    .io .u { width: 6.5rem; }
+    .ft .ld { width: 3.25rem; padding-right: 0.5rem; }
+    .ft .n { width: 3.5rem; }
+    .two thead, .corr thead { display: none; }
+    .two tbody tr, .corr tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.25rem; padding-block: 0.5rem; border-top: 1px solid var(--rule); }
+    .two tbody th { grid-column: 1 / 3; grid-row: 1; padding: 0; align-self: center; }
+    .two td.u { grid-column: 3; grid-row: 1; width: auto; padding: 0; }
+    .two td.o, .corr td.o { width: auto; padding: 0; }
+    .two td.o:nth-of-type(1) { grid-column: 1; grid-row: 2; }
+    .two td.o:nth-of-type(2) { grid-column: 2; grid-row: 2; }
+    .corr tbody th { grid-column: 1 / 4; padding: 0; }
+    .two td.o::before, .corr td.o::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.6875rem; line-height: 1.2; }
+    .two tr.txt output { white-space: normal; }
+    .baker .tick { font-size: 19px; }
+    .baker .axis { font-size: 20px; }
+    .baker .axis .sb { font-size: 15px; }
+    .baker .reg { font-size: 20px; }
+    .baker .reg.is-on { font-size: 21px; }
+  }
+</style>

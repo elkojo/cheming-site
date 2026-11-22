@@ -130,9 +130,10 @@ export const tools: Tool[] = [
     "sub": "2",
     "title": "Pressure Loss: Two Phase",
     "name": "Pressure Loss of Two Phase Flow in Circular Rough Piping",
-    "description": "Two-phase pressure drop in circular rough pipe, with the horizontal flow pattern predicted on the Baker chart.",
-    "standard": "Haraburda & Chafin, Chemical Processing (2000); Baker chart per Perry’s 7th ed.",
+    "description": "Gas–liquid pressure drop in circular rough pipe by Friedel, Chisholm–Baroczy and Lockhart–Martinelli (chosen by Whalley's rule), static head in inclined lines, and the flow pattern on the Baker map.",
+    "standard": "Haraburda & Chafin, Chemical Processing (2000); Whalley (1980); Baker (1954) map",
     "category": "piping",
+    "native": "twophase",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/9d31950cf989751b5aceab7b2ddd1d39966e88bef9eaff6a88cbc738b74e9fce?type=grid&mode=embed"
   },
   {

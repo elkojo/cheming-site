@@ -39,7 +39,7 @@ test('Zoho defaults: friction factor and Δp with the sheet correlation', () => 
   close(fs * r.le / d8 * 0.5 * 862.68 * r.v ** 2, 5924.77886169778, 1e-12, 'sheet Δp, Pa');
 });
 
-test('corrected: exact Colebrook (1P-1) changes Δp by −0.09 %', () => {
+test('exact Colebrook instead of the sheet approximation changes Δp by −0.09 %', () => {
   const r = solve(base);
   close(r.f, 0.016169242570509, 1e-9, 'Colebrook f');
   close(r.dp, 5924.77886169778 * r.f / 0.0162032092859232, 1e-12, 'Δp');
@@ -89,7 +89,7 @@ test('Colebrook equals the 40-digit solution (42 cases, 1e-13; fluids 1.3.1 agre
   for (const [re, rr, f] of COLEBROOK) close(colebrook(re, rr), f, 1e-13, `Re ${re}, ε/D ${rr}`);
 });
 
-test('the sheet correlation was up to 1 % high (1P-1)', () => {
+test('the sheet correlation (Goudar–Sonnad Eq. 3) is up to 1 % high, as its authors state', () => {
   close(goudarSonnadSheet(4000, 0) / colebrook(4000, 0) - 1, 0.0099, 0.02, 'Re 4000 smooth');
 });
 

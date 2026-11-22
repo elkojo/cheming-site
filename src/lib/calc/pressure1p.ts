@@ -2,8 +2,8 @@
 // Native rebuild of the Zoho sheet "Pressure Loss of Single Phase Flow in Rough Piping" (Phase 7).
 // Darcy–Weisbach: Δp = f·(Le/d)·ρ·v²/2, Le = La + d·Σ(n·Le/D) (fittings, Le/D values as on the sheet).
 // Friction factor (owner's choice 2026-11-22): Colebrook–White solved exactly in the turbulent and transitional
-// zones, f = 64/Re in laminar flow (Re ≤ 2000). The sheet used the explicit Goudar–Sonnad correlation without its
-// −0.31 term (up to 1 % high) and had no laminar branch; `goudarSonnadSheet` keeps it for the reference tests.
+// zones, f = 64/Re in laminar flow (Re ≤ 2000). The sheet used the explicit Goudar–Sonnad correlation (their Eq. 3,
+// up to 1 % high, as the authors state) and had no laminar branch; `goudarSonnadSheet` keeps it for the reference tests.
 // Gas (owner's choice): density from the ideal-gas law with Z, ρ = p·M/(Z·R·T), drives velocity, Re and Δp; sonic
 // velocity c = √(k·R·T/M) (ideal gas), Mach = v/c; standard volume at 101.325 kPa, 20 °C with Z = 1 (as the sheet's
 // basis). The method assumes constant density, so it is flagged when Δp exceeds 10 % of the inlet pressure.
@@ -49,7 +49,7 @@ export function colebrook(re: number, rr: number): number {
   return 1 / (x * x);
 }
 
-/** The sheet's explicit correlation (Goudar–Sonnad without the −0.31 term), for the reference tests only. */
+/** The sheet's explicit correlation (Goudar & Sonnad 2007, Eq. 3), for the reference tests only. */
 export function goudarSonnadSheet(re: number, rr: number): number {
   const s = 0.124 * rr * re + Math.log(0.4587 * re);
   return 1 / (0.8686 * Math.log(0.4587 * re / s ** (s / (s + 1)))) ** 2;
