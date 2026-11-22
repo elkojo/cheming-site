@@ -1,0 +1,468 @@
+---
+// Native Restriction Orifice (RO) calculator (Phase 7): sizing (bore for a flow) or rating (flow for a bore), shown as
+// an explicit toggle that also follows the field typed into; vapour/gas or liquid; ISO 5167-2:2003 for unchoked flow,
+// critical gas flow and choked liquid flow as on the original sheet; vena contracta and recovery; the sheet's side notes
+// (plate thickness and edge Cd, equivalent valve Cv) and the full calculation basis.
+// Inputs start on the Zoho defaults; results are computed in the browser on load.
+import DrawingFrame from './DrawingFrame.astro';
+import { SIZES, schedulesFor } from '../lib/calc/pipes';
+import { quantity, DEFAULT_SETTINGS } from '../lib/calc/units';
+import { mathHtml } from '../lib/calc/types';
+
+const U = (q: string) => quantity(q).units(DEFAULT_SETTINGS).map((u) => u.label);
+const P = U('pressure').filter((l) => !/column/.test(l));
+const LEN = ['mm', 'm', 'in'];
+const DPU = ['bar', 'kPa', 'psi', 'kg/cm²'];
+const id = (k: string) => `ro-${k}`;
+const DEF = { nps: '3', sched: '40' };
+// mass flow and viscosity remembered per phase; examples (IAPWS-IF97): steam at 12 bar a, 370 °C; water at 25 °C
+const PHASE_DEF = { gas: { w: ['500', 'kg/h'], mu: ['0.0232', 'cP'] }, liquid: { w: ['5000', 'kg/h'], mu: ['0.89', 'cP'] } };
+
+type Row = { k: string; label: string; sym: string; units?: string[]; unit?: string; value?: string; out?: boolean; phase?: 'gas' | 'liquid'; text?: boolean };
+const svc: Row[] = [
+  { k: 'p1', label: 'Upstream pressure', sym: 'P_1', units: P, unit: 'bar (A)', value: '12' },
+  { k: 'p2', label: 'Downstream pressure (recovered)', sym: 'P_2', units: P, unit: 'bar (A)', value: '1.5' },
+  { k: 'dp', label: 'Permanent pressure loss', sym: 'ΔP = P_1 − P_2', units: DPU, unit: 'bar', out: true },
+  { k: 'r', label: 'Pressure ratio', sym: 'r = P_2/P_1', out: true },
+  { k: 'mw', label: 'Molar mass', sym: 'M', units: ['kg/kmol'], value: '18.02', phase: 'gas' },
+  { k: 'z', label: 'Compressibility factor', sym: 'Z', value: '0.9814', phase: 'gas' },
+  { k: 't', label: 'Upstream temperature', sym: 'T_1', units: U('temp'), unit: '°C (Celsius)', value: '370', phase: 'gas' },
+  { k: 'k', label: 'Isentropic exponent (upstream)', sym: 'κ ≈ c_p/c_v', value: '1.316', phase: 'gas' },
+  { k: 'rho', label: 'Liquid density', sym: 'ρ_1', units: U('density'), unit: 'kg/m³', value: '997', phase: 'liquid' },
+  { k: 'pv', label: 'Vapour pressure', sym: 'p_v', units: P, unit: 'bar (A)', value: '0.0317', phase: 'liquid' },
+  { k: 'mu', label: 'Viscosity', sym: 'μ', units: U('mu'), unit: 'cP', value: '0.0232' },
+  { k: 'rhog', label: 'Density upstream', sym: 'ρ_1 = P_1·M/(Z·R·T_1)', units: U('density'), unit: 'kg/m³', out: true, phase: 'gas' },
+];
+const res: Row[] = [
+  { k: 'beta', label: 'Diameter ratio', sym: 'β = d/D' },
+  { k: 'reg', label: 'Flow', sym: '', text: true },
+  { k: 'c', label: 'Discharge coefficient', sym: 'C' },
+  { k: 'eps', label: 'Expansibility factor', sym: 'ε', phase: 'gas' },
+  { k: 'rc', label: 'Critical pressure ratio', sym: 'r_c', phase: 'gas' },
+  { k: 'red', label: 'Pipe Reynolds number', sym: 'Re_D = 4·q_m/(π·μ·D)' },
+  { k: 'reo', label: 'Orifice Reynolds number', sym: 'Re_d = Re_D/β' },
+  { k: 'q', label: 'Volume flow', sym: 'Q = q_m/ρ_1', units: U('vflow'), unit: 'm³/h', phase: 'liquid' },
+  { k: 'v1', label: 'Volume flow, upstream', sym: 'V_1 = q_m/ρ_1', units: U('vflow'), unit: 'm³/h', phase: 'gas' },
+  { k: 'v2', label: 'Volume flow, downstream', sym: 'V_2 = V_1·P_1/P_2', units: U('vflow'), unit: 'm³/h', phase: 'gas' },
+  { k: 'vs', label: 'Standard volume flow', sym: 'V_std (101.325 kPa, 20 °C, Z = 1)', units: U('vflow').map((l) => `Std ${l}`), unit: 'Std m³/h', phase: 'gas' },
+];
+const vc: Row[] = [
+  { k: 'dpt', label: 'Differential at the flange taps', sym: 'Δp = ΔP/(Δϖ/Δp)', units: DPU, unit: 'bar' },
+  { k: 'lr', label: 'Permanent loss / tap differential', sym: 'Δϖ/Δp' },
+  { k: 'pvc', label: 'Pressure at the downstream tap', sym: 'p_2,tap = P_1 − Δp', units: P, unit: 'bar (A)' },
+  { k: 'u1', label: 'Pipe velocity, upstream', sym: 'u_1 = q_m/(ρ_1·π·D²/4)', units: ['m/s', 'ft/s'], unit: 'm/s' },
+  { k: 'u2', label: 'Pipe velocity, downstream', sym: 'u_2 = u_1·ρ_1/ρ_2', units: ['m/s', 'ft/s'], unit: 'm/s' },
+  { k: 'ma', label: 'Mach number, downstream', sym: 'Ma_2 = u_2/√(κ·R·T_1·Z/M)', phase: 'gas' },
+];
+const inCell = (k: string, v = '') => `<input id="${id(k)}" data-k="${k}" value="${v}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />`;
+const unitCell = (r: Row) => (r.units && r.units.length > 1
+  ? `<select data-u="${r.k}" aria-label="${r.label} unit">${r.units.map((u) => `<option${u === r.unit ? ' selected' : ''}>${u}</option>`).join('')}</select>`
+  : `<span>${r.units?.[0] ?? (r.text ? '' : '–')}</span>`);
+---
+<DrawingFrame>
+  <div class="calc ro" data-ro data-phase-def={JSON.stringify(PHASE_DEF)}>
+    <div class="bar">
+      <p>Square-edged restriction orifice for vapour or liquid: the bore for a flow, or the flow through a bore. Pick the units in the right-hand column.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('mode-h')}>
+      <h2 id={id('mode-h')} class="sr">Mode</h2>
+      <div class="switches">
+        <div class="seg" role="radiogroup" aria-label="Calculate">
+          <span class="seg-l">Calculate</span>
+          <button type="button" role="radio" aria-checked="true" data-mode="size">Orifice diameter <span class="muted">(sizing)</span></button>
+          <button type="button" role="radio" aria-checked="false" data-mode="rate">Flow rate <span class="muted">(rating)</span></button>
+        </div>
+        <div class="seg" role="radiogroup" aria-label="Fluid">
+          <span class="seg-l">Fluid</span>
+          <button type="button" role="radio" aria-checked="true" data-phase-btn="gas">Vapour or gas</button>
+          <button type="button" role="radio" aria-checked="false" data-phase-btn="liquid">Liquid</button>
+        </div>
+      </div>
+      <p class="note" data-mode-note></p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('pipe-h')}>
+      <h2 id={id('pipe-h')}>Orifice and pipe</h2>
+      <table class="io">
+        <tbody>
+          <tr class="pair" data-pair="w">
+            <th scope="row"><label for={id('w')}><span class="lb">Mass flow</span> <span class="eq" set:html={mathHtml('q_m')} /></label> <span class="tag" data-tag="w"></span></th>
+            <td class="v" set:html={inCell('w', '500')} />
+            <td class="u" set:html={unitCell({ k: 'w', label: 'Mass flow', sym: '', units: U('mflow'), unit: 'kg/h' })} />
+          </tr>
+          <tr class="pair" data-pair="d">
+            <th scope="row"><label for={id('d')}><span class="lb">Orifice bore diameter</span> <span class="eq" set:html={mathHtml('d')} /></label> <span class="tag" data-tag="d"></span></th>
+            <td class="v" set:html={inCell('d', '11.94')} />
+            <td class="u" set:html={unitCell({ k: 'd', label: 'Bore', sym: '', units: LEN, unit: 'mm' })} />
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('nps')}><span class="lb">Nominal line size</span> <span class="eq" set:html={mathHtml('NPS')} /></label></th>
+            <td class="v"><select id={id('nps')} data-s="nps">{SIZES.map((s) => <option value={s.nps} selected={s.nps === DEF.nps}>{s.nps}</option>)}</select></td>
+            <td class="u"><span>in</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('sched')}><span class="lb">Schedule</span> <span class="eq">ASME B36.10M / B36.19M</span></label></th>
+            <td class="v"><select id={id('sched')} data-s="sched">{schedulesFor(DEF.nps).map((s) => <option selected={s === DEF.sched}>{s}</option>)}<option value="own">own ID</option></select></td>
+            <td class="u"><span>–</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for={id('D')}><span class="lb">Pipe inside diameter</span> <span class="eq" set:html={mathHtml('D')} /></label></th>
+            <td class="v"><input id={id('D')} data-k="D" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" readonly class="calcd" /></td>
+            <td class="u" set:html={unitCell({ k: 'D', label: 'Pipe ID', sym: '', units: LEN, unit: 'mm' })} />
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="grp" aria-labelledby={id('svc-h')}>
+      <h2 id={id('svc-h')}>Service</h2>
+      <table class="io">
+        <tbody>
+          {svc.map((r) => (
+            <tr data-phase={r.phase}>
+              <th scope="row">{r.out ? <><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></>
+                : <label for={id(r.k)}><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></label>}</th>
+              <td class="v" set:html={r.out ? `<output data-o="${r.k}"></output>` : inCell(r.k, r.value)} />
+              <td class="u" set:html={unitCell(r)} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note" data-phase="gas">Example: steam at 12 bar a and 370 °C (<i>κ</i>, <i>Z</i> and <i>μ</i> from IAPWS-IF97).</p>
+      <p class="note" data-phase="liquid">Example: water at 25 °C (IAPWS-IF97).</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('res-h')}>
+      <h2 id={id('res-h')}>Result</h2>
+      <table class="io">
+        <tbody>
+          {res.map((r) => (
+            <tr data-phase={r.phase} class:list={[{ txt: r.text }]}>
+              <th scope="row"><span class="lb">{r.label}</span> {r.sym && <span class="eq" set:html={mathHtml(r.sym)} />}</th>
+              <td class="v"><output data-o={r.k} /></td>
+              <td class="u" set:html={r.text ? '' : unitCell(r)} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <ul class="warn" data-warn aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('vc-h')}>
+      <h2 id={id('vc-h')}>Vena contracta and pressure recovery</h2>
+      <table class="io">
+        <tbody>
+          {vc.map((r) => (
+            <tr data-phase={r.phase}>
+              <th scope="row"><span class="lb">{r.label}</span> <span class="eq" set:html={mathHtml(r.sym)} /></th>
+              <td class="v"><output data-o={r.k} /></td>
+              <td class="u" set:html={unitCell(r)} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note">A restriction orifice is specified by its permanent loss Δ<i>P</i> (downstream pressure recovered 4–8 pipe diameters after the plate); flow meters read the larger differential Δ<i>p</i> at the taps. Downstream velocity with the downstream density, Mach number at the upstream temperature (isothermal); a Mach number near 1 means the downstream pipe may limit the flow.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('side-h')}>
+      <h2 id={id('side-h')}>Side notes</h2>
+      <h3>Plate thickness and edge (information, not applied)</h3>
+      <table class="io">
+        <tbody>
+          <tr><th scope="row"><label for={id('pt')}><span class="lb">Plate thickness</span> <span class="eq" set:html={mathHtml('t')} /></label></th><td class="v" set:html={inCell('pt', '2')} /><td class="u"><span>mm</span></td></tr>
+          <tr><th scope="row"><label for={id('er')}><span class="lb">Entry-edge radius</span> <span class="eq" set:html={mathHtml('r_e')} /></label></th><td class="v" set:html={inCell('er', '0')} /><td class="u"><span>mm</span></td></tr>
+          <tr><th scope="row"><span class="lb">Thickness ratio</span> <span class="eq" set:html={mathHtml('t/d')} /></th><td class="v"><output data-o="td" /></td><td class="u"><span>–</span></td></tr>
+          <tr><th scope="row"><span class="lb">Cd, choked gas, thick plate</span> <span class="eq" set:html={mathHtml('C_d ≈ 0.81 − 0.0347·ln(t/d)')} /></th><td class="v"><output data-o="cdt" /></td><td class="u"><span>–</span></td></tr>
+          <tr><th scope="row"><span class="lb">Cd, rounded entry edge</span> <span class="eq" set:html={mathHtml('C_d ≈ 0.6·(1 + 5.5·r_e/d) ≤ 1')} /></th><td class="v"><output data-o="cdr" /></td><td class="u"><span>–</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Square-edged thin plates (ISO 5167: <i>t</i> up to 0.02<i>D</i>–0.05<i>D</i>, sharp edge) give the coefficients above. Thick plates and rounded edges change the discharge coefficient: for choked gas, <i>C</i><sub>d</sub> ≈ 1.0 → 0.81 as <i>t</i>/<i>d</i> goes from 0 to 1, 0.81 for <i>t</i>/<i>d</i> 1–7 and less beyond (Ward-Smith, 1979); a rounded entry raises <i>C</i><sub>d</sub> towards 1. Both relations as quoted on the original sheet, approximate.</p>
+      <h3>Equivalent control-valve Cv</h3>
+      <table class="io">
+        <tbody>
+          <tr><th scope="row"><label for={id('fl')}><span class="lb">Valve pressure recovery factor</span> <span class="eq" set:html={mathHtml('F_L')} /></label></th><td class="v" set:html={inCell('fl', '0.88')} /><td class="u"><span>–</span></td></tr>
+          <tr data-phase="gas"><th scope="row"><label for={id('xt')}><span class="lb">Valve pressure drop ratio factor</span> <span class="eq" set:html={mathHtml('x_T')} /></label></th><td class="v" set:html={inCell('xt', '0.67')} /><td class="u"><span>–</span></td></tr>
+          <tr data-phase="liquid"><th scope="row"><label for={id('pc')}><span class="lb">Critical pressure</span> <span class="eq" set:html={mathHtml('p_c')} /></label></th><td class="v" set:html={inCell('pc', '220.64')} /><td class="u" set:html={unitCell({ k: 'pc', label: 'Critical pressure', sym: '', units: P, unit: 'bar (A)' })} /></tr>
+          <tr><th scope="row"><span class="lb">Required valve Cv for the same service</span> <span class="eq" set:html={mathHtml('C_v')} /></th><td class="v"><output data-o="cv" /></td><td class="u"><span>–</span></td></tr>
+          <tr><th scope="row"><span class="lb">Kv</span> <span class="eq" set:html={mathHtml('K_v = 0.865·C_v')} /></th><td class="v"><output data-o="kv" /></td><td class="u"><span>m³/h</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note">The Cv a control valve would need to pass the same flow at the same pressures (IEC 60534-2-1, as in the CV tool). Defaults: a typical 1″ single-port globe valve, equal percentage (Fisher Control Valve Handbook).</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('basis-h')}>
+      <h2 id={id('basis-h')}>Calculation basis</h2>
+      <details class="basis" open>
+        <summary>Equations</summary>
+        <ol class="eqs">
+          <li><b>Unchoked flow</b> (ISO 5167-1/-2:2003, square-edged orifice, flange taps): <i>q</i><sub>m</sub> = <i>C</i>/√(1 − <i>β</i><sup>4</sup>)·<i>ε</i>·(π/4)·<i>d</i><sup>2</sup>·√(2·Δ<i>p</i>·<i>ρ</i><sub>1</sub>)</li>
+          <li><b>Discharge coefficient</b>, Reader–Harris/Gallagher (ISO 5167-2 Eq. 4), flange taps <i>L</i><sub>1</sub> = <i>L</i>′<sub>2</sub> = 25.4 mm/<i>D</i>:<br />
+            <i>C</i> = 0.5961 + 0.0261·<i>β</i><sup>2</sup> − 0.216·<i>β</i><sup>8</sup> + 0.000521·(10<sup>6</sup>·<i>β</i>/<i>Re</i><sub>D</sub>)<sup>0.7</sup> + (0.0188 + 0.0063·<i>A</i>)·<i>β</i><sup>3.5</sup>·(10<sup>6</sup>/<i>Re</i><sub>D</sub>)<sup>0.3</sup>
+            + (0.043 + 0.080·e<sup>−10·<i>L</i><sub>1</sub></sup> − 0.123·e<sup>−7·<i>L</i><sub>1</sub></sup>)·(1 − 0.11·<i>A</i>)·<i>β</i><sup>4</sup>/(1 − <i>β</i><sup>4</sup>) − 0.031·(<i>M</i>′<sub>2</sub> − 0.8·<i>M</i>′<sub>2</sub><sup>1.1</sup>)·<i>β</i><sup>1.3</sup>,<br />
+            <i>A</i> = (19000·<i>β</i>/<i>Re</i><sub>D</sub>)<sup>0.8</sup>, <i>M</i>′<sub>2</sub> = 2·<i>L</i>′<sub>2</sub>/(1 − <i>β</i>); for <i>D</i> &lt; 71.12 mm add 0.011·(0.75 − <i>β</i>)·(2.8 − <i>D</i>/25.4 mm).</li>
+          <li><b>Expansibility</b> (gas; ISO 5167-2 Eq. 5): <i>ε</i> = 1 − (0.351 + 0.256·<i>β</i><sup>4</sup> + 0.93·<i>β</i><sup>8</sup>)·[1 − (<i>p</i><sub>2</sub>/<i>p</i><sub>1</sub>)<sup>1/<i>κ</i></sup>], with <i>p</i><sub>2</sub> at the downstream tap; liquids <i>ε</i> = 1.</li>
+          <li><b>Permanent loss</b> (ISO 5167-2 Eq. 7): Δ<i>ϖ</i>/Δ<i>p</i> = (√(1 − <i>β</i><sup>4</sup>·(1 − <i>C</i><sup>2</sup>)) − <i>C</i>·<i>β</i><sup>2</sup>)/(√(1 − <i>β</i><sup>4</sup>·(1 − <i>C</i><sup>2</sup>)) + <i>C</i>·<i>β</i><sup>2</sup>); the orifice is sized for Δ<i>ϖ</i> = <i>P</i><sub>1</sub> − <i>P</i><sub>2</sub>.</li>
+          <li><b>Critical gas flow</b> when <i>r</i> = <i>P</i><sub>2</sub>/<i>P</i><sub>1</sub> ≤ <i>r</i><sub>c</sub>, from <i>r</i><sub>c</sub><sup>(1 − <i>κ</i>)/<i>κ</i></sup> + ((<i>κ</i> − 1)/2)·<i>β</i><sup>4</sup>·<i>r</i><sub>c</sub><sup>2/<i>κ</i></sup> = (<i>κ</i> + 1)/2 (≈ (2/(<i>κ</i> + 1))<sup><i>κ</i>/(<i>κ</i> − 1)</sup> for small <i>β</i>):<br />
+            <i>q</i><sub>m</sub> = <i>C</i><sub>d</sub>·(π/4)·<i>d</i><sup>2</sup>·√(<i>κ</i>·<i>ρ</i><sub>1</sub>·<i>P</i><sub>1</sub>·(2/(<i>κ</i> + 1))<sup>(<i>κ</i> + 1)/(<i>κ</i> − 1)</sup>) (Perry's Handbook, Eq. 10-26). A sharp-edged orifice is never fully choked: <i>C</i><sub>d</sub> rises from about 0.75 at <i>r</i><sub>c</sub> to 0.84 at <i>r</i> → 0 (Perry, p. 10-16); fit used: <i>C</i><sub>d</sub> = 0.6225·<i>r</i><sup>3</sup> − 1.0476·<i>r</i><sup>2</sup> + 0.1989·<i>r</i> + 0.8361.</li>
+          <li><b>Choked liquid</b> (cavitating or flashing), when smaller than the unchoked flow: <i>q</i><sub>m</sub> = 0.6·(π/4)·<i>d</i><sup>2</sup>/√(1 − <i>β</i><sup>4</sup>)·√(2·<i>ρ</i><sub>1</sub>·(<i>P</i><sub>1</sub> − <i>p</i><sub>v</sub>)).</li>
+          <li><b>Sizing</b> solves these equations for <i>d</i> (iteratively, <i>C</i> depends on <i>Re</i><sub>D</sub> and <i>β</i>); <b>rating</b> solves them for <i>q</i><sub>m</sub>.</li>
+        </ol>
+      </details>
+      <details class="basis">
+        <summary>Notes</summary>
+        <ol>
+          <li>For single-phase vapour or liquid at the inlet, unchoked or choked; not for two-phase inlet flow.</li>
+          <li>Choked flow: the mass flow no longer rises when the downstream pressure falls further at fixed upstream pressure. For an ideal gas through a nozzle this happens at Mach 1, at <i>P</i><sub>2</sub>/<i>P</i><sub>1</sub> = (2/(<i>κ</i> + 1))<sup><i>κ</i>/(<i>κ</i> − 1)</sup>; real gases through thin-plate orifices are never fully choked.</li>
+          <li>For liquids, the limit (cavitating or choked flow) is reached when the pressure at the vena contracta falls below the vapour pressure; flashing when <i>P</i><sub>2</sub> &lt; <i>p</i><sub>v</sub>.</li>
+          <li>ISO 5167-2 limits: 0.10 ≤ β ≤ 0.75, <i>d</i> ≥ 12.5 mm, 50 ≤ <i>D</i> ≤ 1000 mm, <i>Re</i><sub>D</sub> ≥ 5000 (β ≤ 0.56) or ≥ 16000·β²; restriction orifices often fall outside (small bores, choked flow), where the result is a good estimate rather than a measurement-grade value.</li>
+          <li>No allowance for thermal expansion of the plate between drilling and operating temperature (not significant for a restriction orifice).</li>
+          <li>Downstream velocity assumes the same phase as upstream (no flashing); Mach number assumes the upstream temperature.</li>
+          <li>Flow through a drain or vent hole in the plate is neglected.</li>
+          <li>Coefficients hold for thin, sharp, square-edged plates; see the side notes for thick plates and rounded edges.</li>
+        </ol>
+      </details>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { rate, size, limits, cdThickness, cdRounded, gasDensity, type Input, type Result } from '../lib/calc/ro';
+  import { liquidCv, gasCv, kvFromCv } from '../lib/calc/cv';
+  import { pipe, id as pipeId, schedulesFor, type Schedule } from '../lib/calc/pipes';
+  import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig, type Unit } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+
+  const Q = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
+  const L = (pairs: [string, number][]): Unit[] => pairs.map(([label, f]) => ({ label, f }));
+  const LEN = L([['mm', 1e-3], ['m', 1], ['in', 0.0254]]);
+  const DP = L([['bar', 1e5], ['kPa', 1e3], ['psi', 6894.757293168], ['kg/cm²', 98066.5]]);
+  const VEL = L([['m/s', 1], ['ft/s', 0.3048]]);
+  const VF = Q('vflow');
+  const LISTS: Record<string, Unit[]> = {
+    w: Q('mflow'), d: LEN, D: LEN, p1: Q('pressure'), p2: Q('pressure'), pv: Q('pressure'), pc: Q('pressure'), pvc: Q('pressure'),
+    t: Q('temp'), rho: Q('density'), rhog: Q('density'), mu: Q('mu'), dp: DP, dpt: DP,
+    q: VF, v1: VF, v2: VF, vs: VF.map((u) => ({ label: `Std ${u.label}`, f: u.f })), u1: VEL, u2: VEL,
+  };
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const REG: Record<string, string> = { unchoked: 'Unchoked (ISO 5167)', critical: 'Critical (choked) gas flow', 'choked-liquid': 'Choked liquid flow (cavitating)' };
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-ro]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const sel = (k: string) => root.querySelector<HTMLSelectElement>(`select[data-u="${k}"]`);
+    const unit = (k: string) => (LISTS[k] ?? []).find((u) => u.label === sel(k)?.value) ?? { label: '', f: 1 };
+    const nps = $<HTMLSelectElement>('select[data-s="nps"]'), sched = $<HTMLSelectElement>('select[data-s="sched"]');
+    let mode: 'size' | 'rate' = 'size';
+    let phase: 'gas' | 'liquid' = 'gas';
+    const mem: Record<string, Record<string, [string, string]>> = JSON.parse(root.dataset.phaseDef!);
+    let bad = false;
+    const read = (k: string, ok: (x: number) => boolean) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value), x = blank ? NaN : LISTS[k] ? toSI(unit(k), raw) : raw;
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      if (invalid) bad = true;
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, v: number | string | undefined, conv = true) => {
+      const o = $<HTMLOutputElement>(`output[data-o="${k}"]`);
+      if (typeof v === 'string') { o.textContent = v; return; }
+      o.textContent = v === undefined || !Number.isFinite(v) ? (bad ? '—' : '') : fmt(conv && LISTS[k] ? fromSI(unit(k), v) : v);
+    };
+    const pos = (x: number) => x > 0;
+
+    const setMode = (m: 'size' | 'rate', announce = false) => {
+      mode = m;
+      for (const b of root.querySelectorAll<HTMLButtonElement>('[data-mode]')) b.setAttribute('aria-checked', String(b.dataset.mode === m));
+      const given = m === 'size' ? 'w' : 'd', calc = m === 'size' ? 'd' : 'w';
+      inp(given).classList.remove('calcd'); inp(calc).classList.add('calcd');
+      $(`[data-tag="${given}"]`).textContent = 'input'; $(`[data-tag="${calc}"]`).textContent = 'calculated';
+      $('[data-mode-note]').innerHTML = m === 'size'
+        ? 'Sizing: type the mass flow, the orifice bore is calculated. Typing a bore switches to rating.'
+        : 'Rating: type the orifice bore, the mass flow is calculated. Typing a mass flow switches to sizing.';
+      if (announce) $('[data-status]').textContent = m === 'size' ? 'Sizing: orifice diameter is calculated.' : 'Rating: flow rate is calculated.';
+    };
+    const setPhase = (p: 'gas' | 'liquid') => {
+      if (p !== phase) for (const k of ['w', 'mu']) { mem[phase][k] = [inp(k).value, sel(k)!.value]; [inp(k).value, sel(k)!.value] = mem[p][k]; }
+      phase = p;
+      for (const b of root.querySelectorAll<HTMLButtonElement>('[data-phase-btn]')) b.setAttribute('aria-checked', String(b.dataset.phaseBtn === p));
+      for (const el of root.querySelectorAll<HTMLElement>('[data-phase]')) el.hidden = el.dataset.phase !== p;
+    };
+    const fillSchedules = () => {
+      const cur = sched.value, list = schedulesFor(nps.value);
+      sched.replaceChildren(...list.map((s) => new Option(s, s)), new Option('own ID', 'own'));
+      sched.value = cur === 'own' ? 'own' : list.includes(cur as Schedule) ? cur : list.includes('40') ? '40' : list.includes('STD') ? 'STD' : list[0];
+    };
+
+    const run = () => {
+      bad = false;
+      const gas = phase === 'gas';
+      const own = sched.value === 'own', dIn = inp('D');
+      dIn.readOnly = !own; dIn.classList.toggle('calcd', !own);
+      let D: number;
+      if (own) D = read('D', pos);
+      else { const p = pipe(nps.value, sched.value as Schedule); D = p ? pipeId(p) * 0.0254 : NaN; dIn.removeAttribute('aria-invalid'); dIn.value = Number.isFinite(D) ? fmt(fromSI(unit('D'), D)) : ''; }
+      const p1 = read('p1', pos), p2 = read('p2', pos);
+      const pOk = Number.isFinite(p1) && Number.isFinite(p2) && p2 < p1;
+      if (Number.isFinite(p1) && Number.isFinite(p2) && !pOk) { inp('p2').setAttribute('aria-invalid', ''); bad = true; }
+      show('dp', pOk ? p1 - p2 : undefined); show('r', pOk ? p2 / p1 : undefined, false);
+      const mu = read('mu', pos);
+      let inp0: Input | undefined;
+      if (gas) {
+        const g = { mw: read('mw', pos), z: read('z', pos), t: read('t', pos), k: read('k', (x) => x > 1 && x < 2) };
+        const ok = Object.values(g).every(Number.isFinite);
+        show('rhog', ok && Number.isFinite(p1) ? gasDensity(p1, g) : undefined);
+        if (ok && pOk && Number.isFinite(D) && Number.isFinite(mu)) inp0 = { D, p1, p2, mu, gas: g };
+      } else {
+        const rho = read('rho', pos), pv = read('pv', (x) => x >= 0);
+        if (Number.isFinite(rho) && Number.isFinite(pv) && pOk && Number.isFinite(D) && Number.isFinite(mu)) inp0 = { D, p1, p2, mu, rho, pv };
+      }
+      const given = mode === 'size' ? 'w' : 'd', calc = mode === 'size' ? 'd' : 'w';
+      const gv = read(given, pos);
+      inp(calc).removeAttribute('aria-invalid');
+      let r: Result | undefined, fail = '';
+      if (inp0 && Number.isFinite(gv)) {
+        if (mode === 'size') { r = size(inp0, gv); if (!r) fail = 'No bore can pass this flow at these pressures in this pipe (larger line, or higher pressure drop).'; }
+        else if (gv >= D) { inp('d').setAttribute('aria-invalid', ''); bad = true; }
+        else r = rate(inp0, gv);
+      }
+      inp(calc).value = r ? fmt(fromSI(unit(calc), mode === 'size' ? r.d : r.w)) : bad || fail ? '—' : '';
+
+      show('beta', r?.beta, false); show('reg', r ? REG[r.regime] : bad ? '—' : ''); show('c', r?.c, false); show('eps', r?.eps, false);
+      show('rc', r?.rc, false); show('red', r?.reD, false); show('reo', r?.red, false);
+      show('q', r ? r.w / r.rho1 : undefined); show('v1', r ? r.w / r.rho1 : undefined);
+      show('v2', r && pOk ? r.w / r.rho1 * p1 / p2 : undefined);
+      const g = inp0?.gas;
+      show('vs', r && g ? r.w / (g.mw / 1000) * 8.314462618 * 293.15 / 101325 : undefined);
+      show('dpt', r?.dpTap); show('lr', r?.ratio, false); show('pvc', r?.pVc);
+      const A = Math.PI * D * D / 4;
+      const u1 = r ? r.w / (r.rho1 * A) : undefined, u2 = r && u1 !== undefined ? (g ? u1 * p1 / p2 : u1) : undefined;
+      show('u1', u1); show('u2', u2);
+      show('ma', u2 !== undefined && g ? u2 / Math.sqrt(g.k * 8314.462618 * g.t * g.z / g.mw) : undefined, false);
+
+      // side notes
+      const t = read('pt', (x) => x >= 0), er = read('er', (x) => x >= 0);
+      const dmm = r ? r.d * 1000 : NaN;
+      show('td', Number.isFinite(t / dmm) ? t / dmm : undefined, false);
+      show('cdt', Number.isFinite(t / dmm) ? cdThickness(t / dmm) : undefined, false);
+      show('cdr', Number.isFinite(er / dmm) ? cdRounded(er / dmm) : undefined, false);
+      const fl = read('fl', (x) => x > 0 && x <= 1), xt = read('xt', (x) => x > 0 && x <= 1), pc = read('pc', pos);
+      let cv: number | undefined;
+      if (r && inp0) {
+        const wh = r.w * 3600;
+        if (g && Number.isFinite(xt)) cv = gasCv({ w: wh, p1: p1 / 1e5, p2: p2 / 1e5, mw: g.mw, t: g.t, z: g.z, k: g.k }, xt).cv;
+        if (!g && Number.isFinite(fl) && Number.isFinite(pc)) cv = liquidCv({ w: wh, p1: p1 / 1e5, p2: p2 / 1e5, rho: inp0.rho!, pv: inp0.pv! / 1e5, pc: pc / 1e5 }, fl).cv;
+      }
+      show('cv', cv, false); show('kv', cv !== undefined ? kvFromCv(cv) : undefined, false);
+
+      const warn: string[] = [];
+      if (fail) warn.push(fail);
+      if (r) {
+        const lim = limits(r, D);
+        if (lim.length) warn.push(`Outside ISO 5167-2 limits of use: ${lim.join('; ')}. Usual for restriction orifices; treat the result as an estimate.`);
+        if (r.beta > 0.75) warn.push('β above 0.75: consider a smaller line at the orifice, or a multi-hole / multi-stage orifice.');
+        if (r.d < 0.003) warn.push('Bore under 3 mm: small holes block easily (rust, scale); consider several orifices in series.');
+        if (!g && inp0?.pv !== undefined && r.pVc < inp0.pv && r.regime !== 'choked-liquid') warn.push('Pressure at the vena contracta is below the vapour pressure: cavitation.');
+        if (!g && inp0?.pv !== undefined && p2 < inp0.pv) warn.push('Downstream pressure below the vapour pressure: the liquid flashes; check the downstream line as two-phase.');
+        const ma = u2 !== undefined && g ? u2 / Math.sqrt(g.k * 8314.462618 * g.t * g.z / g.mw) : 0;
+        if (ma > 0.7) warn.push(`Downstream Mach ${fmt(ma)}: the downstream pipe may limit the flow, and noise is likely; consider a larger outlet line.`);
+        if (r.regime === 'critical') warn.push('Critical flow: noise and vibration are likely at large pressure ratios; a multi-stage orifice spreads the drop.');
+      }
+      $('[data-warn]').innerHTML = warn.map((x) => `<li>${x}</li>`).join('');
+    };
+
+    root.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (!t.matches('input[type=text]')) return;
+      const k = t.dataset.k;
+      if (k === 'w' && mode !== 'size') setMode('size', true);
+      if (k === 'd' && mode !== 'rate') setMode('rate', true);
+      run();
+    });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLElement;
+      if (t === nps) fillSchedules();
+      if (t === sched && sched.value === 'own') inp('D').focus();
+      if (t.matches('select')) run();
+    });
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-mode]')) b.addEventListener('click', () => { setMode(b.dataset.mode as 'size' | 'rate', true); run(); });
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-phase-btn]')) b.addEventListener('click', () => { setPhase(b.dataset.phaseBtn as 'gas' | 'liquid'); run(); });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]:not([readonly])')) el.value = '';
+      for (const ph of Object.values(mem)) for (const k of ['w', 'mu']) ph[k][0] = '';
+      run(); inp(mode === 'size' ? 'w' : 'd').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    setPhase('gas'); setMode('size'); run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  h3 { margin: 0.75rem 0 0.25rem; font-size: 0.9375rem; font-weight: 650; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .lb { margin-right: 0.625rem; }
+  .calc :global(.eq), .basis :global(span) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 44rem; }
+  .io .v { width: 9.5rem; }
+  .io .u { width: 8.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io .u :global(select) { max-width: 8.5rem; }
+  tr.txt :global(output) { background: none; padding-left: 0; font-weight: 600; white-space: normal; height: auto; }
+  [hidden] { display: none !important; }
+  .calc :global(input), .calc :global(output), select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input.calcd) { background: var(--zoho-out); border-color: transparent; }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  select:focus { outline: 2px solid var(--line); outline-offset: 1px; }
+
+  .switches { display: flex; flex-wrap: wrap; gap: 0.75rem 2rem; }
+  .seg { display: inline-flex; align-items: stretch; flex-wrap: wrap; gap: 0; }
+  .seg-l { align-self: center; margin-right: 0.625rem; font-weight: 600; font-size: 0.9375rem; }
+  .seg button { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: #fff; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; }
+  .seg button + button { border-left: 0; }
+  .seg button[aria-checked='true'] { background: var(--line); color: var(--paper); }
+  .seg button[aria-checked='true'] .muted { color: var(--paper); opacity: 0.85; }
+  .seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .seg .muted { color: var(--muted); font-weight: 400; }
+  .tag { display: inline-block; margin-left: 0.25rem; padding: 0 0.375rem; border: 1px solid var(--rule); color: var(--muted); font-size: 0.6875rem; line-height: 1.25rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 44rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 44rem; }
+  .basis { margin-top: 0.5rem; max-width: 52rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .basis :global(span) { white-space: normal; }
+  .basis i, .basis :global(i) { font-style: italic; }
+  .basis sup, .basis sub { font-size: 0.75em; line-height: 0; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .io .v { width: 7rem; }
+    .io .u { width: 6.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+    .seg-l { grid-column: 1 / -1; margin: 0 0 0.25rem; }
+    .seg button { padding-inline: 0.5rem; height: auto; min-height: 2.5rem; line-height: 1.2; }
+  }
+</style>

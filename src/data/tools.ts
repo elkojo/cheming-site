@@ -163,9 +163,10 @@ export const tools: Tool[] = [
     "tag": "RO",
     "title": "RO",
     "name": "Restriction Orifice",
-    "description": "Restriction orifice bore for a given flow, or flow for a given bore, for vapour or liquid, with discharge-coefficient corrections for plate thickness and edge radius.",
-    "standard": "BS EN ISO 5167-1:2003; Cd per Ward-Smith (1979)",
+    "description": "Restriction orifice sizing (bore for a flow) or rating (flow for a bore) for vapour or liquid: ISO 5167-2 unchoked flow, critical gas and choked liquid flow, vena contracta and recovery, equivalent valve Cv, and the full calculation basis.",
+    "standard": "ISO 5167-1/-2:2003; critical flow per Perry's Handbook",
     "category": "piping",
+    "native": "ro",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/c5cb6f2f1092e2eef77ffb31340b6a93e548baa2424549c3abe4fd610191e275?type=grid&mode=embed"
   },
   {

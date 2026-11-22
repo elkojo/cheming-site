@@ -15,6 +15,7 @@ import PropertiesCalc from '../components/PropertiesCalc.astro';
 import PressureLoss1PCalc from '../components/PressureLoss1PCalc.astro';
 import TwoPhaseCalc from '../components/TwoPhaseCalc.astro';
 import CVCalc from '../components/CVCalc.astro';
+import ROCalc from '../components/ROCalc.astro';
 import SourceList from '../components/SourceList.astro';
 import { tools, categories } from '../data/tools';
 import { url } from '../lib/url';
@@ -64,6 +65,7 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
       : tool.native === 'pressurenc' ? <PressureLoss1PCalc mode="noncircular" />
       : tool.native === 'twophase' ? <TwoPhaseCalc />
       : tool.native === 'cv' ? <CVCalc />
+      : tool.native === 'ro' ? <ROCalc />
       : tool.native ? <NativeCalc id={tool.native} title={tool.title} />
       : <ZohoEmbed src={tool.zoho} title={tool.title} />}
   </div>

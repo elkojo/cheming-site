@@ -167,7 +167,7 @@ export const sources: Source[] = [
     url: 'https://pypi.org/project/fluids/',
     archive: 'https://web.archive.org/web/20260414063257/https://pypi.org/project/fluids/',
     read: '2026-11-22',
-    use: { cv: 'Independent check of the IEC 60534-2-1 liquid and gas sizing (size_control_valve_l, size_control_valve_g): agreement within 0.3 % (rounded handbook constants).', 'pressure-loss-two-phase': 'Independent checks: Churchill friction factor (1e-12), Chisholm with all B branches and Friedel (within 1 %; fluids uses the Colebrook friction factor), Rouhani–Axelsson void fraction (1e-12); pipe table as for Single Phase.', 'pressure-loss-single-phase': 'Schedule tables (after ASME B36.10M/B36.19M, in mm): the main source of the pipe table, checked against the ToolBox and Wikipedia. Independent check of the Colebrook solution (agrees to 1e-10) and of the API RP 14E formula.' },
+    use: { ro: 'Independent check of the ISO 5167 orifice equations (C_Reader_Harris_Gallagher, orifice_expansibility, dP_orifice, differential_pressure_meter_solver): agreement within 1e-6.', cv: 'Independent check of the IEC 60534-2-1 liquid and gas sizing (size_control_valve_l, size_control_valve_g): agreement within 0.3 % (rounded handbook constants).', 'pressure-loss-two-phase': 'Independent checks: Churchill friction factor (1e-12), Chisholm with all B branches and Friedel (within 1 %; fluids uses the Colebrook friction factor), Rouhani–Axelsson void fraction (1e-12); pipe table as for Single Phase.', 'pressure-loss-single-phase': 'Schedule tables (after ASME B36.10M/B36.19M, in mm): the main source of the pipe table, checked against the ToolBox and Wikipedia. Independent check of the Colebrook solution (agrees to 1e-10) and of the API RP 14E formula.' },
   },
   {
     id: 'colebrook-1939', by: 'C. F. Colebrook', title: 'Turbulent flow in pipes, with particular reference to the transition region between the smooth and rough pipe laws',
@@ -256,7 +256,7 @@ export const sources: Source[] = [
     url: 'https://docs.ufpr.br/~gazda/valmason.pdf',
     archive: 'https://web.archive.org/web/20261122113735/https://docs.ufpr.br/~gazda/valmason.pdf',
     read: '2026-11-22',
-    use: { cv: 'Basis of the original sheet: liquid sizing with N6 = 27.3, choked flow at FL²·(p1 − FF·pv), FF = 0.96 − 0.28·√(pv/pc); gas sizing with Y = 1 − x/(3·Fk·xT) and N8 = 94.8 (ISA S75.01 / IEC 534-2), used here instead of the sheet\'s older Cf method (owner\'s choice); Kv = 0.865·Cv.' },
+    use: { ro: 'Equivalent control-valve Cv of the orifice (IEC method, as in the CV tool).', cv: 'Basis of the original sheet: liquid sizing with N6 = 27.3, choked flow at FL²·(p1 − FF·pv), FF = 0.96 − 0.28·√(pv/pc); gas sizing with Y = 1 − x/(3·Fk·xT) and N8 = 94.8 (ISA S75.01 / IEC 534-2), used here instead of the sheet\'s older Cf method (owner\'s choice); Kv = 0.865·Cv.' },
   },
   {
     id: 'masoneilan-2022', by: 'Baker Hughes (Masoneilan)', title: 'Masoneilan Control Valve Sizing Handbook, GEA19540A, Rev. C',
@@ -272,13 +272,31 @@ export const sources: Source[] = [
     url: 'http://www.documentation.emersonprocess.com/groups/public/documents/book/cvh99.pdf',
     archive: 'https://web.archive.org/web/20160303181623/http://www.documentation.emersonprocess.com/groups/public/documents/book/cvh99.pdf',
     read: '2026-11-22',
-    use: { cv: 'Representative Cv, FL and xT at rated travel by size for single-port globe (equal percentage, linear), V-notch ball and high-performance butterfly valves: the valve-style data and size suggestion (replacing the sheet\'s unsourced typical table).' },
+    use: { ro: 'Default FL and xT of the equivalent-valve comparison (1″ single-port globe, equal percentage).', cv: 'Representative Cv, FL and xT at rated travel by size for single-port globe (equal percentage, linear), V-notch ball and high-performance butterfly valves: the valve-style data and size suggestion (replacing the sheet\'s unsourced typical table).' },
   },
   {
     id: 'api-521', by: 'American Petroleum Institute', title: 'API Standard 521 / ISO 23251: Pressure-relieving and Depressuring Systems, 5.10 Failure of automatic controls',
     where: 'American Petroleum Institute, 5th ed.', year: 2007,
     read: '2026-11-22',
     use: { cv: 'Failed-open relief case (5.10.2–5.10.4): one inlet valve fully open regardless of its failure position, relieving rate = maximum inlet flow − normal outlet flow, bypass and limit-stop rules, gas blow-through on loss of level.' },
+  },
+  {
+    id: 'iso-5167-2003', by: 'ISO', title: 'ISO 5167-1:2003 and ISO 5167-2:2003, Measurement of fluid flow by means of pressure differential devices inserted in circular cross-section conduits running full: Part 1 General principles; Part 2 Orifice plates',
+    where: 'International Organization for Standardization, Geneva (also BS EN ISO 5167-1/-2:2003)', year: 2003,
+    read: '2026-11-22',
+    use: { ro: 'Flow equation (Part 1 Eq. 1), Reader–Harris/Gallagher discharge coefficient with flange tappings (Part 2 Eq. 4, small-pipe term), expansibility (Eq. 5), permanent pressure loss (Eq. 7) and limits of use (5.3.1); replaces the 1991 equations of the original sheet (owner\'s choice).' },
+  },
+  {
+    id: 'perry-7-10', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 10 (Transport and Storage of Fluids): flow measurement, orifice meters',
+    where: 'McGraw-Hill, New York, pp. 10-15 to 10-16', year: 1997,
+    read: '2026-11-22',
+    use: { ro: 'Critical flow through a sharp-edged orifice (Eq. 10-26): discharge coefficient rising from about 0.75 at the critical ratio to 0.84 at p2/p1 → 0 (Grace and Lapple; Benedict), which the original sheet\'s Cd fit follows; expansion factor Eq. 10-29 (the 1991 form used by the sheet).' },
+  },
+  {
+    id: 'ward-smith-1979', by: 'A. J. Ward-Smith', title: 'Critical flowmetering: the characteristics of cylindrical nozzles with sharp upstream edges',
+    where: 'International Journal of Heat and Fluid Flow, vol. 1, no. 3, pp. 123–132', year: 1979,
+    read: '2026-11-22',
+    use: { ro: 'Discharge coefficient of choked thick plates against t/d (side note, as quoted on the original sheet; the paper itself was not accessible).' },
   },
   // ── pure-component properties ──
   {
