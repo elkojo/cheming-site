@@ -1,0 +1,417 @@
+---
+// Native PED calculator (Phase 7): category and conformity-assessment modules under the Pressure Equipment Directive
+// 2014/68/EU. Simple by the owner's wish (2026-11-24): equipment, fluid and design data in one block; the result is
+// the category in large type, the Annex II table drawn live with the design point, and the modules allowed.
+import SegToggle from './SegToggle.astro';
+import { mathHtml } from '../lib/calc/types';
+import { quantity, DEFAULT_SETTINGS } from '../lib/calc/units';
+import { DN_NPS } from '../lib/calc/ped';
+
+const id = (k: string) => `ped-${k}`;
+const all = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
+const P_UNITS = ['bar (G)', 'kPa (G)', 'MPa (G)', 'psi (G)', 'kg/cm² (G)'];
+const V_UNITS = ['L', 'm³', 'mL', 'US gal', 'UK gal', 'ft³'];
+const pOpts = P_UNITS.map((l) => all('pressure').find((u) => u.label === l)!);
+const vOpts = V_UNITS.map((l) => all('volume').find((u) => u.label === l)!);
+const name = (label: string, sym: string) => `<span class="lb">${label}</span> <span class="eq">${mathHtml(sym)}</span>`;
+---
+<div class="calc ped" data-ped>
+  <div class="bar">
+    <p>Finds the category of pressure equipment under the Pressure Equipment Directive 2014/68/EU and the conformity-assessment modules allowed for it. PS is the maximum allowable pressure, a gauge pressure.</p>
+    <button type="button" class="reset" data-reset>Clear all inputs</button>
+  </div>
+
+  <section class="grp" aria-labelledby={id('in')}>
+    <h2 id={id('in')}>Equipment and fluid</h2>
+    <div class="switches">
+      <SegToggle label="Equipment" name="equip" value="piping" options={[{ value: 'vessel', label: 'Vessel' }, { value: 'piping', label: 'Piping' }, { value: 'steam', label: 'Steam generator' }, { value: 'acc', label: 'Accessory' }]} />
+      <div data-show="acc"><SegToggle label="Accessory" name="acc" value="pressAcc" options={[{ value: 'pressAcc', label: 'Pressure accessory' }, { value: 'safetyAcc', label: 'Safety accessory' }]} /></div>
+    </div>
+    <p class="note" data-eqnote></p>
+    <div class="switches" data-show="fluid">
+      <SegToggle label="Fluid" name="phase" value="gas" options={[{ value: 'gas', label: 'Gas or vapour' }, { value: 'liquid', label: 'Liquid' }]} />
+      <SegToggle label="Group" name="group" value="2" options={[{ value: '1', label: 'Group 1', hint: '(dangerous)' }, { value: '2', label: 'Group 2', hint: '(all others)' }]} />
+    </div>
+    <p class="note" data-show="fluid">"Liquid" only when its vapour pressure at the maximum allowable temperature is at most 0.5 bar above atmospheric; otherwise choose "Gas or vapour". Group 1 also applies to any fluid kept above its flash point.</p>
+    <details class="ref" data-show="fluid">
+      <summary>Which fluids are Group 1? (Article 13)</summary>
+      <p>Substances and mixtures classified under the CLP Regulation (EC) No 1272/2008 as:</p>
+      <ul class="cols">
+        <li>unstable explosives, explosives of divisions 1.1–1.5</li>
+        <li>flammable gases, category 1 and 2</li>
+        <li>oxidising gases, category 1</li>
+        <li>flammable liquids, category 1 and 2</li>
+        <li>flammable liquids, category 3, where the maximum allowable temperature is above the flash point</li>
+        <li>flammable solids, category 1 and 2</li>
+        <li>self-reactive substances and mixtures, type A to F</li>
+        <li>pyrophoric liquids and solids, category 1</li>
+        <li>substances that emit flammable gases in contact with water, category 1–3</li>
+        <li>oxidising liquids and solids, category 1–3</li>
+        <li>organic peroxides, type A to F</li>
+        <li>acute toxicity: oral and dermal category 1 and 2, inhalation category 1–3</li>
+        <li>specific target organ toxicity, single exposure, category 1</li>
+      </ul>
+      <p>Group 1 also covers substances and mixtures in equipment whose maximum allowable temperature TS exceeds their flash point. Group 2: all other fluids, including steam and water.</p>
+    </details>
+
+    <table class="io">
+      <tbody>
+        <tr data-row="ps">
+          <th scope="row"><label for={id('ps')} set:html={name('Maximum allowable pressure', 'PS')} /></th>
+          <td class="v"><input id={id('ps')} data-k="ps" value="40" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+          <td class="u"><select data-cat="p" aria-label="Pressure unit">{pOpts.map((u) => <option selected={u.label === 'bar (G)'}>{u.label}</option>)}</select></td>
+        </tr>
+        <tr data-row="v">
+          <th scope="row"><label for={id('v')} set:html={name('Volume', 'V')} /></th>
+          <td class="v"><input id={id('v')} data-k="v" value="7000" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+          <td class="u"><select data-cat="v" aria-label="Volume unit">{vOpts.map((u) => <option selected={u.label === 'L'}>{u.label}</option>)}</select></td>
+        </tr>
+        <tr data-row="dn">
+          <th scope="row"><label for={id('dn')} set:html={name('Nominal size', 'DN')} /></th>
+          <td class="v"><input id={id('dn')} data-k="dn" value="80" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" list={id('dns')} /><datalist id={id('dns')}>{DN_NPS.map(([d, n]) => <option value={d}>{`NPS ${n}`}</option>)}</datalist></td>
+          <td class="u"><span data-nps></span></td>
+        </tr>
+        <tr data-row="pv">
+          <th scope="row"><span class="lb">Product</span> <span class="eq" data-pvsym></span></th>
+          <td class="v"><output data-o="pv"></output></td>
+          <td class="u"><span data-pvunit></span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="switches" data-show="exc">
+      <SegToggle label="" name="exc" value="0" options={[{ value: '0', label: 'No' }, { value: '1', label: 'Yes' }]} />
+    </div>
+  </section>
+
+  <section class="grp" aria-labelledby={id('res')}>
+    <h2 id={id('res')}>Result</h2>
+    <div class="result" data-result aria-live="polite">
+      <p class="cat" data-cat-out></p>
+      <p class="sub" data-sub></p>
+    </div>
+    <button type="button" class="sk" data-zoom aria-haspopup="dialog" aria-label="Enlarge the Annex II table">
+      <span class="skimg" data-chart role="img" aria-label="Annex II conformity assessment table with the categories and the design point"></span>
+      <span class="zoom" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 10l4 4M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" stroke-width="1.5"/></svg>
+        Enlarge
+      </span>
+    </button>
+    <div data-modules></div>
+    <ul class="warn" data-warn aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('basis')}>
+    <h2 id={id('basis')}>Calculation basis</h2>
+    <details class="basis">
+      <summary>Scope limits (Article 4(1)); below them, sound engineering practice (Article 4(3))</summary>
+      <ul>
+        <li><b>Vessels, gas or vapour</b>: group 1 above V 1 L and PS·V 25 bar·L, or PS above 200 bar (Table 1); group 2 above V 1 L and PS·V 50 bar·L, or PS above 1 000 bar, and all portable extinguishers and bottles for breathing apparatus (Table 2).</li>
+        <li><b>Vessels, liquid</b>: group 1 above V 1 L and PS·V 200 bar·L, or PS above 500 bar (Table 3); group 2 above PS 10 bar and PS·V 10 000 bar·L, or PS above 1 000 bar (Table 4).</li>
+        <li><b>Fired or otherwise heated equipment</b> generating steam or water above 110 °C, V above 2 L, and all pressure cookers (Table 5).</li>
+        <li><b>Piping, gas or vapour</b>: group 1 above DN 25 (Table 6); group 2 above DN 32 and PS·DN 1 000 bar (Table 7).</li>
+        <li><b>Piping, liquid</b>: group 1 above DN 25 and PS·DN 2 000 bar (Table 8); group 2 above PS 10 bar, DN 200 and PS·DN 5 000 bar (Table 9).</li>
+        <li>Equipment with PS at most 0.5 bar is outside the directive. Sound engineering practice: designed and made to the good practice of a Member State, with instructions for use, <b>no CE marking</b>.</li>
+      </ul>
+    </details>
+    <details class="basis">
+      <summary>Notes</summary>
+      <ol>
+        <li>The lines in the tables are the upper limit of each category (Annex II point 4): a value exactly on a line belongs to the lower category.</li>
+        <li>A vessel with several chambers takes the highest category of its chambers; a chamber with several fluids is classified by the fluid needing the highest category (Article 13(2)).</li>
+        <li>Pressure accessories use the vessel table on V and the piping table on DN; when both apply, the higher category counts (Annex II point 3). Safety accessories are category IV, or the category of the equipment they are made for (point 2).</li>
+        <li>The manufacturer chooses any module of the category, or one of a higher category (Article 14(3)).</li>
+        <li>Assemblies (Article 4(2)) are assessed as a whole on top of their parts (Article 14(6)); not covered here.</li>
+        <li>The directive's tables did not change from 97/23/EC to 2014/68/EU; the module names did (e.g. A1 → A2, C1 → C2, B1 → B design type).</li>
+      </ol>
+    </details>
+  </section>
+  <p class="sr" aria-live="polite" data-status></p>
+
+  <dialog class="zd" aria-labelledby={id('zd-title')}>
+    <div class="zhead">
+      <h2 id={id('zd-title')} data-zd-title>Annex II table</h2>
+      <button type="button" class="zclose" data-zd-close aria-label="Close">
+        <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <div class="zimg" data-zd-img></div>
+  </dialog>
+</div>
+
+<script>
+  import { classify, categoryOf, isDN, LINES, EXCEPTION, MODULES, MODULES_FOR, TABLE_TITLE, DN_NPS, tableFor, type Equip, type Phase, type Group, type Cat, type PedResult } from '../lib/calc/ped';
+  import { quantity, DEFAULT_SETTINGS, toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+  const all = (q: string) => quantity(q).units(DEFAULT_SETTINGS);
+  const CAT_NAME: Record<Cat, string> = { out: 'Outside the directive', SEP: 'Sound engineering practice', I: 'Category I', II: 'Category II', III: 'Category III', IV: 'Category IV' };
+  const FILL: Record<Cat, string> = { out: '#ffffff', SEP: '#f3f3f0', I: '#e3e3de', II: '#d0d0ca', III: '#b9b9b2', IV: '#9e9e97' };
+
+  // ── Annex II table chart: log PS against log V or DN, regions filled from the classification itself ──
+  function chart(table: number, ps: number, x: number, W: number): string {
+    const dn = isDN(table);
+    const x0 = dn ? 1 : 0.1, x1 = dn ? 1e5 : 1e5, y0 = 0.1, y1 = 1e4;
+    const ML = 54, MR = 26, MT = 14, MB = 44, H = Math.round(Math.min(440, Math.max(260, W * 0.62)));
+    const pw = W - ML - MR, ph = H - MT - MB;
+    const lx = Math.log10(x0), ux = Math.log10(x1), ly = Math.log10(y0), uy = Math.log10(y1);
+    const X = (v: number) => ML + (Math.log10(v) - lx) / (ux - lx) * pw;
+    const Y = (v: number) => MT + (uy - Math.log10(v)) / (uy - ly) * ph;
+    const n = (v: number) => v.toFixed(1);
+    const P: string[] = [];
+    // fill: runs of equal category per row of small cells
+    const nx = Math.round(pw / 3), ny = Math.round(ph / 3), cw = pw / nx, chh = ph / ny;
+    const sum: Record<string, [number, number, number]> = {};
+    for (let j = 0; j < ny; j++) {
+      const yv = 10 ** (uy - (j + 0.5) / ny * (uy - ly));
+      let start = 0, prev: Cat | undefined;
+      for (let i = 0; i <= nx; i++) {
+        const c = i < nx ? categoryOf(table, yv, 10 ** (lx + (i + 0.5) / nx * (ux - lx))) : undefined;
+        if (c) { const s = (sum[c] ??= [0, 0, 0]); s[0] += i; s[1] += j; s[2]++; }
+        if (c !== prev) {
+          if (prev && prev !== 'out') P.push(`<rect x="${n(ML + start * cw)}" y="${n(MT + j * chh)}" width="${n((i - start) * cw + 0.6)}" height="${n(chh + 0.6)}" fill="${FILL[prev]}"/>`);
+          start = i; prev = c;
+        }
+      }
+    }
+    // grid and ticks (decades)
+    for (let e = Math.ceil(lx); e <= ux; e++) {
+      const v = 10 ** e;
+      P.push(`<line x1="${n(X(v))}" y1="${MT}" x2="${n(X(v))}" y2="${MT + ph}" class="grid"/><text x="${n(X(v))}" y="${MT + ph + 15}" class="tick" text-anchor="middle">${fmt(v)}</text>`);
+    }
+    for (let e = Math.ceil(ly); e <= uy; e++) {
+      const v = 10 ** e;
+      P.push(`<line x1="${ML}" y1="${n(Y(v))}" x2="${ML + pw}" y2="${n(Y(v))}" class="grid"/><text x="${ML - 6}" y="${n(Y(v) + 4)}" class="tick" text-anchor="end">${fmt(v)}</text>`);
+    }
+    // the directive's demarcation lines
+    const cl = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
+    P.push(`<line x1="${ML}" y1="${n(Y(0.5))}" x2="${ML + pw}" y2="${n(Y(0.5))}" class="dl"/>`);
+    for (const [ax, ay, bx, by] of LINES[table]) P.push(`<line x1="${n(X(cl(ax, x0, x1)))}" y1="${n(Y(ay))}" x2="${n(X(cl(bx, x0, x1)))}" y2="${n(Y(by))}" class="dl"/>`);
+    // category labels at the centre of each region
+    for (const [c, [si, sj, k]] of Object.entries(sum)) {
+      if (c === 'out' || k < 20) continue;
+      P.push(`<text x="${n(ML + (si / k + 0.5) * cw)}" y="${n(MT + (sj / k + 0.5) * chh + 5)}" class="cl" text-anchor="middle">${c}</text>`);
+    }
+    // design point
+    if (ps > 0 && x > 0) {
+      const px = X(cl(x, x0, x1)), py = Y(cl(ps, y0, y1));
+      P.push(`<circle cx="${n(px)}" cy="${n(py)}" r="6" class="pt"/><circle cx="${n(px)}" cy="${n(py)}" r="2" class="ptc"/>`);
+    }
+    P.push(`<rect x="${ML}" y="${MT}" width="${pw}" height="${ph}" class="frame"/>`);
+    P.push(`<text x="${ML + pw / 2}" y="${H - 8}" class="ax" text-anchor="middle">${dn ? 'Nominal size DN' : 'Volume V, L'}</text>`);
+    P.push(`<text x="13" y="${MT + ph / 2}" class="ax" text-anchor="middle" transform="rotate(-90 13 ${MT + ph / 2})">PS, bar</text>`);
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" xmlns="http://www.w3.org/2000/svg">${P.join('')}</svg>`;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-ped]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const st = { equip: 'piping', acc: 'pressAcc', phase: 'gas' as Phase, group: 2 as Group, exc: false };
+    let pU = 'bar (G)', vU = 'L';
+    const pUnit = () => all('pressure').find((u) => u.label === pU)!, vUnit = () => all('volume').find((u) => u.label === vU)!;
+    let shown: { table: number; ps: number; x: number } | undefined;
+
+    const read = (k: string, ok: (x: number) => boolean, conv: (x: number) => number = (x) => x) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value), x = blank ? NaN : conv(raw);
+      const bad = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', bad);
+      return bad ? NaN : x;
+    };
+    const draw = () => {
+      const box = $<HTMLElement>('[data-chart]');
+      box.innerHTML = shown ? chart(shown.table, shown.ps, shown.x, Math.max(320, Math.min(720, box.clientWidth || 720))) : '';
+      $<HTMLElement>('[data-zoom]').hidden = !shown;
+    };
+
+    const run = () => {
+      const equip: Equip = st.equip === 'acc' ? (st.acc as Equip) : (st.equip as Equip);
+      segSet(root, 'equip', st.equip); segSet(root, 'acc', st.acc); segSet(root, 'phase', st.phase); segSet(root, 'group', String(st.group)); segSet(root, 'exc', st.exc ? '1' : '0');
+      const fluid = equip !== 'steam' && equip !== 'safetyAcc';
+      const useV = equip === 'vessel' || equip === 'steam' || equip === 'pressAcc', useDN = equip === 'piping' || equip === 'pressAcc';
+      for (const el of root.querySelectorAll<HTMLElement>('[data-show]')) {
+        const w = el.dataset.show!;
+        el.hidden = !(w === 'acc' ? st.equip === 'acc' : w === 'fluid' ? fluid : true);
+      }
+      $<HTMLElement>('tr[data-row="ps"]').hidden = equip === 'safetyAcc';
+      $<HTMLElement>('tr[data-row="v"]').hidden = !useV; $<HTMLElement>('tr[data-row="dn"]').hidden = !useDN;
+      $('[data-eqnote]').innerHTML = {
+        vessel: 'Vessel: a housing designed and built to contain fluids under pressure, including its direct attachments up to the coupling to other equipment.',
+        piping: 'Piping: pipes or piping components for transporting fluids, connected for integration into a pressure system (including tubes of heat exchangers that cool or heat air).',
+        steam: 'Fired or otherwise heated pressure equipment with a risk of overheating, generating steam or super-heated water above 110 °C (Table 5).',
+        pressAcc: 'Pressure accessory: a device with an operational function and pressure-bearing housing (valve, fitting, filter body …). Type V, DN or both; the higher category counts.',
+        safetyAcc: 'Safety accessory: a device protecting equipment against exceeding its limits (safety valve, bursting disc, pressure switch …).',
+      }[equip];
+
+      const ps = read('ps', (x) => x > -1, (x) => (toSI(pUnit(), x) - 101325) / 1e5);
+      const v = useV ? read('v', (x) => x > 0, (x) => toSI(vUnit(), x) * 1000) : NaN;
+      const dn = useDN ? read('dn', (x) => x > 0) : NaN;
+      const nps = DN_NPS.find(([d]) => d === dn);
+      $('[data-nps]').textContent = nps ? `NPS ${nps[1]}` : '';
+      // product row
+      const pvShow = equip === 'vessel' || equip === 'steam' ? ['PS·V', ps * v, 'bar·L'] : equip === 'piping' ? ['PS·DN', ps * dn, 'bar'] : undefined;
+      $<HTMLElement>('tr[data-row="pv"]').hidden = !pvShow;
+      if (pvShow) { $('[data-pvsym]').innerHTML = pvShow[0] as string; $('output[data-o="pv"]').textContent = Number.isFinite(pvShow[1] as number) ? fmt(pvShow[1] as number) : ''; $('[data-pvunit]').textContent = pvShow[2] as string; }
+
+      // exception question for the table in use
+      const tbl = equip === 'vessel' || equip === 'piping' || equip === 'steam' ? tableFor(equip, st.phase, st.group) : NaN;
+      const ex = EXCEPTION[tbl];
+      const excBox = $<HTMLElement>('[data-show="exc"]');
+      excBox.hidden = !ex;
+      if (ex) excBox.querySelector('.seg-l')!.textContent = ex.q + '?';
+
+      const warn: string[] = [];
+      let r: PedResult | undefined;
+      const need = equip === 'safetyAcc' ? [] : equip === 'pressAcc' ? [ps, Number.isFinite(v) || Number.isFinite(dn) ? 1 : NaN] : [ps, useV ? v : dn];
+      if (need.every(Number.isFinite)) r = classify({ equip, phase: st.phase, group: st.group, ps, v, dn, exception: st.exc });
+
+      const out = $('[data-cat-out]'), sub = $('[data-sub]'), mods = $('[data-modules]');
+      $<HTMLElement>('[data-result]').dataset.cat = r?.cat ?? '';
+      shown = undefined;
+      if (!r) { out.textContent = '—'; sub.textContent = 'Fill in the pressure and the size.'; mods.innerHTML = ''; }
+      else {
+        out.textContent = CAT_NAME[r.cat];
+        const deciding = r.tables.length ? r.tables.reduce((a, b) => (['out', 'SEP', 'I', 'II', 'III', 'IV'].indexOf(b.cat) > ['out', 'SEP', 'I', 'II', 'III', 'IV'].indexOf(a.cat) ? b : a)) : undefined;
+        if (deciding) shown = { table: deciding.table, ps, x: deciding.x };
+        sub.innerHTML = equip === 'safetyAcc'
+          ? 'Safety accessories are category IV (Annex II point 2). Exception: one made for specific equipment may take that equipment\'s category; classify the equipment instead.'
+          : r.tables.map((t) => `Table ${t.table}: ${TABLE_TITLE[t.table]} → ${CAT_NAME[t.cat]}`).join('<br>')
+            + (r.exceptionApplied ? `<br><b>Raised to ${CAT_NAME[r.cat]}</b> by the exception (Annex II): ${lc(EXCEPTION[r.tables[0].table]!.q)}.` : '');
+        if (r.cat === 'out') mods.innerHTML = '<p class="note">PS is at most 0.5 bar: the directive does not apply.</p>';
+        else if (r.cat === 'SEP') mods.innerHTML = '<p class="note">Below the limits of Article 4(1): design and manufacture to the <b>sound engineering practice</b> of a Member State, supply adequate instructions for use. <b>No CE marking</b> and no conformity-assessment module.</p>';
+        else {
+          const list = MODULES_FOR[r.cat].map((k) => MODULES[k]);
+          mods.innerHTML = `<h3>Conformity assessment: choose one of these modules</h3><table class="mods"><thead><tr><th scope="col">Module</th><th scope="col">Procedure (Annex III)</th><th scope="col">Notified body</th></tr></thead><tbody>${list.map((m) => `<tr><th scope="row">${m.id}</th><td>${m.name}</td><td>${m.nb}</td></tr>`).join('')}</tbody></table><p class="note">A module of a higher category may also be used (Article 14(3)). The equipment then carries the CE marking with the notified body's number (none for module A).</p>`;
+        }
+        if (tbl === 5 && st.exc) warn.push('Pressure cooker: its design must be assessed by a procedure equivalent to at least one category III module (Annex II, Table 5).');
+        if (ex && st.exc && !r.exceptionApplied && tbl !== 5) warn.push(`The exception (${lc(ex.q)}) changes nothing here: it only applies to category ${tbl === 7 ? 'II' : tbl === 2 ? 'SEP, I or II' : 'I or II'}.`);
+        if (st.phase === 'liquid' && st.group === 2 && equip === 'vessel' && r.cat === 'SEP') warn.push('Table 4 exception: assemblies generating warm water (up to 110 °C, manually fed with solid fuel, PS·V above 50 bar·L) need module B (design type) or H for some essential requirements (Article 4(2)).');
+      }
+      $('[data-warn]').innerHTML = warn.map((w) => `<li>${w}</li>`).join('');
+      draw();
+    };
+
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      if (t.dataset.cat === 'p' || t.dataset.cat === 'v') {
+        const k = t.dataset.cat === 'p' ? 'ps' : 'v';
+        const from = t.dataset.cat === 'p' ? pUnit() : vUnit();
+        if (t.dataset.cat === 'p') pU = t.value; else vU = t.value;
+        const to = t.dataset.cat === 'p' ? pUnit() : vUnit();
+        const el = inp(k), x = parseNumber(el.value);
+        if (el.value.trim() !== '' && Number.isFinite(x)) el.value = fmt(fromSI(to, toSI(from, x))).replace('−', '-');
+        $('[data-status]').textContent = `Unit changed to ${t.value}; value converted.`;
+        run();
+      }
+    });
+    root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input[data-k]')) run(); });
+    segInit(root, 'equip', (v) => { st.equip = v; st.exc = false; run(); });
+    segInit(root, 'acc', (v) => { st.acc = v; run(); });
+    segInit(root, 'phase', (v) => { st.phase = v as Phase; st.exc = false; run(); });
+    segInit(root, 'group', (v) => { st.group = (+v) as Group; st.exc = false; run(); });
+    segInit(root, 'exc', (v) => { st.exc = v === '1'; run(); });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) el.value = '';
+      st.exc = false; run(); inp('ps').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    const dlg = $<HTMLDialogElement>('dialog.zd');
+    $('[data-zoom]').addEventListener('click', () => {
+      if (!shown) return;
+      $('[data-zd-title]').textContent = `Table ${shown.table}: ${TABLE_TITLE[shown.table]}`;
+      $('[data-zd-img]').innerHTML = chart(shown.table, shown.ps, shown.x, Math.max(320, Math.min(720, $<HTMLElement>('[data-chart]').clientWidth || 720)));
+      dlg.showModal();
+    });
+    $('[data-zd-close]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    let rt = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); }).observe($('[data-chart]'));
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 60rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.5rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(h3) { margin: 1rem 0 0.375rem; font-size: 0.9375rem; font-weight: 650; }
+  .calc :global([hidden]) { display: none !important; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; margin-top: 0.5rem; }
+  .calc :global(.note) { margin: 0.375rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 50rem; }
+  .calc :global(.note b) { color: var(--ink); }
+  .io { border-collapse: collapse; width: 100%; max-width: 46rem; margin-top: 0.75rem; font-size: 0.9375rem; }
+  .io th, .io td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .io tbody th { font-weight: 400; padding-right: 0.75rem; }
+  .io .v { width: 9.5rem; }
+  .io .u { width: 9rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i) { font-style: italic; padding-right: 0.05em; }
+  .calc input, .calc output, .calc select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc input, .calc output { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc input { background: var(--zoho-in); border-color: var(--muted); }
+  .calc input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc input[aria-invalid] { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc output { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc select { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .ref { margin-top: 0.5rem; max-width: 50rem; font-size: 0.875rem; }
+  .ref summary { cursor: pointer; font-weight: 600; color: var(--line); padding: 0.25rem 0; }
+  .ref p { margin: 0.375rem 0; }
+  .cols { columns: 2 18rem; margin: 0.25rem 0; padding-left: 1.25rem; }
+  .cols li { break-inside: avoid; margin: 0.125rem 0; }
+
+  /* result */
+  .result { display: inline-block; min-width: min(100%, 26rem); padding: 0.75rem 1rem; border: 1.5px solid var(--ink); background: var(--zoho-out); }
+  .result[data-cat='out'], .result[data-cat='SEP'] { background: #fff; }
+  .cat { margin: 0; font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
+  .sub { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--ink); line-height: 1.5; }
+  .calc :global(.mods) { border-collapse: collapse; width: 100%; max-width: 56rem; font-size: 0.875rem; }
+  .calc :global(.mods th), .calc :global(.mods td) { border-bottom: 1px solid var(--rule); padding: 0.375rem 0.75rem 0.375rem 0; text-align: left; vertical-align: top; }
+  .calc :global(.mods thead th) { font-weight: 600; font-size: 0.8125rem; }
+  .calc :global(.mods tbody th) { font-weight: 650; white-space: nowrap; }
+  .warn { margin: 0.75rem 0 0; padding: 0; list-style: none; max-width: 50rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+
+  /* chart */
+  .sk { display: block; width: 100%; max-width: 46rem; margin-top: 1rem; padding: 0; border: 0; background: none; text-align: left; cursor: zoom-in; }
+  .skimg { display: block; }
+  .skimg :global(svg) { display: block; max-width: 100%; height: auto; }
+  .zimg :global(svg) { display: block; width: 100%; height: auto; max-height: calc(100dvh - 8rem); }
+  .zoom { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .ped :global(.grid) { stroke: #fff; stroke-width: 0.8; opacity: 0.7; }
+  .ped :global(.dl) { stroke: var(--ink); stroke-width: 1.4; }
+  .ped :global(.frame) { fill: none; stroke: var(--ink); stroke-width: 1; }
+  .ped :global(.tick) { font: 400 11px var(--font-ui); fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .ped :global(.ax) { font: 400 12px var(--font-ui); fill: var(--ink); }
+  .ped :global(.cl) { font: 700 14px var(--font-ui); fill: var(--ink); paint-order: stroke; stroke: rgb(255 255 255 / 0.7); stroke-width: 3px; }
+  .ped :global(.pt) { fill: none; stroke: var(--markup); stroke-width: 2.5; }
+  .ped :global(.ptc) { fill: var(--markup); }
+  .zd { width: min(56rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1.5px solid var(--ink); border-radius: 0; background: #fff; color: var(--ink); }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .zhead h2 { margin: 0; font-size: 1.125rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zclose:hover { background: var(--line); color: var(--paper); }
+  .zimg { padding: 1rem 1.25rem 1.5rem; display: grid; place-items: center; }
+  .basis { margin-top: 0.5rem; max-width: 60rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ul, .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .io .v { width: 7rem; }
+    .io .u { width: 6.5rem; }
+    .cat { font-size: 1.5rem; }
+    .calc :global(.mods tbody th) { white-space: normal; }
+  }
+</style>

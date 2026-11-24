@@ -560,6 +560,20 @@ export const sources: Source[] = [
     read: '2026-11-24',
     use: { 'heat-exchanger': 'The original sheet\'s Note 4 list of typical fouling factors (m²·K/W), checked; definition Rd = 1/Ud − 1/U.' },
   },
+  {
+    id: 'ped-2014', by: 'European Parliament and Council', title: 'Directive 2014/68/EU on the harmonisation of the laws of the Member States relating to the making available on the market of pressure equipment (recast)',
+    where: 'Official Journal of the European Union, L 189, 27.6.2014, pp. 164–259', year: 2014,
+    url: 'https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:32014L0068',
+    archive: 'https://web.archive.org/web/20240810115043/https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:32014L0068',
+    read: '2026-11-24',
+    use: { ped: 'Scope limits (Article 4(1)) and sound engineering practice (4(3)); fluid groups by the CLP hazard classes and the flash-point rule (Article 13); modules per category and the free choice of a higher one (Article 14); Annex II tables 1–9, their exceptions and the accessory rules; Annex III module titles.' },
+  },
+  {
+    id: 'ped-1997', by: 'European Parliament and Council', title: 'Directive 97/23/EC on the approximation of the laws of the Member States concerning pressure equipment',
+    where: 'Official Journal of the European Communities, L 181, 9.7.1997, pp. 1–55 (Annex II tables pp. 25–33)', year: 1997,
+    read: '2026-11-24',
+    use: { ped: 'The basis of the original sheet. Its Annex II tables 1–9 (unchanged in 2014/68/EU, where they are graphics) were read to check every category boundary and the lines drawn in the chart.' },
+  },
 ];
 
 /** Sources used by one tool, in registry order. */
