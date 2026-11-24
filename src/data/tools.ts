@@ -196,8 +196,10 @@ export const tools: Tool[] = [
     "tag": "P",
     "title": "Pump",
     "name": "Pump",
-    "description": "Suction and discharge pressures, differential head, NPSH available versus required, and performance data for up to three flow cases.",
+    "description": "Centrifugal pump circuit for three flow cases: suction and discharge pressures, control-valve pressure drop on the pump curve, NPSH available versus an NPSHr estimate, specific speed, maximum discharge pressure, power and driver rating.",
+    "standard": "API 610 (ISO 13709) for design pressure and driver rating; NPSHr from suction specific speed",
     "category": "equipment",
+    "native": "pump",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/c93432793a31089aa283c7459397d89baff3cf6c8f63397188e438955e64ae2e?type=grid&mode=embed"
   },
   {

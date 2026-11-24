@@ -1,0 +1,672 @@
+---
+// Native Pump calculator (Phase 7): centrifugal pump circuit for three flow cases (rated, normal, minimum as % of the
+// normal flow). Suction and discharge pressures, control-valve Δp on a parabolic pump curve, NPSH available vs. an
+// NPSHr estimate from the suction specific speed, specific speed and impeller estimate, maximum discharge (piping
+// design) pressure per API 610, power per case and driver rating. One unit selector per category (as Drum); changing a
+// unit converts the typed values. Live pump/system curve chart. Inputs start on the Zoho defaults (owner's decisions
+// 2026-11-24: normal flow + % cases, rising curve, no company rules, Nss 9 000 US units).
+import SegToggle from './SegToggle.astro';
+import { mathHtml } from '../lib/calc/types';
+import { PUMP_UNITS, PUMP_DEFAULT_UNITS, SS_US, type PumpCat } from '../lib/calc/pump-units';
+
+const id = (k: string) => `pu-${k}`;
+const unitSel = (cat: PumpCat, label: string) =>
+  `<select data-cat="${cat}" aria-label="${label} unit">${PUMP_UNITS[cat].map((u) => `<option${u.label === PUMP_DEFAULT_UNITS[cat] ? ' selected' : ''}>${u.label}</option>`).join('')}</select>`;
+const unitTxt = (cat: PumpCat) => `<span data-ut="${cat}">${PUMP_DEFAULT_UNITS[cat]}</span>`;
+const inCell = (k: string, v = '', label = '') =>
+  `<input id="${id(k)}" data-k="${k}" value="${v}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"${label ? ` aria-label="${label}"` : ''} />`;
+const out = (k: string) => `<output data-o="${k}"></output>`;
+const NSS_DEFAULT = (9000 * SS_US).toFixed(2);   // 9 000 US units (Evans, in Branan 2002)
+
+type Row = { k: string; label: string; sym: string; cat?: PumpCat; unit?: string; in0?: string; ins?: [string, string, string] };
+const caseRow = (r: Row) => {
+  const cells = [0, 1, 2].map((i) => {
+    if (r.ins) return `<td>${inCell(`${r.k}${i}`, r.ins[i], `${r.label}, case ${i + 1}`)}</td>`;
+    if (i === 0 && r.in0 !== undefined) return `<td>${inCell(r.k, r.in0, `${r.label}, rated case`)}</td>`;
+    return `<td>${out(`${r.k}-${i}`)}</td>`;
+  }).join('');
+  const u = r.cat ? (r.unit === 'sel' ? unitSel(r.cat, r.label) : unitTxt(r.cat)) : `<span>${r.unit ?? '–'}</span>`;
+  return `<tr data-row="${r.k}"><th scope="row"><span class="lb">${r.label}</span> <span class="eq">${mathHtml(r.sym)}</span></th>${cells}<td class="cu">${u}</td></tr>`;
+};
+const head = `<thead><tr><th scope="col"><span class="sr">Quantity</span></th>${[0, 1, 2].map((i) => `<th scope="col" class="cn" data-cn="${i}">${['Rated', 'Normal', 'Minimum'][i]}</th>`).join('')}<th scope="col" class="cu"><span class="sr">Unit</span></th></tr></thead>`;
+const caseTable = (rows: Row[]) => `<table class="cs">${head}<tbody>${rows.map(caseRow).join('')}</tbody></table>`;
+---
+<div class="calc pump" data-pump>
+  <div class="bar">
+    <p>Centrifugal pump circuit for three flow cases. Losses and the control-valve Δp are given at the rated flow; the other cases follow from (<i>Q</i>/<i>Q</i><sub>r</sub>)² and the pump curve. One unit per kind of quantity; typed values are converted.</p>
+    <button type="button" class="reset" data-reset>Clear all inputs</button>
+  </div>
+
+  <section class="grp" aria-labelledby={id('fl-h')}>
+    <h2 id={id('fl-h')}>Liquid and flow cases</h2>
+    <div class="switches">
+      <SegToggle label="Normal flow given as" name="given" value="mass" options={[{ value: 'mass', label: 'Mass flow' }, { value: 'vol', label: 'Volume flow' }]} />
+    </div>
+    <table class="io">
+      <tbody>
+        <tr>
+          <th scope="row"><label for={id('mN')}><span class="lb">Normal mass flow, total</span> <span class="eq" set:html={mathHtml('M')} /></label></th>
+          <td class="v" set:html={inCell('mN', '126875')} />
+          <td class="u" set:html={unitSel('mflow', 'Mass flow')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('qN')}><span class="lb">Normal volume flow, total</span> <span class="eq" set:html={mathHtml('V = M/ρ')} /></label></th>
+          <td class="v" set:html={inCell('qN')} />
+          <td class="u" set:html={unitSel('vflow', 'Volume flow')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('rho')}><span class="lb">Density at operating temperature</span> <span class="eq" set:html={mathHtml('ρ')} /></label></th>
+          <td class="v" set:html={inCell('rho', '870')} />
+          <td class="u" set:html={unitSel('rho', 'Density')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('pv')}><span class="lb">Vapour pressure at operating temperature</span> <span class="eq" set:html={mathHtml('P_v')} /></label></th>
+          <td class="v" set:html={inCell('pv', '0.1')} />
+          <td class="u" set:html={unitSel('p', 'Pressure')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('n')}><span class="lb">Pumps operating in parallel</span> <span class="eq" set:html={mathHtml('n')} /></label></th>
+          <td class="v" set:html={inCell('n', '1')} />
+          <td class="u"><span>–</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <table class="cs">
+      <thead>
+        <tr>
+          <th scope="col"><span class="sr">Quantity</span></th>
+          {[0, 1, 2].map((i) => <th scope="col"><input class="nm-in" data-name={i} value={['Rated', 'Normal', 'Minimum'][i]} aria-label={`Name of case ${i + 1}`} autocomplete="off" spellcheck="false" /></th>)}
+          <th scope="col" class="cu"><span class="sr">Unit</span></th>
+        </tr>
+      </thead>
+      <tbody set:html={[
+        caseRow({ k: 'pct', label: 'Flow, % of normal', sym: '', unit: '%', ins: ['120', '100', '50'] }),
+        caseRow({ k: 'm', label: 'Mass flow, total', sym: 'M_i', cat: 'mflow' }),
+        caseRow({ k: 'q', label: 'Capacity per pump', sym: 'Q = M_i/(ρ·n)', cat: 'vflow' }),
+      ].join('')} />
+    </table>
+    <p class="note">The first case is the rated (sizing) case: the pump is sized there and the losses below are given for its flow. Case names can be edited.</p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('su-h')}>
+    <h2 id={id('su-h')}>Suction</h2>
+    <table class="io">
+      <tbody>
+        <tr>
+          <th scope="row"><label for={id('pos')}><span class="lb">Suction vessel pressure</span> <span class="eq" set:html={mathHtml('P_os')} /></label></th>
+          <td class="v" set:html={inCell('pos', '1.09')} />
+          <td class="u" set:html={unitTxt('p')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('elsg')}><span class="lb">Suction vessel elevation above grade</span> <span class="eq" set:html={mathHtml('EL_sg')} /></label></th>
+          <td class="v" set:html={inCell('elsg', '0')} />
+          <td class="u" set:html={unitSel('len', 'Length')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('lll')}><span class="lb">Low liquid level above that elevation</span> <span class="eq" set:html={mathHtml('LLL')} /></label></th>
+          <td class="v" set:html={inCell('lll', '1')} />
+          <td class="u" set:html={unitTxt('len')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('elclg')}><span class="lb">Pump centreline above grade</span> <span class="eq" set:html={mathHtml('EL_clg')} /></label></th>
+          <td class="v" set:html={inCell('elclg', '0.75')} />
+          <td class="u" set:html={unitTxt('len')} />
+        </tr>
+      </tbody>
+    </table>
+    <Fragment set:html={caseTable([
+      { k: 'pstat', label: 'Static pressure, LLL to centreline', sym: 'P_st = (EL_sg + LLL − EL_clg)·ρ·g', cat: 'dp', unit: 'sel' },
+      { k: 'dpSeq', label: 'Equipment pressure loss', sym: 'ΔP_s,eq', cat: 'dp', in0: '0' },
+      { k: 'dpSfr', label: 'Line pressure loss', sym: 'ΔP_s,fr', cat: 'dp', in0: '0' },
+      { k: 'ps', label: 'Pump suction pressure', sym: 'P_s = P_os + P_st − ΔP_s,eq − ΔP_s,fr', cat: 'p' },
+    ])} />
+  </section>
+
+  <section class="grp" aria-labelledby={id('di-h')}>
+    <h2 id={id('di-h')}>Discharge</h2>
+    <table class="io">
+      <tbody>
+        <tr>
+          <th scope="row"><label for={id('pt')}><span class="lb">Maximum terminal pressure</span> <span class="eq" set:html={mathHtml('P_t')} /></label></th>
+          <td class="v" set:html={inCell('pt', '9')} />
+          <td class="u" set:html={unitTxt('p')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('elclt')}><span class="lb">Terminal point above pump centreline</span> <span class="eq" set:html={mathHtml('EL_clt')} /></label></th>
+          <td class="v" set:html={inCell('elclt', '1.7')} />
+          <td class="u" set:html={unitTxt('len')} />
+        </tr>
+      </tbody>
+    </table>
+    <Fragment set:html={caseTable([
+      { k: 'pclt', label: 'Static pressure', sym: 'P_clt = EL_clt·ρ·g', cat: 'dp', unit: 'sel' },
+      { k: 'dpDeq', label: 'Equipment pressure loss', sym: 'ΔP_d,eq', cat: 'dp', in0: '1.5' },
+      { k: 'dpDfe', label: 'Flow meter pressure loss', sym: 'ΔP_d,fe', cat: 'dp', in0: '1.5' },
+      { k: 'dpDfr', label: 'Line pressure loss', sym: 'ΔP_d,fr', cat: 'dp', in0: '0' },
+      { k: 'dpCv', label: 'Control valve pressure drop', sym: 'ΔP_cv = P_d − (P_t + P_clt + ΣΔP_d)', cat: 'dp', in0: '0' },
+      { k: 'pd', label: 'Pump discharge pressure', sym: 'P_d = P_s + ΔP_pump', cat: 'p' },
+    ])} />
+    <p class="note">Rated case: <i>P</i><sub>d</sub> = <i>P</i><sub>t</sub> + <i>P</i><sub>clt</sub> + Σ losses + Δ<i>P</i><sub>cv</sub> sizes the pump. Other cases: the pump curve gives <i>P</i><sub>d</sub>, and the control valve takes up the difference.</p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('pc-h')}>
+    <h2 id={id('pc-h')}>Pump curve</h2>
+    <table class="io">
+      <tbody>
+        <tr>
+          <th scope="row"><label for={id('rso')}><span class="lb">Rise of head, rated point to shut-off</span> <span class="eq" set:html={mathHtml('R_so')} /></label></th>
+          <td class="v" set:html={inCell('rso', '30')} />
+          <td class="u"><span>%</span></td>
+        </tr>
+        <tr><th scope="row"><span class="lb">Shut-off head at rated speed</span> <span class="eq" set:html={mathHtml('H_so = (1 + R_so)·H_r')} /></th><td class="v"><output data-o="hso0" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+      </tbody>
+    </table>
+    <p class="note">Take <i>R</i><sub>so</sub> from the vendor's curve when known. API 610 prefers a continuous rise to shut-off and requires at least 10 % for pumps in parallel (5.1.13).</p>
+    <Fragment set:html={caseTable([
+      { k: 'dp', label: 'Pump differential pressure', sym: 'ΔP_pump = H·ρ·g', cat: 'dp', unit: 'sel' },
+      { k: 'h', label: 'Pump differential head', sym: 'H = H_so − (H_so − H_r)·(Q/Q_r)²', cat: 'len' },
+      { k: 'hsys', label: 'System head without control valve', sym: 'H_sys', cat: 'len' },
+    ])} />
+    <button type="button" class="sk" data-zoom aria-haspopup="dialog" aria-label="Enlarge the pump and system curves">
+      <span class="skimg" data-chart role="img" aria-label="Pump curve, system curve without the control valve, and the three flow cases"></span>
+      <span class="zoom" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 10l4 4M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" stroke-width="1.5"/></svg>
+        Enlarge
+      </span>
+    </button>
+    <p class="note">Solid: pump curve. Dashed: system without the control valve. The vertical gap at each case is the control-valve pressure drop.</p>
+    <ul class="warn" data-warn aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('np-h')}>
+    <h2 id={id('np-h')}>NPSH</h2>
+    <div class="switches">
+      <SegToggle label="Impeller" name="eyes" value="1" options={[{ value: '1', label: 'Single suction' }, { value: '2', label: 'Double suction' }]} />
+    </div>
+    <table class="io">
+      <tbody>
+        <tr>
+          <th scope="row"><label for={id('N')}><span class="lb">Rotational speed</span> <span class="eq" set:html={mathHtml('N')} /></label></th>
+          <td class="v"><input id={id('N')} data-k="N" value="2950" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" list={id('speeds')} /><datalist id={id('speeds')}><option value="2950" /><option value="1475" /><option value="3550" /><option value="1775" /></datalist></td>
+          <td class="u"><span>rpm</span></td>
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('stages')}><span class="lb">Number of stages</span> <span class="eq" set:html={mathHtml('z')} /></label></th>
+          <td class="v" set:html={inCell('stages', '1')} />
+          <td class="u"><span>–</span></td>
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('nss')}><span class="lb">Suction specific speed</span> <span class="eq" set:html={mathHtml('N_ss = N·√(Q/e)/NPSH_r⁰·⁷⁵')} /></label></th>
+          <td class="v" set:html={inCell('nss', NSS_DEFAULT)} />
+          <td class="u" set:html={unitSel('ss', 'Specific speed')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('margin')}><span class="lb">NPSH safety margin</span> <span class="eq" set:html={mathHtml('NPSH_sm')} /></label></th>
+          <td class="v" set:html={inCell('margin', '0.6')} />
+          <td class="u" set:html={unitTxt('len')} />
+        </tr>
+        <tr><th scope="row"><span class="lb">NPSH required at the centreline, estimate</span> <span class="eq" set:html={mathHtml('NPSH_r = (N·√(Q_r/e)/N_ss)⁴ᐟ³')} /></th><td class="v"><output data-o="npshrCl" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+        <tr><th scope="row"><span class="lb">Total NPSH required</span> <span class="eq" set:html={mathHtml('NPSH_req = NPSH_r + NPSH_sm')} /></th><td class="v"><output data-o="npshr" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+        <tr><th scope="row"><span class="lb">Vapour pressure head</span> <span class="eq" set:html={mathHtml('H_vp = (P_os − P_v)/(ρ·g)')} /></th><td class="v"><output data-o="hvp" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+      </tbody>
+    </table>
+    <p class="note">Default <i>N</i><sub>ss</sub> = 9 000 in US units (rpm, US gpm, ft), as used by Evans for study estimates (constant 7 000–10 000; quoted in Branan 2002); <i>e</i> = impeller eyes (2 for double suction). Speeds in the list: two- and four-pole motors at 50 Hz and 60 Hz.</p>
+    <Fragment set:html={caseTable([
+      { k: 'npsha', label: 'NPSH available', sym: 'NPSH_a = EL_sg + LLL − EL_clg − ΣΔP_s/(ρ·g) + H_vp', cat: 'len' },
+      { k: 'ratio', label: 'Ratio to NPSH required', sym: 'NPSH_a/NPSH_r', unit: '–' },
+      { k: 'elsMin', label: 'Minimum suction vessel elevation', sym: 'EL_s,min = NPSH_req + EL_clg + ΣΔP_s/(ρ·g) − LLL − H_vp', cat: 'len' },
+      { k: 'ok', label: 'NPSH check', sym: 'NPSH_a ≥ NPSH_req', unit: '' },
+    ])} />
+    <p class="note">The NPSHr estimate is for the rated flow and is used for all cases (at low flow the real NPSHr can rise again); the vendor's curve governs.</p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('pf-h')}>
+    <h2 id={id('pf-h')}>Pump performance, rated case</h2>
+    <table class="io">
+      <tbody>
+        <tr><th scope="row"><span class="lb">Specific speed</span> <span class="eq" set:html={mathHtml('N_s = N·√Q_r/(H_r/z)⁰·⁷⁵')} /></th><td class="v"><output data-o="ns" /></td><td class="u" set:html={unitTxt('ss')} /></tr>
+        <tr><th scope="row"><span class="lb">Impeller tip speed, estimate</span> <span class="eq" set:html={mathHtml('u = √(2·g·H_r/z)')} /></th><td class="v"><output data-o="u" /></td><td class="u" set:html={unitSel('vel', 'Velocity')} /></tr>
+        <tr><th scope="row"><span class="lb">Impeller diameter, estimate</span> <span class="eq" set:html={mathHtml('D = 60·u/(π·N)')} /></th><td class="v"><output data-o="dImp" /></td><td class="u" set:html={unitSel('dia', 'Diameter')} /></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="grp" aria-labelledby={id('de-h')}>
+    <h2 id={id('de-h')}>Maximum discharge pressure (piping design)</h2>
+    <div class="switches">
+      <SegToggle label="Driver" name="driver" value="motor" options={[{ value: 'motor', label: 'Electric motor' }, { value: 'turbine', label: 'Steam turbine' }]} />
+    </div>
+    <table class="io">
+      <tbody>
+        <tr data-drv="turbine">
+          <th scope="row"><label for={id('trip')}><span class="lb">Trip speed, % of rated speed</span> <span class="eq" set:html={mathHtml('N_trip/N')} /></label></th>
+          <td class="v" set:html={inCell('trip', '110')} />
+          <td class="u"><span>%</span></td>
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('pds')}><span class="lb">Suction vessel design pressure</span> <span class="eq" set:html={mathHtml('P_ds')} /></label></th>
+          <td class="v" set:html={inCell('pds', '2.4')} />
+          <td class="u" set:html={unitSel('pg', 'Design pressure')} />
+        </tr>
+        <tr>
+          <th scope="row"><label for={id('hll')}><span class="lb">Suction vessel HLL above pump centreline</span> <span class="eq" set:html={mathHtml('H_HLL')} /></label></th>
+          <td class="v" set:html={inCell('hll', '0')} />
+          <td class="u" set:html={unitTxt('len')} />
+        </tr>
+        <tr><th scope="row"><span class="lb">Shut-off head</span> <span class="eq" data-hsoeq /></th><td class="v"><output data-o="hso" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+        <tr><th scope="row"><span class="lb">Maximum discharge pressure</span> <span class="eq" set:html={mathHtml('P_dd = P_ds + (H_so + H_HLL)·ρ·g')} /></th><td class="v"><output data-o="pdd" /></td><td class="u" set:html={unitTxt('pg')} /></tr>
+      </tbody>
+    </table>
+    <p class="note">API 610 5.3.1: maximum suction pressure plus the maximum differential the pump can develop; 5.3.2 c) adds operation to trip speed (head ∝ speed²).</p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('pw-h')}>
+    <h2 id={id('pw-h')}>Power</h2>
+    <div class="switches">
+      <SegToggle label="Rated efficiency" name="effmode" value="typed" options={[{ value: 'typed', label: 'Typed' }, { value: 'est', label: 'Estimate', hint: '(Branan / GPSA)' }]} />
+    </div>
+    <Fragment set:html={caseTable([
+      { k: 'eff', label: 'Pump efficiency', sym: 'η', unit: '%', ins: ['72.34', '72.34', '72.34'] },
+      { k: 'whp', label: 'Hydraulic power per pump', sym: 'P_h = Q·ΔP_pump', cat: 'power', unit: 'sel' },
+      { k: 'bhp', label: 'Shaft power per pump', sym: 'P_sh = P_h/η', cat: 'power' },
+      { k: 'drv', label: 'Driver input power', sym: 'P_in = P_sh/η_drv', cat: 'power' },
+    ])} />
+    <table class="io">
+      <tbody>
+        <tr>
+          <th scope="row"><label for={id('effDrv')}><span class="lb">Driver efficiency</span> <span class="eq" set:html={mathHtml('η_drv')} /></label></th>
+          <td class="v" set:html={inCell('effDrv', '95')} />
+          <td class="u"><span>%</span></td>
+        </tr>
+        <tr><th scope="row"><span class="lb" data-drvlab>Minimum motor rating (API 610 Table 11)</span> <span class="eq" data-drveq /></th><td class="v"><output data-o="drvRating" /></td><td class="u" set:html={unitTxt('power')} /></tr>
+      </tbody>
+    </table>
+    <p class="note" data-effnote></p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('basis-h')}>
+    <h2 id={id('basis-h')}>Calculation basis</h2>
+    <details class="basis" open>
+      <summary>Equations</summary>
+      <ol class="eqs">
+        <li><b>Cases</b>: total mass flow <i>M</i><sub>i</sub> = <i>M</i>·%<sub>i</sub>/100, capacity per pump <i>Q</i><sub>i</sub> = <i>M</i><sub>i</sub>/(<i>ρ</i>·<i>n</i>); case 1 is the rated case (<i>Q</i><sub>r</sub>). Losses given at <i>Q</i><sub>r</sub> are scaled with (<i>Q</i><sub>i</sub>/<i>Q</i><sub>r</sub>)² (turbulent flow).</li>
+        <li><b>Rated case</b>: <i>P</i><sub>s</sub> = <i>P</i><sub>os</sub> + (<i>EL</i><sub>sg</sub> + <i>LLL</i> − <i>EL</i><sub>clg</sub>)·<i>ρ</i>·<i>g</i> − Δ<i>P</i><sub>s,eq</sub> − Δ<i>P</i><sub>s,fr</sub>; <i>P</i><sub>d</sub> = <i>P</i><sub>t</sub> + <i>EL</i><sub>clt</sub>·<i>ρ</i>·<i>g</i> + Δ<i>P</i><sub>d,eq</sub> + Δ<i>P</i><sub>d,fe</sub> + Δ<i>P</i><sub>d,fr</sub> + Δ<i>P</i><sub>cv</sub>; <i>H</i><sub>r</sub> = (<i>P</i><sub>d</sub> − <i>P</i><sub>s</sub>)/(<i>ρ</i>·<i>g</i>), <i>g</i> = 9.80665 m/s².</li>
+        <li><b>Pump curve</b>: <i>H</i>(<i>Q</i>) = <i>H</i><sub>so</sub> − (<i>H</i><sub>so</sub> − <i>H</i><sub>r</sub>)·(<i>Q</i>/<i>Q</i><sub>r</sub>)², <i>H</i><sub>so</sub> = (1 + <i>R</i><sub>so</sub>)·<i>H</i><sub>r</sub>. Other cases: <i>P</i><sub>d</sub> = <i>P</i><sub>s</sub> + <i>H</i>·<i>ρ</i>·<i>g</i>, Δ<i>P</i><sub>cv</sub> = <i>P</i><sub>d</sub> − (<i>P</i><sub>t</sub> + <i>P</i><sub>clt</sub> + ΣΔ<i>P</i><sub>d</sub>).</li>
+        <li><b>NPSH</b>: <i>NPSH</i><sub>a</sub> = <i>EL</i><sub>sg</sub> + <i>LLL</i> − <i>EL</i><sub>clg</sub> − (Δ<i>P</i><sub>s,eq</sub> + Δ<i>P</i><sub>s,fr</sub>)/(<i>ρ</i>·<i>g</i>) + (<i>P</i><sub>os</sub> − <i>P</i><sub>v</sub>)/(<i>ρ</i>·<i>g</i>); estimate <i>NPSH</i><sub>r</sub> = (<i>N</i>·(<i>Q</i><sub>r</sub>/<i>e</i>)<sup>0.5</sup>/<i>N</i><sub>ss</sub>)<sup>4/3</sup> (Evans: <i>n</i>·<i>Q</i><sup>0.5</sup>/<i>NPSH</i><sup>0.75</sup> = <i>C</i>, in Branan 2002).</li>
+        <li><b>Specific speed and impeller</b>: <i>N</i><sub>s</sub> = <i>N</i>·<i>Q</i><sub>r</sub><sup>0.5</sup>/(<i>H</i><sub>r</sub>/<i>z</i>)<sup>0.75</sup>; tip speed <i>u</i> = (2·<i>g</i>·<i>H</i><sub>r</sub>/<i>z</i>)<sup>0.5</sup> (head coefficient 1), <i>D</i> = 60·<i>u</i>/(π·<i>N</i>).</li>
+        <li><b>Maximum discharge pressure</b> (API 610 5.3.1, 5.3.2 c): <i>P</i><sub>dd</sub> = <i>P</i><sub>ds</sub> + (<i>H</i><sub>so</sub>·(<i>N</i><sub>trip</sub>/<i>N</i>)² + <i>H</i><sub>HLL</sub>)·<i>ρ</i>·<i>g</i>; the trip-speed factor applies to turbine drivers only.</li>
+        <li><b>Power</b>: <i>P</i><sub>h</sub> = <i>Q</i>·Δ<i>P</i><sub>pump</sub>, <i>P</i><sub>sh</sub> = <i>P</i><sub>h</sub>/<i>η</i>, <i>P</i><sub>in</sub> = <i>P</i><sub>sh</sub>/<i>η</i><sub>drv</sub>. Motor rating (API 610 Table 11): at least 125 % of the rated shaft power for motors below 22 kW, 115 % for 22–55 kW, 110 % above 55 kW; steam turbine 110 % (API 610 6.1.8).</li>
+        <li><b>Efficiency estimate</b> (Branan, fitted to the GPSA curves; result in %): <i>η</i> = 80 − 0.2855·<i>F</i> + 3.78·10<sup>−4</sup>·<i>F</i>·<i>G</i> − 2.38·10<sup>−7</sup>·<i>F</i>·<i>G</i>² + 5.39·10<sup>−4</sup>·<i>F</i>² − 6.39·10<sup>−7</sup>·<i>F</i>²·<i>G</i> + 4·10<sup>−10</sup>·<i>F</i>²·<i>G</i>², <i>F</i> = head in ft, <i>G</i> = flow per pump in US gpm; valid for <i>F</i> = 50–300 ft and <i>G</i> = 100–1000 gpm, within about 7 % of the curve value.</li>
+      </ol>
+    </details>
+    <details class="basis">
+      <summary>Notes</summary>
+      <ol>
+        <li>Maximum terminal pressure: the highest operating pressure at the delivery point (vessel or battery limit) the pump must reach.</li>
+        <li>The parabolic curve is a generic shape through the rated point and the shut-off head; use the vendor's curve once known.</li>
+        <li>Pressures are absolute unless the unit says (G); gauge units use 101.325 kPa.</li>
+        <li>Driver efficiencies (Walas, rules of thumb): motors 85–95 %, steam turbines 42–78 %, gas engines and turbines 28–38 %; larger machines are more efficient. Electric motors are used almost exclusively below 100 HP (75 kW) and are made up to 20 000 HP.</li>
+      </ol>
+    </details>
+    <details class="basis">
+      <summary>Typical ranges of pump types (Walas, rules of thumb)</summary>
+      <table class="ty">
+        <thead><tr><th scope="col">Type</th><th scope="col">Flow, US gpm</th><th scope="col">Flow, m³/h</th><th scope="col">Max. head, ft</th><th scope="col">Max. head, m</th><th scope="col">Efficiency</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Centrifugal, single stage</th><td>15–5 000</td><td>3.4–1 136</td><td>500</td><td>152</td><td rowspan="2">45 % at 100 gpm, 70 % at 500 gpm, 80 % at 10 000 gpm</td></tr>
+          <tr><th scope="row">Centrifugal, multistage</th><td>20–11 000</td><td>4.5–2 498</td><td>5 500</td><td>1 676</td></tr>
+          <tr><th scope="row">Axial</th><td>20–100 000</td><td>4.5–22 712</td><td>40</td><td>12</td><td>65–85 %</td></tr>
+          <tr><th scope="row">Rotary</th><td>1–5 000</td><td>0.23–1 136</td><td>50 000</td><td>15 240</td><td>50–80 %</td></tr>
+          <tr><th scope="row">Reciprocating</th><td>10–10 000</td><td>2.3–2 271</td><td>1 000 000</td><td>304 800</td><td>70 % at 10 HP, 85 % at 50 HP, 90 % at 500 HP</td></tr>
+        </tbody>
+      </table>
+    </details>
+  </section>
+  <p class="sr" aria-live="polite" data-status></p>
+
+  <dialog class="zd" aria-labelledby={id('zd-title')}>
+    <div class="zhead">
+      <h2 id={id('zd-title')}>Pump and system curves</h2>
+      <button type="button" class="zclose" data-zd-close aria-label="Close">
+        <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <div class="zimg" data-zd-img></div>
+  </dialog>
+</div>
+
+<script>
+  import { pump, curves, type PumpInput, type PumpResult } from '../lib/calc/pump';
+  import { PUMP_UNITS, PUMP_DEFAULT_UNITS, GPM, type PumpCat } from '../lib/calc/pump-units';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber, mathHtml } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('−', '-');
+  const CAT: Record<string, PumpCat> = {
+    mN: 'mflow', qN: 'vflow', rho: 'rho', pv: 'p', pos: 'p', elsg: 'len', lll: 'len', elclg: 'len', dpSeq: 'dp', dpSfr: 'dp',
+    pt: 'p', elclt: 'len', dpDeq: 'dp', dpDfe: 'dp', dpDfr: 'dp', dpCv: 'dp', nss: 'ss', margin: 'len', pds: 'pg', hll: 'len',
+  };
+  const OUTCAT: Record<string, PumpCat> = {
+    m: 'mflow', q: 'vflow', pstat: 'dp', dpSeq: 'dp', dpSfr: 'dp', ps: 'p', pclt: 'dp', dpDeq: 'dp', dpDfe: 'dp', dpDfr: 'dp', dpCv: 'dp',
+    pd: 'p', dp: 'dp', h: 'len', hsys: 'len', npsha: 'len', elsMin: 'len', whp: 'power', bhp: 'power', drv: 'power',
+  };
+
+  interface Shown { x: PumpInput; r: PumpResult; names: string[] }
+
+  // ── pump / system curve chart (inline SVG) ──
+  function nice(max: number): { step: number; top: number } {
+    const raw = max / 5, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p;
+    const step = (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+    return { step, top: Math.ceil(max / step - 1e-9) * step };
+  }
+  function chart(s: Shown, uq: { label: string; f: number }, uh: { label: string; f: number }, W: number): string {
+    const { x, r, names } = s;
+    const qCase = r.cases.map((c) => c.q);
+    const qMax = Math.max(...qCase, r.qr) * 1.25;
+    const pts = curves(x, r, qMax, 80);
+    const hVals = [...pts.map((p) => p.pump), ...pts.map((p) => p.sys), ...r.cases.map((c) => c.h)].filter(Number.isFinite);
+    const hTopRaw = Math.max(...hVals) * 1.05, hMin = Math.min(0, ...pts.map((p) => p.sys));
+    const xs = nice(qMax / uq.f), ys = nice((hTopRaw - hMin) / uh.f);
+    const yBot = hMin < 0 ? -Math.ceil(-hMin / uh.f / ys.step) * ys.step : 0;
+    const yTop = yBot + Math.ceil((hTopRaw / uh.f - yBot) / ys.step) * ys.step;
+    const ML = 52, MR = 14, MT = 14, MB = 42, H = Math.round(Math.min(380, Math.max(240, W * 0.55)));
+    const pw = W - ML - MR, ph = H - MT - MB;
+    const X = (q: number) => ML + (q / uq.f) / xs.top * pw;
+    const Y = (h: number) => MT + (yTop - h / uh.f) / (yTop - yBot) * ph;
+    const n = (v: number) => v.toFixed(1);
+    const parts: string[] = [];
+    for (let v = 0; v <= xs.top + 1e-9; v += xs.step) {
+      const px = ML + v / xs.top * pw;
+      parts.push(`<line x1="${n(px)}" y1="${MT}" x2="${n(px)}" y2="${MT + ph}" class="grid"/><text x="${n(px)}" y="${MT + ph + 15}" class="tick" text-anchor="middle">${fmt(+v.toPrecision(10))}</text>`);
+    }
+    for (let v = yBot; v <= yTop + 1e-9; v += ys.step) {
+      const py = MT + (yTop - v) / (yTop - yBot) * ph;
+      parts.push(`<line x1="${ML}" y1="${n(py)}" x2="${ML + pw}" y2="${n(py)}" class="grid${Math.abs(v) < 1e-12 ? ' zero' : ''}"/><text x="${ML - 6}" y="${n(py + 4)}" class="tick" text-anchor="end">${fmt(+v.toPrecision(10))}</text>`);
+    }
+    const line = (k: 'pump' | 'sys') => pts.filter((p) => p[k] >= yBot * uh.f - 1e-9).map((p, i) => `${i ? 'L' : 'M'}${n(X(p.q))},${n(Y(p[k]))}`).join(' ');
+    parts.push(`<path d="${line('sys')}" class="sys"/><path d="${line('pump')}" class="pc"/>`);
+    r.cases.forEach((c, i) => {
+      const px = X(c.q), y1 = Y(c.h), y2 = Y(c.hsys);
+      parts.push(`<line x1="${n(px)}" y1="${n(y1)}" x2="${n(px)}" y2="${n(y2)}" class="gap${c.dpCv < 0 ? ' neg' : ''}"/>`);
+      parts.push(`<circle cx="${n(px)}" cy="${n(y2)}" r="3.5" class="ps"/><circle cx="${n(px)}" cy="${n(y1)}" r="4" class="pp"/>`);
+      const ly = Math.min(y1, y2) - 8;
+      parts.push(`<text x="${n(px)}" y="${n(Math.max(MT + 10, ly))}" class="cl" text-anchor="middle">${names[i].replace(/[<&]/g, '')}</text>`);
+    });
+    parts.push(`<text x="${n(ML + pw / 2)}" y="${H - 6}" class="ax" text-anchor="middle">Capacity per pump, ${uq.label}</text>`);
+    parts.push(`<text x="14" y="${n(MT + ph / 2)}" class="ax" text-anchor="middle" transform="rotate(-90 14 ${n(MT + ph / 2)})">Head, ${uh.label}</text>`);
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-pump]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const units: Record<PumpCat, string> = { ...PUMP_DEFAULT_UNITS };
+    const unit = (c: PumpCat) => PUMP_UNITS[c].find((u) => u.label === units[c])!;
+    let given: 'mass' | 'vol' = 'mass', eyes: 1 | 2 = 1, driver: 'motor' | 'turbine' = 'motor', effmode: 'typed' | 'est' = 'typed';
+    let bad = false;
+    let last: Shown | undefined;
+    const effDirty = [false, false, false];
+
+    const read = (k: string, ok: (x: number) => boolean, c: PumpCat | null = CAT[k] ?? null) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value);
+      const x = blank ? NaN : c ? toSI(unit(c), raw) : raw;
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      if (invalid) bad = true;
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, v: number | undefined, c?: PumpCat) => {
+      const o = root.querySelector<HTMLOutputElement>(`output[data-o="${k}"]`);
+      if (o) o.textContent = v === undefined || !Number.isFinite(v) ? '' : fmt(c ? fromSI(unit(c), v) : v);
+    };
+    const names = () => [0, 1, 2].map((i) => $<HTMLInputElement>(`input[data-name="${i}"]`).value.trim() || `Case ${i + 1}`);
+
+    const draw = () => {
+      const box = $<HTMLElement>('[data-chart]');
+      if (!last) { box.innerHTML = ''; return; }
+      const W = Math.max(320, Math.min(760, box.clientWidth || 760));
+      box.innerHTML = chart(last, unit('vflow'), unit('len'), W);
+    };
+
+    const run = () => {
+      bad = false;
+      segSet(root, 'given', given);
+      for (const el of root.querySelectorAll<HTMLElement>('[data-drv]')) el.hidden = el.dataset.drv !== driver;
+      const nm = names();
+      root.querySelectorAll<HTMLElement>('[data-cn]').forEach((th) => { th.textContent = nm[+th.dataset.cn!]; });
+
+      const pos = (x: number) => x > 0, nonneg = (x: number) => x >= 0, any = (x: number) => Number.isFinite(x);
+      const rho = read('rho', pos);
+      // linked normal flow: the given one is typed, the other calculated (green, typeable)
+      const mEl = inp('mN'), qEl = inp('qN');
+      mEl.classList.toggle('calcd', given === 'vol'); qEl.classList.toggle('calcd', given === 'mass');
+      let m = NaN;
+      if (given === 'mass') { m = read('mN', pos); qEl.removeAttribute('aria-invalid'); qEl.value = Number.isFinite(m) && Number.isFinite(rho) ? fmtIn(fromSI(unit('vflow'), m / rho)) : ''; }
+      else { const q = read('qN', pos); mEl.removeAttribute('aria-invalid'); m = q * rho; mEl.value = Number.isFinite(m) ? fmtIn(fromSI(unit('mflow'), m)) : ''; }
+
+      const pct = [0, 1, 2].map((i) => read(`pct${i}`, pos, null)) as [number, number, number];
+      const effR = effmode === 'est' ? NaN : read('eff0', (x) => x > 0 && x <= 100, null);
+      const x: PumpInput = {
+        m, rho, pv: read('pv', nonneg), n: read('n', (v) => v >= 1 && Number.isInteger(v), null), pct,
+        pos: read('pos', pos), elsg: read('elsg', any), lll: read('lll', any), elclg: read('elclg', any),
+        dpSeq: read('dpSeq', nonneg), dpSfr: read('dpSfr', nonneg),
+        pt: read('pt', pos), elclt: read('elclt', any), dpDeq: read('dpDeq', nonneg), dpDfe: read('dpDfe', nonneg), dpDfr: read('dpDfr', nonneg), dpCv: read('dpCv', nonneg),
+        rso: read('rso', (v) => v > 0 && v < 200, null) / 100, N: read('N', pos, null), eyes, stages: read('stages', (v) => v >= 1 && Number.isInteger(v), null),
+        nss: read('nss', pos), margin: read('margin', nonneg),
+        pds: read('pds', pos), hll: read('hll', any), driver, trip: read('trip', (v) => v >= 100 && v < 200, null) / 100,
+        eff: [effR / 100, NaN, NaN], effDrv: read('effDrv', (v) => v > 0 && v <= 100, null) / 100,
+      };
+      if (driver === 'motor') x.trip = 1;
+      // the flow-and-hydraulics core must be complete for any result
+      const core = [x.m, x.rho, x.n, ...x.pct, x.pos, x.elsg, x.lll, x.elclg, x.dpSeq, x.dpSfr, x.pt, x.elclt, x.dpDeq, x.dpDfe, x.dpDfr, x.dpCv, x.rso];
+      let r: PumpResult | undefined;
+      if (core.every(Number.isFinite)) {
+        const probe = pump({ ...x, eff: [1, 1, 1], effDrv: 1 });   // hydraulics only (efficiency estimate, head)
+        // efficiency: estimate fills the rated field; untouched per-case fields follow the rated value
+        if (effmode === 'est') {
+          inp('eff0').value = fmtIn(probe.effEst); inp('eff0').removeAttribute('aria-invalid'); x.eff[0] = probe.effEst / 100;
+        }
+        for (const i of [1, 2]) {
+          if (!effDirty[i] && Number.isFinite(x.eff[0])) inp(`eff${i}`).value = inp('eff0').value;
+          x.eff[i] = read(`eff${i}`, (v) => v > 0 && v <= 100, null) / 100;
+        }
+        r = pump(x);
+        if (probe.hr <= 0) r = undefined;
+      } else if (effmode === 'est') inp('eff0').value = '';
+      inp('eff0').classList.toggle('calcd', effmode === 'est'); inp('eff0').readOnly = effmode === 'est';
+
+      // outputs
+      const warn: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const c = r?.cases[i];
+        for (const [k, cat] of Object.entries(OUTCAT)) show(`${k}-${i}`, c ? (c as unknown as Record<string, number>)[k] : undefined, cat);
+        show(`ratio-${i}`, c?.ratio);
+        const ok = root.querySelector<HTMLOutputElement>(`output[data-o="ok-${i}"]`)!;
+        const valid = c && Number.isFinite(c.npsha) && Number.isFinite(r!.npshr);
+        ok.textContent = valid ? (c!.npshOk ? 'sufficient' : 'insufficient') : '';
+        ok.classList.toggle('bad', !!valid && !c!.npshOk);
+      }
+      show('hso0', r?.hso0, 'len'); show('npshrCl', r?.npshrCl, 'len'); show('npshr', r?.npshr, 'len'); show('hvp', r?.hvp, 'len');
+      show('ns', r?.ns, 'ss'); show('u', r?.u, 'vel'); show('dImp', r?.dImp, 'dia');
+      show('hso', r?.hso, 'len'); show('pdd', r && Number.isFinite(r.pdd) ? r.pdd : undefined, 'pg');
+      show('drvRating', r?.drvRating, 'power');
+      $('[data-hsoeq]').innerHTML = mathHtml(driver === 'turbine' ? 'H_so,max = (N_trip/N)²·(1 + R_so)·H_r' : 'H_so = (1 + R_so)·H_r');
+      $('[data-drvlab]').textContent = driver === 'motor' ? 'Minimum motor rating (API 610 Table 11)' : 'Minimum turbine rating (API 610 6.1.8)';
+      $('[data-drveq]').innerHTML = r && Number.isFinite(r.drvRating) ? mathHtml(`${r.drvPct} %·P_sh,rated`) : '';
+
+      if (r) {
+        const nmn = nm;
+        r.cases.forEach((c, i) => {
+          if (i > 0 && c.dpCv < 0) warn.push(`${nmn[i]}: the pump curve lies below the system — the pump cannot deliver this flow (control-valve Δp negative). Check the case % or the rise to shut-off.`);
+          if (Number.isFinite(c.npsha) && Number.isFinite(r!.npshr) && !c.npshOk) warn.push(`${nmn[i]}: NPSH available ${fmt(fromSI(unit('len'), c.npsha))} ${units.len} is below the required ${fmt(fromSI(unit('len'), r!.npshr))} ${units.len}; raise the suction vessel to at least ${fmt(fromSI(unit('len'), c.elsMin))} ${units.len}.`);
+          if (i > 0 && c.pct > r!.cases[0].pct) warn.push(`${nmn[i]} has more flow than the rated case: the pump is sized at the first case, beyond it the curve is extrapolated.`);
+          if (c.ps < x.pv) warn.push(`${nmn[i]}: suction pressure below the vapour pressure.`);
+        });
+        const F = r.hr / 0.3048, Gq = r.qr / GPM;
+        $('[data-effnote]').innerHTML = `Branan / GPSA estimate at the rated point: ${fmt(r.effEst)} %` + (r.effEstInRange ? ' (inside its range).' : ` — <b>outside its range</b> (head ${fmt(F)} ft, flow ${fmt(Gq)} US gpm; valid 50–300 ft and 100–1000 gpm), use with care.`) + ' Efficiencies of the other cases start equal to the rated one; at part load the real efficiency is lower — type the vendor values.';
+      } else $('[data-effnote]').innerHTML = '';
+      if (bad) warn.push('Some inputs are invalid (red border).');
+      $('[data-warn]').innerHTML = warn.map((w) => `<li>${w}</li>`).join('');
+      last = r ? { x, r, names: nm } : undefined;
+      draw();
+    };
+
+    // one unit per category: every selector of that category follows; typed values are converted
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      const c = t.dataset.cat as PumpCat | undefined;
+      if (c) {
+        const from = unit(c);
+        units[c] = t.value;
+        const to = unit(c);
+        for (const s of root.querySelectorAll<HTMLSelectElement>(`select[data-cat="${c}"]`)) s.value = t.value;
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-ut="${c}"]`)) s.textContent = t.value;
+        for (const [k, kc] of Object.entries(CAT)) {
+          if (kc !== c) continue;
+          const el = inp(k), v = parseNumber(el.value);
+          if (el.value.trim() !== '' && Number.isFinite(v)) el.value = fmtIn(fromSI(to, toSI(from, v)));
+        }
+        $('[data-status]').textContent = `Unit changed to ${t.value}; values converted.`;
+      }
+      if (t.matches('select')) run();
+    });
+    root.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (!t.matches('input')) return;
+      if (t.dataset.k === 'mN' && given !== 'mass') given = 'mass';
+      if (t.dataset.k === 'qN' && given !== 'vol') given = 'vol';
+      const m = /^eff([12])$/.exec(t.dataset.k ?? '');
+      if (m) effDirty[+m[1]] = t.value.trim() !== '';
+      run();
+    });
+    segInit(root, 'given', (v) => { given = v as typeof given; run(); });
+    segInit(root, 'eyes', (v) => { eyes = (+v) as 1 | 2; run(); });
+    segInit(root, 'driver', (v) => { driver = v as typeof driver; run(); });
+    segInit(root, 'effmode', (v) => { effmode = v as typeof effmode; run(); });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) el.value = '';
+      effDirty.fill(false);
+      if (effmode === 'est') { effmode = 'typed'; segSet(root, 'effmode', 'typed'); }
+      run(); inp(given === 'mass' ? 'mN' : 'qN').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    const dlg = $<HTMLDialogElement>('dialog.zd');
+    $('[data-zoom]').addEventListener('click', () => {
+      if (!last) return;
+      const W = Math.min(1100, Math.max(320, window.innerWidth - 64));
+      $('[data-zd-img]').innerHTML = chart(last, unit('vflow'), unit('len'), W);
+      dlg.showModal();
+    });
+    $('[data-zd-close]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    let rt = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); }).observe($('[data-chart]'));
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 60rem; }
+  .bar :global(i) { font-style: italic; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  tbody th { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  th label { cursor: text; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 50rem; }
+  .io .v { width: 9.5rem; }
+  .io .u { width: 9rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io .u :global(select) { max-width: 9rem; }
+  [hidden] { display: none !important; }
+  .calc :global(input), .calc :global(output), select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input.calcd) { background: var(--zoho-out); border-color: transparent; }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(output.bad) { color: var(--markup); font-weight: 600; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .calc :global(select:focus) { outline: 2px solid var(--line); outline-offset: 1px; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 50rem; }
+  .note :global(b) { color: var(--ink); }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 50rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+
+  /* case tables: quantity | three cases | unit */
+  .calc :global(.cs) { max-width: 60rem; margin-top: 0.75rem; table-layout: fixed; }
+  .calc :global(.cs thead th) { font-weight: 600; font-size: 0.8125rem; vertical-align: bottom; padding: 0 0.25rem 0.25rem 0; }
+  .calc :global(.cs thead th:first-child) { width: 38%; }
+  .calc :global(.cs .cu) { width: 8.5rem; padding-left: 0.25rem; color: var(--muted); font-size: 0.875rem; }
+  .calc :global(.cs .cu select) { max-width: 8.5rem; }
+  .calc :global(.cs td) { padding: 0.125rem 0.25rem 0.125rem 0; }
+  .calc :global(.cs tbody th) { font-weight: 400; text-align: left; padding-right: 0.75rem; line-height: 1.35; }
+  .calc :global(.cs thead th:not(:first-child):not(.cu)) { width: 16%; text-align: left; }
+  .calc :global(.sr) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .calc :global(.cs .cn) { padding-left: 0.5rem; }
+  .calc :global(input.nm-in) { background: #fff; border-color: var(--rule); font-weight: 600; font-size: 0.8125rem; height: 1.75rem; }
+
+  /* chart */
+  .sk { display: block; width: 100%; max-width: 50rem; margin-top: 1rem; padding: 0; border: 0; background: none; text-align: left; cursor: zoom-in; }
+  .skimg { display: block; }
+  .skimg :global(svg), .zimg :global(svg) { display: block; max-width: 100%; height: auto; }
+  .zoom { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .pump :global(.grid) { stroke: var(--rule); stroke-width: 0.6; }
+  .pump :global(.grid.zero) { stroke: var(--muted); }
+  .pump :global(.tick) { font: 400 11px var(--font-ui); fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .pump :global(.ax) { font: 400 12px var(--font-ui); fill: var(--ink); }
+  .pump :global(.pc) { fill: none; stroke: var(--ink); stroke-width: 2; }
+  .pump :global(.sys) { fill: none; stroke: var(--line); stroke-width: 1.6; stroke-dasharray: 7 4; }
+  .pump :global(.gap) { stroke: var(--line); stroke-width: 2.5; }
+  .pump :global(.gap.neg) { stroke: var(--markup); }
+  .pump :global(.pp) { fill: var(--ink); }
+  .pump :global(.ps) { fill: #fff; stroke: var(--line); stroke-width: 1.5; }
+  .pump :global(.cl) { font: 600 11px var(--font-ui); fill: var(--ink); paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+  .zd { width: min(72rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1.5px solid var(--ink); border-radius: 0; background: #fff; color: var(--ink); }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .zhead h2 { margin: 0; font-size: 1.25rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zclose:hover { background: var(--line); color: var(--paper); }
+  .zimg { padding: 1rem 1.25rem 1.5rem; display: grid; place-items: center; }
+
+  .basis { margin-top: 0.5rem; max-width: 60rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .basis i { font-style: italic; }
+  .basis sup, .basis sub { font-size: 0.75em; line-height: 0; }
+  .ty { font-size: 0.8125rem; margin: 0.25rem 0 0.5rem; }
+  .ty th, .ty td { border-bottom: 1px solid var(--rule); padding: 0.25rem 0.5rem 0.25rem 0; vertical-align: top; }
+  .ty thead th { font-weight: 600; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .io .v { width: 7rem; }
+    .io .u { width: 6.5rem; }
+    .io .u :global(select) { max-width: 6.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .calc :global(.cs) { font-size: 0.75rem; }
+    .calc :global(.cs thead th:first-child) { width: 31%; }
+    .calc :global(.cs thead th:not(:first-child):not(.cu)) { width: 19%; }
+    .calc :global(.cs .cu) { width: 4.5rem; font-size: 0.6875rem; }
+    .calc :global(.cs .cu select) { font-size: 0.6875rem; padding: 0; }
+    .calc :global(.cs input), .calc :global(.cs output) { padding: 0 0.1875rem; }
+    .ty { display: block; overflow-x: auto; }
+  }
+</style>

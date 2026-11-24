@@ -17,6 +17,7 @@ import TwoPhaseCalc from '../components/TwoPhaseCalc.astro';
 import CVCalc from '../components/CVCalc.astro';
 import ROCalc from '../components/ROCalc.astro';
 import DrumCalc from '../components/DrumCalc.astro';
+import PumpCalc from '../components/PumpCalc.astro';
 import SourceList from '../components/SourceList.astro';
 import { tools, categories } from '../data/tools';
 import { url } from '../lib/url';
@@ -68,6 +69,7 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
       : tool.native === 'cv' ? <CVCalc />
       : tool.native === 'ro' ? <ROCalc />
       : tool.native === 'drum' ? <DrumCalc />
+      : tool.native === 'pump' ? <PumpCalc />
       : tool.native ? <NativeCalc id={tool.native} title={tool.title} />
       : <ZohoEmbed src={tool.zoho} title={tool.title} />}
   </div>

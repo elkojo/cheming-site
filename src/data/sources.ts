@@ -313,6 +313,25 @@ export const sources: Source[] = [
     read: '2026-11-22',
     use: { drum: 'Check of the head volumes: ASME torispherical (knuckle 0.06·L, crown L = Di) 0.0809·Di³, 2:1 ellipsoidal π·Di³/24, hemispherical π·Di³/12; partially filled horizontal cylinder (Eq. 10-109).' },
   },
+  // ── pumps ──
+  {
+    id: 'branan-rot-3', by: 'C. R. Branan', title: 'Rules of Thumb for Chemical Engineers, 3rd ed., Section 5 Pumps: Efficiency (p. 105) and Suction System NPSH for Studies (p. 108, after F. L. Evans, Equipment Design Handbook for Refineries and Chemical Plants, Vol. 1, 2nd ed., 1979)',
+    where: 'Gulf Professional Publishing (Elsevier), Amsterdam/Boston', year: 2002,
+    read: '2026-11-24',
+    use: { pump: 'Efficiency equation fitted to the GPSA pump-efficiency curves (efficiency in %, head 50–300 ft, flow 100–1000 US gpm, within about 7 % of the curve value); Evans\' relation n·Q^0.5/NPSH^0.75 = C with C = 7 000–10 000 (9 000 for estimates), the default suction specific speed.' },
+  },
+  {
+    id: 'walas-cpe-2', by: 'J. R. Couper, W. R. Penney, J. R. Fair, S. M. Walas', title: 'Chemical Process Equipment: Selection and Design, 2nd ed., Rules of Thumb: Summary (Drivers and power recovery equipment; Pumps)',
+    where: 'Gulf Professional Publishing (Elsevier), Burlington MA', year: 2005,
+    read: '2026-11-24',
+    use: { pump: 'Typical ranges of pump types (flow, maximum head, efficiency) and driver efficiencies (motors 85–95 %, steam turbines 42–78 %, gas engines and turbines 28–38 %); the source of the original sheet\'s notes 8, 9 and 11.' },
+  },
+  {
+    id: 'api-610-10', by: 'American Petroleum Institute', title: 'ANSI/API Standard 610 / ISO 13709:2003, Centrifugal Pumps for Petroleum, Petrochemical and Natural Gas Industries',
+    where: 'American Petroleum Institute, 10th ed., October 2004', year: 2004,
+    read: '2026-11-24',
+    use: { pump: 'Maximum discharge pressure = maximum suction pressure + maximum differential (5.3.1), raised for operation to trip speed (5.3.2 c); continuous head rise to shut-off, at least 10 % for parallel operation (5.1.13); motor ratings 125 / 115 / 110 % of rated power (Table 11, 6.1.3); steam turbines 110 % (6.1.8).' },
+  },
   {
     id: 'plaatijzerindustrie-28011', by: 'De Plaatijzerindustrie B.V. (Apeldoorn, NL)', title: 'Klöpperbodem — decimal (torispherical) heads acc. DIN 28011: specifications and stock list',
     where: 'manufacturer\'s web page and data sheet (July 2025)', year: 2025,
