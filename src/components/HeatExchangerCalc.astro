@@ -1,0 +1,728 @@
+---
+// Native Heat Exchanger calculator (Phase 7). Five numbered steps: 1 Streams (hot and cold side by side), 2 Heat
+// balance, 3 Temperature difference (arrangement, LMTD, F, live T–Q chart), 4 Overall coefficient U (service value,
+// or clean + fouling; clickable reference tables), 5 Area and tubes. Sizing (one unknown from the heat balance, then
+// the area) or rating (given area → outlets, ε-NTU). Owner's decisions 2026-11-24 (ORIGINAL-ERRORS.md HE-1…6).
+import SegToggle from './SegToggle.astro';
+import { mathHtml } from '../lib/calc/types';
+import { HX_UNITS, HX_DEFAULT_UNITS, type HxCat } from '../lib/calc/hx-units';
+import { PERRY_11_3, ETB_U, ETB_FOULING } from '../lib/calc/hx-data';
+
+const id = (k: string) => `hx-${k}`;
+const plain = (s: string) => s.replace(/<[^>]*>/g, '').trim();
+const unitSel = (cat: HxCat, label: string) =>
+  `<select data-cat="${cat}" aria-label="${plain(label)} unit">${HX_UNITS[cat].map((u) => `<option${u.label === HX_DEFAULT_UNITS[cat] ? ' selected' : ''}>${u.label}</option>`).join('')}</select>`;
+const unitTxt = (cat: HxCat) => `<span data-ut="${cat}">${HX_DEFAULT_UNITS[cat]}</span>`;
+const inp = (k: string, v = '', label = '') =>
+  `<input id="${id(k)}" data-k="${k}" value="${v}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"${label ? ` aria-label="${label}"` : ''} />`;
+const out = (k: string) => `<output data-o="${k}"></output>`;
+const name = (label: string, sym: string) => `<span class="lb">${label}</span> <span class="eq">${mathHtml(sym)}</span>`;
+
+// two-column (hot | cold) rows
+type Pair = { k: string; label: string; sym: string; cat?: HxCat; sel?: boolean; unit?: string; v?: [string, string]; out?: boolean };
+const pair = (r: Pair) => {
+  const cell = (side: 'h' | 'c', i: 0 | 1) => {
+    const k = `${r.k}${side}`;
+    return `<td>${r.out ? out(k) : inp(k, r.v?.[i] ?? '', `${r.label}, ${side === 'h' ? 'hot' : 'cold'} stream`)}<span class="na" data-na="${k}" hidden>–</span></td>`;
+  };
+  const u = r.cat ? (r.sel ? unitSel(r.cat, r.label) : unitTxt(r.cat)) : `<span>${r.unit ?? '–'}</span>`;
+  return `<tr data-row="${r.k}"><th scope="row">${name(r.label, r.sym)}</th>${cell('h', 0)}${cell('c', 1)}<td class="cu">${u}</td></tr>`;
+};
+// one-value rows
+type Row = { k: string; label: string; sym: string; cat?: HxCat; sel?: boolean; unit?: string; v?: string; out?: boolean; show?: string };
+const row = (r: Row) => {
+  const cell = r.out ? out(r.k) : inp(r.k, r.v ?? '');
+  const u = r.cat ? (r.sel ? unitSel(r.cat, r.label) : unitTxt(r.cat)) : `<span>${r.unit ?? '–'}</span>`;
+  const nm = name(r.label, r.sym);
+  return `<tr data-row="${r.k}"${r.show ? ` data-show="${r.show}"` : ''}><th scope="row">${r.out ? nm : `<label for="${id(r.k)}">${nm}</label>`}</th><td class="v">${cell}</td><td class="u">${u}</td></tr>`;
+};
+const rows = (rs: Row[]) => `<table class="io"><tbody>${rs.map(row).join('')}</tbody></table>`;
+const range = (lo: number, hi: number) => `${lo}–${hi}`;
+---
+<div class="calc hx" data-hx>
+  <div class="bar">
+    <p>Shell-and-tube, double-pipe, cross-flow and other two-stream exchangers. Work down the five steps: the result updates as you type. Temperatures and flows of the two streams sit side by side; one unit per kind of quantity, typed values are converted.</p>
+    <button type="button" class="reset" data-reset>Clear all inputs</button>
+  </div>
+
+  <div class="switches top">
+    <SegToggle label="Mode" name="mode" value="size" options={[{ value: 'size', label: 'Sizing', hint: '(find the area)' }, { value: 'rate', label: 'Rating', hint: '(given area)' }]} />
+    <div class="calcsw" data-show="size">
+      <span class="calcl">Calculate</span>
+      <SegToggle label="Hot" name="solveH" value="mh" options={[{ value: 'tih', label: 'Inlet temp.', short: 'In. temp.' }, { value: 'th', label: 'Outlet temp.', short: 'Out. temp.' }, { value: 'mh', label: 'Flow' }]} />
+      <SegToggle label="Cold" name="solveC" value="" options={[{ value: 'tic', label: 'Inlet temp.', short: 'In. temp.' }, { value: 'tc', label: 'Outlet temp.', short: 'Out. temp.' }, { value: 'mc', label: 'Flow' }]} />
+    </div>
+  </div>
+  <p class="note modenote" data-modenote></p>
+
+  <section class="grp" aria-labelledby={id('s1')}>
+    <h2 id={id('s1')}><span class="no">1</span> Streams</h2>
+    <div class="switches">
+      <SegToggle label="Hot stream" name="latH" value="0" options={[{ value: '0', label: 'Sensible' }, { value: '1', label: 'Condensing' }]} />
+      <SegToggle label="Cold stream" name="latC" value="0" options={[{ value: '0', label: 'Sensible' }, { value: '1', label: 'Boiling' }]} />
+      <SegToggle label="In the tubes" name="tside" value="c" options={[{ value: 'h', label: 'Hot stream' }, { value: 'c', label: 'Cold stream' }]} />
+    </div>
+    <table class="cs">
+      <thead><tr><th scope="col"><span class="sr">Quantity</span></th><th scope="col" class="hot">Hot stream</th><th scope="col" class="cold">Cold stream</th><th scope="col" class="cu"><span class="sr">Unit</span></th></tr></thead>
+      <tbody set:html={[
+        pair({ k: 'tin', label: 'Inlet temperature', sym: 'T_in', cat: 'temp', sel: true, v: ['104', '40'] }),
+        pair({ k: 'tout', label: 'Outlet temperature', sym: 'T_out', cat: 'temp', v: ['85.11', '60'] }),
+        pair({ k: 'm', label: 'Mass flow', sym: 'M', cat: 'mflow', sel: true, v: ['', '140000'] }),
+        pair({ k: 'cp', label: 'Specific heat', sym: 'c_p', cat: 'cp', sel: true, v: ['0.63', '0.51'] }),
+        pair({ k: 'lam', label: 'Latent heat', sym: 'λ', cat: 'lam', sel: true }),
+        pair({ k: 'C', label: 'Heat capacity rate', sym: 'C = M·c_p', unit: 'W/K', out: true }),
+      ].join('')} />
+    </table>
+    <div class="switches">
+      <SegToggle label="Hot properties" name="propH" value="typed" options={[{ value: 'typed', label: 'Typed' }, { value: 'if97', label: 'Water / steam', hint: '(IF97)' }]} />
+      <SegToggle label="Cold properties" name="propC" value="typed" options={[{ value: 'typed', label: 'Typed' }, { value: 'if97', label: 'Water / steam', hint: '(IF97)' }]} />
+    </div>
+    <p class="note">Condensing or boiling: the stream stays at its inlet temperature (saturation) and gives or takes <i>M</i>·<i>λ</i>; no sensible cooling or heating is included. "Water / steam" fills <i>c</i><sub>p</sub> of liquid water at the mean temperature (1 atm, or saturation pressure above 100 °C), or the latent heat of steam at the inlet temperature, from IAPWS-IF97.</p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s2')}>
+    <h2 id={id('s2')}><span class="no">2</span> Heat balance</h2>
+    <Fragment set:html={rows([
+      { k: 'q', label: 'Heat duty', sym: 'Q = M·c_p·|T_out − T_in|  or  M·λ', cat: 'power', sel: true, out: true },
+    ])} />
+    <p class="note" data-qnote></p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s3')}>
+    <h2 id={id('s3')}><span class="no">3</span> Temperature difference</h2>
+    <div class="switches">
+      <SegToggle label="Flow arrangement" name="arr" value="counter" options={[{ value: 'counter', label: 'Counter-current' }, { value: 'co', label: 'Co-current' }, { value: 'shell', label: 'Shell and tube' }, { value: 'cross', label: 'Cross-flow' }]} />
+      <div data-show="cross"><SegToggle label="Mixing" name="mix" value="none" options={[{ value: 'none', label: 'Both unmixed' }, { value: 'hot', label: 'Hot mixed' }, { value: 'cold', label: 'Cold mixed' }]} /></div>
+    </div>
+    <button type="button" class="sk" data-zoom aria-haspopup="dialog" aria-label="Enlarge the temperature profile">
+      <span class="skimg" data-chart role="img" aria-label="Temperature of the hot and the cold stream against the heat transferred"></span>
+      <span class="zoom" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 10l4 4M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" stroke-width="1.5"/></svg>
+        Enlarge
+      </span>
+    </button>
+    <Fragment set:html={rows([
+      { k: 'shells', label: 'Shell passes (each with 2, 4 … tube passes)', sym: 'N', v: '1', show: 'shell' },
+      { k: 'dt1', label: 'Temperature difference, hot end', sym: 'Δt_1', cat: 'dt', sel: true, out: true },
+      { k: 'dt2', label: 'Temperature difference, cold end', sym: 'Δt_2', cat: 'dt', out: true },
+      { k: 'lmtd', label: 'Log-mean temperature difference', sym: 'LMTD = (Δt_1 − Δt_2)/ln(Δt_1/Δt_2)', cat: 'dt', out: true },
+      { k: 'R', label: 'Capacity ratio', sym: 'R = (T_h,in − T_h,out)/(T_c,out − T_c,in)', out: true, show: 'F' },
+      { k: 'P', label: 'Thermal effectiveness, cold side', sym: 'P = (T_c,out − T_c,in)/(T_h,in − T_c,in)', out: true, show: 'F' },
+      { k: 'F', label: 'Correction factor', sym: 'F', out: true, show: 'F' },
+      { k: 'nShell', label: 'Shell passes needed for F ≥ 0.8', sym: 'N_min', out: true, show: 'shell' },
+      { k: 'dtm', label: 'Mean temperature difference', sym: 'ΔT_m = F·LMTD', cat: 'dt', out: true },
+    ])} />
+    <p class="note" data-arrnote></p>
+    <ul class="warn" data-warn3 aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s4')}>
+    <h2 id={id('s4')}><span class="no">4</span> Overall heat-transfer coefficient</h2>
+    <div class="switches">
+      <SegToggle label="U given as" name="umode" value="clean" options={[{ value: 'service', label: 'Service value', hint: '(dirt included)' }, { value: 'clean', label: 'Clean + fouling' }]} />
+    </div>
+    <Fragment set:html={rows([
+      { k: 'u', label: 'Overall coefficient in service', sym: 'U_d', cat: 'htc', sel: true, show: 'service' },
+      { k: 'uc', label: 'Overall coefficient, clean', sym: 'U', cat: 'htc', v: '717', show: 'clean' },
+      { k: 'rfh', label: 'Fouling resistance, hot stream <span class="side" data-sideof="h"></span>', sym: 'R_f,h', cat: 'foul', sel: true, v: '0.0004', show: 'clean' },
+      { k: 'rfc', label: 'Fouling resistance, cold stream <span class="side" data-sideof="c"></span>', sym: 'R_f,c', cat: 'foul', v: '0.0005', show: 'clean' },
+      { k: 'dRatio', label: 'Tube diameter ratio (step 5)', sym: 'd_o/d_i', out: true, show: 'clean' },
+      { k: 'rfiO', label: 'Tube-side fouling referred to the outside area', sym: 'R_f,i·d_o/d_i', cat: 'foul', out: true, show: 'clean' },
+      { k: 'ud', label: 'Design coefficient, outside area', sym: 'U_d = 1/(1/U + R_f,o + R_f,i·d_o/d_i)', cat: 'htc', out: true, show: 'clean' },
+    ])} />
+    <p class="note" data-foulnote></p>
+    <p class="note">Type the clean <i>U</i> on the outside tube area, as on exchanger data sheets. A deposit inside the tubes covers a smaller surface, so its resistance per m² of outside area is larger by <i>d</i><sub>o</sub>/<i>d</i><sub>i</sub> (Perry Eq. 11-2). Typical values from handbooks are service values: they already include fouling, so add fouling only to a clean coefficient (the original sheet did both). Click a row below to use it.</p>
+    <details class="ref">
+      <summary>Typical overall coefficients in tubular exchangers, dirt included (Perry, Table 11-3)</summary>
+      <table class="ty" data-tab="perry">
+        <thead><tr><th scope="col">Shell side</th><th scope="col">Tube side</th><th scope="col">Design <i>U</i>, <span data-ut="htc">{HX_DEFAULT_UNITS.htc}</span></th><th scope="col">Dirt included, <span data-ut="foul">{HX_DEFAULT_UNITS.foul}</span></th></tr></thead>
+        {PERRY_11_3.map((g, gi) => (
+          <tbody>
+            <tr class="gh"><th scope="colgroup" colspan="4">{g.title}</th></tr>
+            {g.rows.map((r, ri) => (
+              <tr class="pick" tabindex="0" data-perry={`${gi}.${ri}`} title="Use the middle of the range as the service coefficient">
+                <td>{r.shell}</td><td>{r.tube}</td><td data-uv={`${r.u[0]},${r.u[1]}`} data-us="btu"></td><td data-rv={r.dirt} data-rs="btu"></td>
+              </tr>
+            ))}
+          </tbody>
+        ))}
+      </table>
+      <p class="note">Perry gives U in Btu/(h·ft²·°F) and dirt in h·ft²·°F/Btu; shown here converted. For preliminary estimates only.</p>
+    </details>
+    <details class="ref">
+      <summary>Overall coefficients by exchanger type (Engineering ToolBox, the original sheet's list)</summary>
+      <table class="ty" data-tab="etb">
+        <thead><tr><th scope="col">Type</th><th scope="col">Application</th><th scope="col"><i>U</i>, <span data-ut="htc">{HX_DEFAULT_UNITS.htc}</span></th></tr></thead>
+        <tbody>
+          {ETB_U.map((r, i) => (
+            <tr class="pick" tabindex="0" data-etb={i} title="Use the middle of the range as the service coefficient"><td>{r.type}</td><td>{r.app}</td><td data-uv={`${r.u[0]},${r.u[1]}`} data-us="si"></td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="note">The source does not say whether fouling is included; treat the values as service coefficients.</p>
+    </details>
+    <details class="ref">
+      <summary>Typical fouling resistances (Engineering ToolBox, the original sheet's list)</summary>
+      <table class="ty" data-tab="foul">
+        <thead><tr><th scope="col">Fluid</th><th scope="col"><i>R</i><sub>f</sub>, <span data-ut="foul">{HX_DEFAULT_UNITS.foul}</span></th><th scope="col">Use for</th></tr></thead>
+        <tbody>
+          {ETB_FOULING.map((r, i) => (
+            <tr><td>{r.fluid}</td><td data-rv={r.rf} data-rs="si"></td><td class="use"><button type="button" data-foul={`${i}.h`}>Hot stream</button> <button type="button" data-foul={`${i}.c`}>Cold stream</button></td></tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s5')}>
+    <h2 id={id('s5')}><span class="no">5</span> Area and tubes</h2>
+    <Fragment set:html={rows([
+      { k: 'areaReq', label: 'Required area', sym: 'A = Q/(U_d·ΔT_m)', cat: 'area', sel: true, out: true, show: 'size' },
+      { k: 'margin', label: 'Design margin on area', sym: 'm', v: '20', unit: '%', show: 'size' },
+      { k: 'areaD', label: 'Design area', sym: 'A′ = A·(1 + m)', cat: 'area', out: true, show: 'size' },
+      { k: 'area', label: 'Installed area', sym: 'A', cat: 'area', show: 'rate' },
+      { k: 'ntu', label: 'Number of transfer units', sym: 'NTU = U_d·A/C_min', out: true, show: 'rate' },
+      { k: 'eps', label: 'Effectiveness', sym: 'ε = Q/(C_min·(T_h,in − T_c,in))', out: true, show: 'rate' },
+    ])} />
+    <h3>Tube count estimate</h3>
+    <p class="note" data-tubenote></p>
+    <Fragment set:html={rows([
+      { k: 'od', label: 'Tube outside diameter', sym: 'd_o', cat: 'dia', sel: true, v: '19.05' },
+      { k: 'wall', label: 'Tube wall thickness', sym: 's', cat: 'dia', v: '2.11' },
+      { k: 'len', label: 'Tube length', sym: 'L', cat: 'len', sel: true, v: '6.096' },
+      { k: 'passes', label: 'Tube passes per shell', sym: 'n_p', v: '1' },
+      { k: 'rho', label: 'Density of the tube-side fluid', sym: 'ρ', cat: 'rho', sel: true, v: '850' },
+      { k: 'nTubes', label: 'Tubes per shell', sym: 'N_t = ⌈A′/(N·π·d_o·L)⌉', out: true },
+      { k: 'nTot', label: 'Tubes in all shells', sym: 'N·N_t', out: true },
+      { k: 'perPass', label: 'Tubes per pass', sym: 'N_t/n_p', out: true },
+      { k: 'vel', label: 'Tube-side velocity', sym: 'v = M/(ρ·(N_t/n_p)·π·d_i²/4)', cat: 'vel', sel: true, out: true },
+    ])} />
+    <p class="note">Default tube 19.05 mm (¾ in) × 2.11 mm (14 BWG) × 6.096 m (20 ft), the most common sizes (Perry). Tube side for corrosive, fouling, scaling and high-pressure fluids; shell side for viscous and condensing fluids (Walas). For water, keep at least 0.9–1.0 m/s in the tubes against fouling (Perry). Area counted on the tube outside; tube sheets, U-bends and the shell are not sized here.</p>
+    <ul class="warn" data-warn5 aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('basis')}>
+    <h2 id={id('basis')}>Calculation basis</h2>
+    <details class="basis" open>
+      <summary>Equations</summary>
+      <ol>
+        <li><b>Heat balance</b>: <i>Q</i> = <i>M</i><sub>h</sub>·<i>c</i><sub>p,h</sub>·(<i>T</i><sub>h,in</sub> − <i>T</i><sub>h,out</sub>) = <i>M</i><sub>c</sub>·<i>c</i><sub>p,c</sub>·(<i>T</i><sub>c,out</sub> − <i>T</i><sub>c,in</sub>); a condensing or boiling stream gives <i>M</i>·<i>λ</i> at constant temperature. In sizing the chosen unknown follows from the other stream's duty.</li>
+        <li><b>LMTD</b> (Perry 11-5): counter-current basis Δ<i>t</i><sub>1</sub> = <i>T</i><sub>h,in</sub> − <i>T</i><sub>c,out</sub>, Δ<i>t</i><sub>2</sub> = <i>T</i><sub>h,out</sub> − <i>T</i><sub>c,in</sub>; co-current Δ<i>t</i><sub>1</sub> = <i>T</i><sub>h,in</sub> − <i>T</i><sub>c,in</sub>, Δ<i>t</i><sub>2</sub> = <i>T</i><sub>h,out</sub> − <i>T</i><sub>c,out</sub>. Equal ends: LMTD = Δ<i>t</i>.</li>
+        <li><b>Correction factor</b> <i>F</i> (shell-and-tube and cross-flow; counter-current LMTD): from the effectiveness relations, <i>F</i> = <i>Q</i>/(<i>C</i><sub>min</sub>·NTU·LMTD), where NTU is the value that gives the actual effectiveness <i>ε</i> = <i>Q</i>/(<i>C</i><sub>min</sub>·(<i>T</i><sub>h,in</sub> − <i>T</i><sub>c,in</sub>)). For one shell pass this is Bowman, Mueller and Nagle's equation (Perry Fig. 11-4a); <i>N</i> shells in series as in Lienhard Table 3.1; cross-flow with one fluid mixed as Lienhard Table 3.1; both unmixed by the exact series (Mason; Lienhard gives an approximation). <i>F</i> = 1 when one stream changes phase.</li>
+        <li><b>Design coefficient</b> on the outside tube area (Perry Eq. 11-2): <i>U</i><sub>d</sub> = 1/(1/<i>U</i> + <i>R</i><sub>f,o</sub> + <i>R</i><sub>f,i</sub>·<i>d</i><sub>o</sub>/<i>d</i><sub>i</sub>); <i>R</i><sub>f,o</sub> is the fouling of the shell-side stream, <i>R</i><sub>f,i</sub> that of the tube-side stream (chosen in step 1), <i>d</i><sub>i</sub> = <i>d</i><sub>o</sub> − 2·<i>s</i> from step 5. Without tube dimensions <i>d</i><sub>o</sub>/<i>d</i><sub>i</sub> = 1 (the original sheet's formula).</li>
+        <li><b>Area</b>: <i>A</i> = <i>Q</i>/(<i>U</i><sub>d</sub>·<i>F</i>·LMTD), <i>A</i>′ = <i>A</i>·(1 + <i>m</i>).</li>
+        <li><b>Rating</b> (ε-NTU): NTU = <i>U</i><sub>d</sub>·<i>A</i>/<i>C</i><sub>min</sub>, <i>C</i><sub>r</sub> = <i>C</i><sub>min</sub>/<i>C</i><sub>max</sub>; <i>ε</i>(NTU, <i>C</i><sub>r</sub>) for the arrangement (Lienhard Table 3.1); <i>Q</i> = <i>ε</i>·<i>C</i><sub>min</sub>·(<i>T</i><sub>h,in</sub> − <i>T</i><sub>c,in</sub>); both streams changing phase: <i>Q</i> = <i>U</i><sub>d</sub>·<i>A</i>·(<i>T</i><sub>h</sub> − <i>T</i><sub>c</sub>).</li>
+        <li><b>Tubes</b>: <i>N</i><sub>t</sub> = ⌈<i>A</i>′/(<i>N</i>·π·<i>d</i><sub>o</sub>·<i>L</i>)⌉ per shell, velocity with the tube-side flow through <i>N</i><sub>t</sub>/<i>n</i><sub>p</sub> tubes of inside diameter <i>d</i><sub>i</sub> = <i>d</i><sub>o</sub> − 2·<i>s</i>.</li>
+      </ol>
+    </details>
+    <details class="basis">
+      <summary>Notes</summary>
+      <ol>
+        <li><i>F</i> below 0.8 (0.75 at the very lowest) means the arrangement is inefficient and sensitive to small deviations: use more shell passes in series (Perry).</li>
+        <li>Temperature cross: the cold outlet above the hot outlet. A single 1-2 shell handles only a small cross; counter-current flow (double-pipe, several shells in series, plate exchangers) handles more.</li>
+        <li>Minimum temperature approach about 20 °F (11 K) with normal coolants, 10 °F (5.6 K) or less with refrigerants; cooling water typically enters at 90 °F (32 °C) and leaves at no more than 120 °F (49 °C) (Walas).</li>
+        <li>Constant specific heats and <i>U</i> along the exchanger are assumed; for strongly varying properties, split the duty into zones.</li>
+      </ol>
+    </details>
+  </section>
+  <p class="sr" aria-live="polite" data-status></p>
+
+  <dialog class="zd" aria-labelledby={id('zd-title')}>
+    <div class="zhead">
+      <h2 id={id('zd-title')}>Temperature profile</h2>
+      <button type="button" class="zclose" data-zd-close aria-label="Close">
+        <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <div class="zimg" data-zd-img></div>
+  </dialog>
+</div>
+
+<script>
+  import { size, rate, designU, tubes, shellsNeeded, type StreamIn, type Geometry, type Arr, type Mix, type Unknown, type Stream } from '../lib/calc/hx';
+  import { HX_UNITS, HX_DEFAULT_UNITS, type HxCat } from '../lib/calc/hx-units';
+  import { PERRY_11_3, ETB_U, ETB_FOULING, BTU_HFT2F } from '../lib/calc/hx-data';
+  import { saturated, atPT } from '../lib/calc/steam';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('−', '-');
+  const CAT: Record<string, HxCat> = {
+    tinh: 'temp', tinc: 'temp', touth: 'temp', toutc: 'temp', mh: 'mflow', mc: 'mflow', cph: 'cp', cpc: 'cp', lamh: 'lam', lamc: 'lam',
+    u: 'htc', uc: 'htc', rfh: 'foul', rfc: 'foul', area: 'area', od: 'dia', wall: 'dia', len: 'len', rho: 'rho',
+  };
+  const T_1ATM = 373.124;   // K, IF97 saturation temperature at 101.325 kPa
+
+  /** cp of liquid water, J/(kg·K), at T (K): 1 atm below 100 °C, saturated liquid above. */
+  function waterCp(T: number): number {
+    try { return 1000 * (T <= T_1ATM ? atPT(101325, T).props.cp : saturated('T', T).water.cp); } catch { return NaN; }
+  }
+  /** latent heat of steam, J/kg, at T (K) */
+  function steamLam(T: number): number {
+    try { const s = saturated('T', T); return 1000 * (s.steam.h - s.water.h); } catch { return NaN; }
+  }
+
+  type U = { label: string; f: number; off?: number };
+  interface Shown { hot: Stream; cold: Stream; q: number; arr: Arr; latH: boolean; latC: boolean }
+
+  // ── T–Q chart: temperature against heat transferred ──
+  function nice(span: number): number {
+    const raw = span / 5, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+  }
+  function chart(s: Shown, ut: U, uq: U, W: number): string {
+    const { hot: h, cold: c, q, arr } = s;
+    const co = arr === 'co';
+    const T = (k: number) => fromSI(ut as never, k), Qd = fromSI(uq as never, q);
+    // hot line: counter basis runs from T_h,out at Q = 0 to T_h,in at Q; co-current from T_h,in at 0
+    const hot: [number, number][] = co ? [[0, T(h.tin)], [Qd, T(h.tout)]] : [[0, T(h.tout)], [Qd, T(h.tin)]];
+    const cold: [number, number][] = [[0, T(c.tin)], [Qd, T(c.tout)]];
+    const all = [...hot, ...cold].map((p) => p[1]);
+    let lo = Math.min(...all), hi = Math.max(...all);
+    const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+    const ys = nice(hi - lo), yb = Math.floor(lo / ys) * ys, yt = Math.ceil(hi / ys) * ys;
+    const xs = nice(Qd), xt = Math.ceil(Qd / xs - 1e-9) * xs;
+    const ML = 50, MR = 92, MT = 16, MB = 44, H = Math.round(Math.min(360, Math.max(230, W * 0.5)));
+    const pw = W - ML - MR, ph = H - MT - MB;
+    const X = (v: number) => ML + v / xt * pw, Y = (v: number) => MT + (yt - v) / (yt - yb) * ph;
+    const n = (v: number) => v.toFixed(1);
+    const P: string[] = [];
+    for (let v = 0; v <= xt + 1e-9; v += xs) P.push(`<line x1="${n(X(v))}" y1="${MT}" x2="${n(X(v))}" y2="${MT + ph}" class="grid"/><text x="${n(X(v))}" y="${MT + ph + 15}" class="tick" text-anchor="middle">${fmt(+v.toPrecision(10))}</text>`);
+    for (let v = yb; v <= yt + 1e-9; v += ys) P.push(`<line x1="${ML}" y1="${n(Y(v))}" x2="${ML + pw}" y2="${n(Y(v))}" class="grid"/><text x="${ML - 6}" y="${n(Y(v) + 4)}" class="tick" text-anchor="end">${fmt(+v.toPrecision(10))}</text>`);
+    // Δt at both ends
+    const end = (x: number, a: number, b: number, lab: string) => {
+      const y1 = Y(Math.max(a, b)), y2 = Y(Math.min(a, b));
+      P.push(`<line x1="${n(X(x))}" y1="${n(y1)}" x2="${n(X(x))}" y2="${n(y2)}" class="dt"/>`);
+      const lx = x === 0 ? X(x) + 8 : X(x) - 8;
+      P.push(`<text x="${n(lx)}" y="${n((y1 + y2) / 2 + 4)}" class="dtl" text-anchor="${x === 0 ? 'start' : 'end'}">${lab}</text>`);
+    };
+    end(0, hot[0][1], cold[0][1], co ? 'Δt₁' : 'Δt₂');
+    end(Qd, hot[1][1], cold[1][1], co ? 'Δt₂' : 'Δt₁');
+    const line = (p: [number, number][], cls: string) => `<path d="M${n(X(p[0][0]))},${n(Y(p[0][1]))} L${n(X(p[1][0]))},${n(Y(p[1][1]))}" class="${cls}"/>`;
+    P.push(line(cold, 'lc'), line(hot, 'lh'));
+    // end temperatures and stream names on the right
+    const tag = (p: [number, number], cls: string, txt: string, dy: number) => P.push(`<text x="${n(X(p[0]) + 8)}" y="${n(Y(p[1]) + dy)}" class="${cls}">${txt}</text>`);
+    const ry = (a: number, b: number) => (Y(a) < Y(b) ? [-2, 12] : [12, -2]);
+    const [dh, dc] = ry(hot[1][1], cold[1][1]);
+    tag(hot[1], 'th', `Hot ${fmt(hot[1][1])}`, dh + 4);
+    tag(cold[1], 'tc', `Cold ${fmt(cold[1][1])}`, dc + 4);
+    P.push(`<text x="${ML + pw / 2}" y="${H - 8}" class="ax" text-anchor="middle">Heat transferred, ${uq.label}</text>`);
+    P.push(`<text x="13" y="${MT + ph / 2}" class="ax" text-anchor="middle" transform="rotate(-90 13 ${MT + ph / 2})">Temperature, ${ut.label}</text>`);
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" xmlns="http://www.w3.org/2000/svg">${P.join('')}</svg>`;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-hx]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const units: Record<HxCat, string> = { ...HX_DEFAULT_UNITS };
+    const unit = (c: HxCat) => HX_UNITS[c].find((u) => u.label === units[c])!;
+    const st = {
+      mode: 'size' as 'size' | 'rate', solve: 'mh' as Unknown, latH: false, latC: false, propH: 'typed', propC: 'typed',
+      arr: 'counter' as Arr, mix: 'none' as Mix, umode: 'clean' as 'service' | 'clean', tside: 'c' as 'h' | 'c',
+    };
+    let passesDirty = false, bad = false, last: Shown | undefined, lastAreaD = NaN, lastUd = NaN;
+    // the value last typed into each field, restored when a calculated field becomes an input again
+    const typed: Record<string, string> = {};
+    for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) typed[el.dataset.k!] = el.value;
+    let wasCalc = new Set<string>();
+
+    const read = (k: string, ok: (x: number) => boolean, c: HxCat | null = CAT[k] ?? null) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value);
+      const x = blank ? NaN : c ? toSI(unit(c), raw) : raw;
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      if (invalid) bad = true;
+      return invalid ? NaN : x;
+    };
+    const put = (k: string, v: number) => { const el = inp(k); el.removeAttribute('aria-invalid'); el.value = Number.isFinite(v) ? fmtIn(fromSI(unit(CAT[k]), v)) : ''; };
+    const putTyped = (k: string, v: number) => { put(k, v); typed[k] = inp(k).value; };
+    const show = (k: string, v: number | undefined, c?: HxCat) => {
+      const o = root.querySelector<HTMLOutputElement>(`output[data-o="${k}"]`);
+      if (o) o.textContent = v === undefined || !Number.isFinite(v) ? '' : fmt(c ? fromSI(unit(c), v) : v);
+    };
+    /** mark an input as calculated (green, read-only) or typed (yellow) */
+    const calcd = (k: string, on: boolean) => { const el = inp(k); el.classList.toggle('calcd', on); el.readOnly = on; };
+    /** hide an input (not applicable) and show a dash */
+    const na = (k: string, on: boolean) => { inp(k).hidden = on; $<HTMLElement>(`[data-na="${k}"]`).hidden = !on; };
+
+    const draw = () => {
+      const box = $<HTMLElement>('[data-chart]');
+      box.innerHTML = last ? chart(last, unit('temp'), unit('power'), Math.max(320, Math.min(760, box.clientWidth || 760))) : '';
+    };
+
+    // reference tables: values in the current units
+    const fillTables = () => {
+      const uh = unit('htc'), uf = unit('foul');
+      for (const td of root.querySelectorAll<HTMLElement>('[data-uv]')) {
+        const [a, b] = td.dataset.uv!.split(',').map(Number), f = td.dataset.us === 'btu' ? BTU_HFT2F : 1;
+        td.textContent = `${fmt(+fromSI(uh, a * f).toPrecision(3))}–${fmt(+fromSI(uh, b * f).toPrecision(3))}`;
+      }
+      for (const td of root.querySelectorAll<HTMLElement>('[data-rv]')) {
+        const v = +td.dataset.rv!, f = td.dataset.rs === 'btu' ? 1 / BTU_HFT2F : 1;
+        td.textContent = fmt(+fromSI(uf, v * f).toPrecision(3));
+      }
+    };
+
+    const run = () => {
+      bad = false;
+      const { mode, solve, latH, latC } = st;
+      segSet(root, 'mode', mode); segSet(root, 'solveH', solve); segSet(root, 'solveC', solve); segSet(root, 'arr', st.arr); segSet(root, 'mix', st.mix);
+      segSet(root, 'umode', st.umode); segSet(root, 'latH', latH ? '1' : '0'); segSet(root, 'latC', latC ? '1' : '0');
+      segSet(root, 'propH', st.propH); segSet(root, 'propC', st.propC); segSet(root, 'tside', st.tside);
+      const usesF = st.arr === 'shell' || st.arr === 'cross';
+      for (const el of root.querySelectorAll<HTMLElement>('[data-show]')) {
+        const w = el.dataset.show!;
+        el.hidden = !(w === mode || w === st.arr || w === st.umode || (w === 'F' && usesF));
+      }
+      $('[data-modenote]').innerHTML = mode === 'size'
+        ? 'Sizing: type all but one of the six temperatures and flows; the one chosen above is calculated from the heat balance (green). Then the area follows.'
+        : 'Rating: an existing exchanger. Type both inlet temperatures, both flows and the installed area (step 5); both outlet temperatures and the duty are calculated.';
+
+      // which fields are calculated
+      const comp = new Set<string>();
+      if (mode === 'size') comp.add({ tih: 'tinh', th: 'touth', mh: 'mh', tic: 'tinc', tc: 'toutc', mc: 'mc' }[solve]);
+      else { comp.add('touth'); comp.add('toutc'); if (latH) comp.add('mh'); if (latC) comp.add('mc'); }
+      if (latH) comp.add('touth'); if (latC) comp.add('toutc');
+      const nowCalc = new Set([...comp, ...(st.propH === 'if97' ? ['cph', 'lamh'] : []), ...(st.propC === 'if97' ? ['cpc', 'lamc'] : [])]);
+      for (const k of wasCalc) if (!nowCalc.has(k) && typed[k]) inp(k).value = typed[k];   // nothing typed before: keep the calculated value
+      wasCalc = nowCalc;
+      for (const k of ['tinh', 'tinc', 'touth', 'toutc', 'mh', 'mc']) calcd(k, comp.has(k));
+      na('cph', latH); na('cpc', latC); na('lamh', !latH); na('lamc', !latC);
+      $<HTMLElement>('tr[data-row="lam"]').hidden = !latH && !latC;
+      calcd('cph', st.propH === 'if97'); calcd('cpc', st.propC === 'if97'); calcd('lamh', st.propH === 'if97'); calcd('lamc', st.propC === 'if97');
+
+      const pos = (x: number) => x > 0, any = (x: number) => Number.isFinite(x);
+      const rd = (k: string, ok: (x: number) => boolean) => (comp.has(k) ? NaN : read(k, ok));
+      const tinh = rd('tinh', pos), tinc = rd('tinc', pos);
+      const hot: StreamIn = { latent: latH, tin: tinh, tout: latH ? tinh : rd('touth', pos), m: rd('mh', pos), cp: NaN, lam: NaN };
+      const cold: StreamIn = { latent: latC, tin: tinc, tout: latC ? tinc : rd('toutc', pos), m: rd('mc', pos), cp: NaN, lam: NaN };
+      if (st.propH !== 'if97') { hot.cp = latH ? NaN : read('cph', pos); hot.lam = latH ? read('lamh', pos) : NaN; }
+      if (st.propC !== 'if97') { cold.cp = latC ? NaN : read('cpc', pos); cold.lam = latC ? read('lamc', pos) : NaN; }
+      void any;
+
+      // tube dimensions (step 5), needed for the outside-area basis of U
+      const d = read('od', pos), wall = read('wall', (x) => x > 0 && x < d / 2), L = read('len', pos);
+      const dRatio = Number.isFinite(d) && Number.isFinite(wall) ? d / (d - 2 * wall) : NaN;
+      for (const s of root.querySelectorAll<HTMLElement>('[data-sideof]')) s.textContent = s.dataset.sideof === st.tside ? '(tube side)' : '(shell side)';
+      // U
+      let Ud: number;
+      if (st.umode === 'service') { Ud = read('u', pos); $('[data-foulnote]').innerHTML = ''; }
+      else {
+        const rfh = read('rfh', (x) => x >= 0), rfc = read('rfc', (x) => x >= 0);
+        const [rfo, rfi] = st.tside === 'h' ? [rfc, rfh] : [rfh, rfc];
+        const ratio = Number.isFinite(dRatio) ? dRatio : 1;
+        Ud = designU(read('uc', pos), rfo, rfi, ratio);
+        show('ud', Ud, 'htc'); show('dRatio', ratio); show('rfiO', rfi * ratio, 'foul');
+        $('[data-foulnote]').innerHTML = Number.isFinite(dRatio) ? '' : '<b>No tube dimensions in step 5</b>: both resistances are added as typed (<i>d</i><sub>o</sub>/<i>d</i><sub>i</sub> = 1).';
+      }
+      lastUd = Ud;
+      const shells = st.arr === 'shell' ? read('shells', (x) => x >= 1 && x <= 12 && Number.isInteger(x), null) : 1;
+      const g: Geometry = { arr: st.arr, shells, mix: st.mix };
+      const margin = read('margin', (x) => x >= 0 && x < 500, null) / 100;
+      const A = mode === 'rate' ? read('area', pos) : NaN;
+
+      // calculation, with IAPWS-IF97 water/steam properties iterated on the mean temperature
+      const calc = () => (mode === 'size' ? size(hot, cold, solve, g, Ud, margin) : rate(hot, cold, g, Ud, A));
+      const setProps = (s: StreamIn, prop: string, tin: number, tout: number) => {
+        if (prop !== 'if97') return;
+        if (s.latent) s.lam = steamLam(tin);
+        else s.cp = waterCp([tin, tout].every(Number.isFinite) ? (tin + tout) / 2 : Number.isFinite(tin) ? tin : tout);
+      };
+      setProps(hot, st.propH, hot.tin, hot.tout); setProps(cold, st.propC, cold.tin, cold.tout);
+      let r = calc();
+      for (let i = 0; i < 6 && (st.propH === 'if97' || st.propC === 'if97'); i++) {
+        setProps(hot, st.propH, r.hot.tin, r.hot.tout); setProps(cold, st.propC, r.cold.tin, r.cold.tout); r = calc();
+      }
+      if (st.propH === 'if97') { put(latH ? 'lamh' : 'cph', latH ? hot.lam : hot.cp); }
+      if (st.propC === 'if97') { put(latC ? 'lamc' : 'cpc', latC ? cold.lam : cold.cp); }
+
+      const balanceOk = [r.hot.tin, r.hot.tout, r.hot.m, r.cold.tin, r.cold.tout, r.cold.m, r.th.q].every(Number.isFinite) && !r.error;
+      // fill calculated stream fields
+      if (comp.has('tinh')) put('tinh', balanceOk ? r.hot.tin : NaN);
+      if (comp.has('tinc')) put('tinc', balanceOk ? r.cold.tin : NaN);
+      if (comp.has('touth')) put('touth', balanceOk ? r.hot.tout : NaN);
+      if (comp.has('toutc')) put('toutc', balanceOk ? r.cold.tout : NaN);
+      if (comp.has('mh')) put('mh', balanceOk ? r.hot.m : NaN);
+      if (comp.has('mc')) put('mc', balanceOk ? r.cold.m : NaN);
+      const th = r.th;
+      show('Ch', balanceOk && !latH ? r.hot.C : undefined); show('Cc', balanceOk && !latC ? r.cold.C : undefined);
+      show('q', balanceOk ? th.q : undefined, 'power');
+      const tU = unit('temp'), qU = unit('power');
+      $('[data-qnote]').innerHTML = balanceOk
+        ? `${latH ? 'Hot stream condenses' : 'Hot stream cools'} from ${fmt(fromSI(tU, r.hot.tin))} to ${fmt(fromSI(tU, r.hot.tout))} ${tU.label}; ${latC ? 'cold stream boils' : 'cold stream warms'} from ${fmt(fromSI(tU, r.cold.tin))} to ${fmt(fromSI(tU, r.cold.tout))} ${tU.label}.`
+        : '';
+
+      const thermOk = balanceOk && !th.infeasible;
+      show('dt1', balanceOk ? th.dt1 : undefined, 'dt'); show('dt2', balanceOk ? th.dt2 : undefined, 'dt');
+      show('lmtd', thermOk ? th.lmtd : undefined, 'dt'); show('R', balanceOk && usesF ? th.R : undefined); show('P', balanceOk && usesF ? th.P : undefined);
+      show('F', thermOk ? th.F : undefined); show('dtm', thermOk ? th.dtm : undefined, 'dt');
+      const nMin = balanceOk && st.arr === 'shell' ? shellsNeeded(r.hot, r.cold, th.q) : NaN;
+      show('nShell', nMin);
+      $('[data-arrnote]').innerHTML = {
+        counter: 'Counter-current: the streams flow in opposite directions (double-pipe, or the ideal any other arrangement is compared with).',
+        co: 'Co-current (parallel flow): both streams enter at the same end. The cold outlet can never exceed the hot outlet.',
+        shell: 'Shell and tube: <i>N</i> shell passes in series, each with an even number of tube passes (1-2, 2-4 …). <i>F</i> corrects the counter-current LMTD.',
+        cross: 'Cross-flow, single pass (air coolers, plate-fin): "mixed" means the fluid is free to mix across the flow (no channels or fins). <i>F</i> corrects the counter-current LMTD.',
+      }[st.arr];
+
+      // step 5
+      let areaD = NaN;
+      if (mode === 'size') {
+        const ok = thermOk && Number.isFinite(r.area) && r.area > 0;
+        show('areaReq', ok ? r.area : undefined, 'area');
+        areaD = ok && 'areaD' in r ? r.areaD : NaN;
+        show('areaD', areaD, 'area');
+        lastAreaD = areaD;
+      } else {
+        areaD = A;
+        const rr = r as ReturnType<typeof rate>;
+        show('ntu', balanceOk ? rr.ntu : undefined); show('eps', balanceOk ? rr.eps : undefined);
+      }
+      // tubes
+      if (!passesDirty) inp('passes').value = st.arr === 'shell' ? '2' : '1';
+      const np = read('passes', (x) => x >= 1 && x <= 16 && Number.isInteger(x), null), rho = read('rho', pos);
+      const mT = st.tside === 'h' ? r.hot.m : r.cold.m;
+      $('[data-tubenote]').innerHTML = `The ${st.tside === 'h' ? 'hot' : 'cold'} stream flows in the tubes (chosen in step 1).`;
+      const tb = Number.isFinite(areaD) && areaD > 0 ? tubes(areaD, shells, d, wall, L, np, mT, rho) : undefined;
+      show('nTubes', tb?.perShell); show('nTot', tb && shells > 1 ? tb.total : tb?.perShell); show('perPass', tb ? tb.perPass : undefined);
+      show('vel', tb && balanceOk ? tb.v : undefined, 'vel');
+
+      // warnings
+      const w3: string[] = [], w5: string[] = [];
+      const allIn = [r.hot.tin, r.cold.tin].every(Number.isFinite) || [r.hot.tout, r.cold.tout].every(Number.isFinite);
+      if (r.error && allIn) w3.push(r.error);
+      else if (balanceOk) {
+        if (th.infeasible) {
+          w3.push(st.arr === 'shell'
+            ? `These temperatures cannot be reached with ${shells} shell pass${shells > 1 ? 'es' : ''}${Number.isFinite(nMin) ? `: use at least ${nMin} shells in series for F ≥ 0.8` : ''} (temperature cross).`
+            : st.arr === 'co' ? 'Co-current flow cannot reach these temperatures: the cold outlet must stay below the hot outlet. Use counter-current flow.'
+              : 'These temperatures cannot be reached with this arrangement (one end has no temperature difference or a cross). Check the temperatures or use counter-current flow.');
+        } else {
+          if (usesF && th.F < 0.8) w3.push(`<i>F</i> = ${fmt(th.F)} is below 0.8: the arrangement is inefficient and sensitive to small deviations${st.arr === 'shell' && Number.isFinite(nMin) && nMin > shells ? `; use ${nMin} shell passes in series` : ''}.`);
+          if (th.cross && !latH && !latC) w3.push('Temperature cross: the cold outlet is above the hot outlet. Possible in counter-current flow; in shell-and-tube units it needs several shells.');
+          const approach = Math.min(th.dt1, th.dt2);
+          if (approach < 5.6) w3.push(`Closest approach ${fmt(fromSI(unit('dt'), approach))} ${units.dt}: below about 10 °F (5.6 K) even refrigerants are uneconomic (Walas); expect a large area.`);
+        }
+        if (mode === 'rate') {
+          if (latH && Number.isFinite(r.hot.m)) w3.push(`The hot stream condenses ${fmt(fromSI(unit('mflow'), r.hot.m))} ${units.mflow}; more vapour than that stays uncondensed.`);
+          if (latC && Number.isFinite(r.cold.m)) w3.push(`The cold stream evaporates ${fmt(fromSI(unit('mflow'), r.cold.m))} ${units.mflow}.`);
+        }
+      }
+      if (st.propH === 'if97' && latH && !(hot.lam > 0)) w3.push('Steam latent heat: the hot inlet must be between 0.01 °C and the critical temperature 373.9 °C.');
+      if (st.propC === 'if97' && latC && !(cold.lam > 0)) w3.push('Steam latent heat: the cold inlet must be between 0.01 °C and the critical temperature 373.9 °C.');
+      if (tb && balanceOk) {
+        if (st.tside === 'h' ? latH : latC) w5.push('The tube-side stream changes phase: the velocity is for the density you type (vapour at the inlet, liquid at the outlet).');
+        else if (tb.v < 0.9 && rho > 600) w5.push(`Tube-side velocity ${fmt(fromSI(unit('vel'), tb.v))} ${units.vel} is low for a liquid (water: at least 0.9–1.0 m/s against fouling, Perry): use more tube passes.`);
+        if (st.arr !== 'shell' && np > 1) w5.push('More than one tube pass is not counter-current any more: choose "Shell and tube" in step 3 so that F is applied.');
+      }
+      if (bad) w5.push('Some inputs are invalid (red border).');
+      $('[data-warn3]').innerHTML = w3.map((x) => `<li>${x}</li>`).join('');
+      $('[data-warn5]').innerHTML = w5.map((x) => `<li>${x}</li>`).join('');
+
+      last = thermOk && th.q > 0 ? { hot: r.hot, cold: r.cold, q: th.q, arr: st.arr, latH, latC } : undefined;
+      draw();
+      void qU;
+    };
+
+    // unit changes: every selector of a category follows; typed values convert
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      const c = t.dataset.cat as HxCat | undefined;
+      if (c) {
+        const from = unit(c);
+        units[c] = t.value;
+        const to = unit(c);
+        for (const s of root.querySelectorAll<HTMLSelectElement>(`select[data-cat="${c}"]`)) s.value = t.value;
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-ut="${c}"]`)) s.textContent = t.value;
+        for (const [k, kc] of Object.entries(CAT)) {
+          if (kc !== c) continue;
+          const el = inp(k), v = parseNumber(el.value);
+          if (el.value.trim() !== '' && Number.isFinite(v)) el.value = fmtIn(fromSI(to, toSI(from, v)));
+        }
+        fillTables();
+        $('[data-status]').textContent = `Unit changed to ${t.value}; values converted.`;
+      }
+      if (t.matches('select')) run();
+    });
+    root.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (!t.matches('input[data-k]')) return;
+      if (!t.readOnly) typed[t.dataset.k!] = t.value;
+      if (t.dataset.k === 'passes') passesDirty = t.value.trim() !== '';
+      run();
+    });
+    segInit(root, 'mode', (v) => {
+      st.mode = v as typeof st.mode;
+      if (st.mode === 'rate' && inp('area').value.trim() === '' && Number.isFinite(lastAreaD)) putTyped('area', lastAreaD);
+      run();
+    });
+    segInit(root, 'solveH', (v) => { st.solve = v as Unknown; run(); });
+    segInit(root, 'solveC', (v) => { st.solve = v as Unknown; run(); });
+    // a condensing / boiling stream has one temperature (saturation), which must be typed
+    segInit(root, 'latH', (v) => { st.latH = v === '1'; if (st.latH && (st.solve === 'th' || st.solve === 'tih')) st.solve = 'mh'; run(); });
+    segInit(root, 'latC', (v) => { st.latC = v === '1'; if (st.latC && (st.solve === 'tc' || st.solve === 'tic')) st.solve = 'mc'; run(); });
+    segInit(root, 'propH', (v) => { st.propH = v; run(); });
+    segInit(root, 'propC', (v) => { st.propC = v; run(); });
+    segInit(root, 'arr', (v) => { st.arr = v as Arr; run(); });
+    segInit(root, 'mix', (v) => { st.mix = v as Mix; run(); });
+    segInit(root, 'umode', (v) => {
+      st.umode = v as typeof st.umode;
+      if (st.umode === 'service' && inp('u').value.trim() === '' && Number.isFinite(lastUd)) putTyped('u', lastUd);
+      run();
+    });
+    segInit(root, 'tside', (v) => { st.tside = v as 'h' | 'c'; run(); });
+
+    // clickable reference rows
+    const useU = (lo: number, hi: number) => { st.umode = 'service'; putTyped('u', (lo + hi) / 2); run(); inp('u').focus(); $('[data-status]').textContent = 'Service coefficient filled in.'; };
+    for (const tr of root.querySelectorAll<HTMLElement>('tr.pick')) {
+      const pick = () => {
+        if (tr.dataset.perry) { const [gi, ri] = tr.dataset.perry.split('.').map(Number), r = PERRY_11_3[gi].rows[ri]; useU(r.u[0] * BTU_HFT2F, r.u[1] * BTU_HFT2F); }
+        else { const r = ETB_U[+tr.dataset.etb!]; useU(r.u[0], r.u[1]); }
+      };
+      tr.addEventListener('click', pick);
+      tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    }
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-foul]')) {
+      b.addEventListener('click', () => {
+        const [i, side] = b.dataset.foul!.split('.');
+        st.umode = 'clean'; putTyped(side === 'h' ? 'rfh' : 'rfc', ETB_FOULING[+i].rf); run();
+        $('[data-status]').textContent = `Fouling resistance of the ${side === 'h' ? 'hot' : 'cold'} stream filled in.`;
+      });
+    }
+
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) { el.value = ''; typed[el.dataset.k!] = ''; }
+      passesDirty = true;   // stays empty until typed
+      run(); inp('tinh').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    const dlg = $<HTMLDialogElement>('dialog.zd');
+    $('[data-zoom]').addEventListener('click', () => {
+      if (!last) return;
+      $('[data-zd-img]').innerHTML = chart(last, unit('temp'), unit('power'), Math.max(320, Math.min(760, $<HTMLElement>('[data-chart]').clientWidth || 760)));
+      dlg.showModal();
+    });
+    $('[data-zd-close]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    let rt = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); }).observe($('[data-chart]'));
+    fillTables();
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  /* chart line colours: red for hot, blue for cold, in tones distinct from markup red and line blue (owner 2026-11-24) */
+  .hx { --hx-hot: #b5482f; --hx-cold: #3f88bd; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 60rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.5rem; font-size: 1.0625rem; font-weight: 650; }
+  h3 { margin: 1.25rem 0 0.375rem; font-size: 0.9375rem; font-weight: 650; }
+  .no { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border: 1.5px solid var(--ink); border-radius: 50%; font-size: 0.8125rem; font-weight: 700; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  .calc :global(table) { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  .calc :global(th), .calc :global(td) { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .calc :global(tbody th) { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  .calc :global(th label) { cursor: text; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i) { font-style: italic; padding-right: 0.05em; }
+  .calc :global(.io) { max-width: 50rem; margin-top: 0.5rem; }
+  .calc :global(.io .v) { width: 9.5rem; }
+  .calc :global(.io .u) { width: 9rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .calc :global(.io .u select) { max-width: 9rem; }
+  .calc :global([hidden]) { display: none !important; }
+  .calc :global(input), .calc :global(output), .calc :global(select) { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input.calcd) { background: var(--zoho-out); border-color: transparent; }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .calc :global(select:focus) { outline: 2px solid var(--line); outline-offset: 1px; }
+  .calc :global(.na) { display: block; padding-left: 0.5rem; color: var(--muted); }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; margin-top: 0.5rem; }
+  .switches.top { margin-top: 1rem; }
+  .calcsw { display: flex; flex-wrap: wrap; align-items: center; gap: 0 1rem; }
+  .calcl { font-weight: 600; font-size: 0.9375rem; margin: 0 0.25rem 0.5rem 0; }   /* same bottom margin as the toggles, so all labels sit on one line */
+  .calc :global(.side) { color: var(--muted); }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 50rem; }
+  .modenote { margin-bottom: 0.25rem; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 50rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+
+  /* hot | cold table */
+  .cs { max-width: 50rem; margin-top: 0.75rem; table-layout: fixed; }
+  .cs thead th { font-weight: 650; font-size: 0.875rem; padding: 0 0.25rem 0.25rem 0; }
+  .cs thead th:first-child { width: 40%; }
+  .cs thead .hot { color: var(--hx-hot); }
+  .cs thead .cold { color: var(--hx-cold); }
+  .cs :global(td) { padding: 0.125rem 0.25rem 0.125rem 0; }
+  .cs .cu, .cs :global(td.cu) { width: 8.5rem; padding-left: 0.25rem; color: var(--muted); font-size: 0.875rem; }
+  .cs :global(td.cu select) { max-width: 8.5rem; }
+  .calc :global(.sr) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* reference tables */
+  .ref { margin-top: 0.5rem; max-width: 60rem; font-size: 0.875rem; }
+  .ref summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; color: var(--line); }
+  .ty { font-size: 0.8125rem; margin: 0.25rem 0 0.5rem; }
+  .ty th, .ty td { border-bottom: 1px solid var(--rule); padding: 0.25rem 0.5rem 0.25rem 0; vertical-align: top; }
+  .ty thead th { font-weight: 600; }
+  .ty .gh th { font-weight: 650; padding-top: 0.625rem; }
+  .ty tr.pick { cursor: pointer; }
+  .ty tr.pick:hover td, .ty tr.pick:focus td { background: var(--wash); }
+  .ty tr.pick:focus { outline: 2px solid var(--line); outline-offset: -2px; }
+  .ty .use button { padding: 0.125rem 0.5rem; border: 1px solid var(--line); background: #fff; color: var(--line); font: 600 0.75rem/1.4 var(--font-ui); cursor: pointer; }
+  .ty .use button:hover { background: var(--line); color: var(--paper); }
+
+  /* chart */
+  .sk { display: block; width: 100%; max-width: 50rem; margin-top: 0.75rem; padding: 0; border: 0; background: none; text-align: left; cursor: zoom-in; }
+  .skimg { display: block; }
+  .skimg :global(svg) { display: block; max-width: 100%; height: auto; }
+  .zimg :global(svg) { display: block; width: 100%; height: auto; max-height: calc(100dvh - 8rem); }
+  .zoom { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .hx :global(.grid) { stroke: var(--rule); stroke-width: 0.6; }
+  .hx :global(.tick) { font: 400 11px var(--font-ui); fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .hx :global(.ax) { font: 400 12px var(--font-ui); fill: var(--ink); }
+  .hx :global(.lh) { fill: none; stroke: var(--hx-hot); stroke-width: 2.5; }
+  .hx :global(.lc) { fill: none; stroke: var(--hx-cold); stroke-width: 2.5; }
+  .hx :global(.th) { font: 600 12px var(--font-ui); fill: var(--hx-hot); font-variant-numeric: tabular-nums; }
+  .hx :global(.tc) { font: 600 12px var(--font-ui); fill: var(--hx-cold); font-variant-numeric: tabular-nums; }
+  .hx :global(.dt) { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; }
+  .hx :global(.dtl) { font: 600 12px var(--font-ui); fill: var(--ink); paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+  .zd { width: min(72rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1.5px solid var(--ink); border-radius: 0; background: #fff; color: var(--ink); }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .zhead h2 { margin: 0; font-size: 1.25rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zclose:hover { background: var(--line); color: var(--paper); }
+  .zimg { padding: 1rem 1.25rem 1.5rem; display: grid; place-items: center; }
+
+  .basis { margin-top: 0.5rem; max-width: 60rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .calc :global(.io .v) { width: 7rem; }
+    .calc :global(.io .u) { width: 6.5rem; }
+    .calc :global(.io .u select) { max-width: 6.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .cs { font-size: 0.8125rem; }
+    .cs thead th:first-child { width: 34%; }
+    .cs .cu, .cs :global(td.cu) { width: 4.75rem; font-size: 0.6875rem; }
+    .cs :global(td.cu select) { max-width: 4.75rem; font-size: 0.6875rem; padding: 0; }
+    .cs :global(input), .cs :global(output) { padding: 0 0.1875rem; }
+    .ty { display: block; overflow-x: auto; }
+  }
+</style>

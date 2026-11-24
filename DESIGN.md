@@ -138,6 +138,8 @@ A restrained drafting palette: ink and paper carry the page; one blue does every
 
 **The One Blue Rule.** If it is blue, it can be clicked or is focused. Nothing decorative is blue.
 
+**Exception: hot and cold streams in charts** (owner 2026-11-24). Temperature charts draw the hot stream in brick red `#b5482f` and the cold stream in steel blue `#3f88bd`, tones deliberately different from Markup Red and Line Blue so they read as data, not as an error or a link. Used in the Heat Exchanger tool (`--hx-hot`, `--hx-cold`).
+
 ## Typography
 
 **Body Font:** Archivo (variable, self-hosted via Fontsource; system-ui fallback)

@@ -2,7 +2,7 @@
 // Visible switch for alternative modes ("Calculate: diameter | flow", "Fluid: liquid | gas", "Given: p | t").
 // Site-wide rule (owner 2026-11-22): every mode or "type either" choice is shown as an explicit labelled toggle,
 // kept in sync with the field the visitor types into. Behaviour: src/lib/ui/seg.ts (segInit / segSet).
-interface Option { value: string; label: string; hint?: string }
+interface Option { value: string; label: string; hint?: string; /** shorter label shown on narrow screens */ short?: string }
 interface Props { label: string; name: string; options: Option[]; value: string }
 const { label, name, options, value } = Astro.props;
 ---
@@ -10,7 +10,7 @@ const { label, name, options, value } = Astro.props;
   <span class="seg-l">{label}</span>
   {options.map((o) => (
     <button type="button" role="radio" aria-checked={o.value === value ? 'true' : 'false'} tabindex={o.value === value ? 0 : -1} data-value={o.value}>
-      {o.label}{o.hint && <> <span class="hint">{o.hint}</span></>}
+      {o.short ? <><span class="full">{o.label}</span><span class="short">{o.short}</span></> : o.label}{o.hint && <> <span class="hint">{o.hint}</span></>}
     </button>
   ))}
 </div>
@@ -23,6 +23,8 @@ const { label, name, options, value } = Astro.props;
   button[aria-checked='true'] { background: var(--line); color: var(--paper); }
   button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   .hint { font-weight: 400; color: var(--muted); }
+  .short { display: none; }
+  @media (max-width: 22rem) { .full { display: none; } .short { display: inline; } }
   button[aria-checked='true'] .hint { color: var(--paper); opacity: 0.85; }
   @media (max-width: 48rem) {
     .seg { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }

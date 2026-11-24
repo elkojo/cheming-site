@@ -72,7 +72,7 @@ export const sources: Source[] = [
     url: 'https://iapws.org/technical-guidance/release/IF97-Rev',
     archive: 'https://web.archive.org/web/20250608103336/https://iapws.org/relguide/IF97-Rev.pdf',
     read: '2026-11-20',
-    use: { steam: 'All thermodynamic properties (regions 1–4, saturation line, B23 boundary); all 126 coefficients and the verification values in the tests checked against the release.' },
+    use: { steam: 'All thermodynamic properties (regions 1–4, saturation line, B23 boundary); all 126 coefficients and the verification values in the tests checked against the release.', 'heat-exchanger': 'Optional property helper: specific heat of liquid water at the mean stream temperature (1 atm, or saturation above 100 °C) and the latent heat of steam at the condensing or boiling temperature.' },
   },
   {
     id: 'iapws-visc', by: 'IAPWS', title: 'Release on the IAPWS Formulation 2008 for the Viscosity of Ordinary Water Substance, R12-08',
@@ -324,7 +324,7 @@ export const sources: Source[] = [
     id: 'walas-cpe-2', by: 'J. R. Couper, W. R. Penney, J. R. Fair, S. M. Walas', title: 'Chemical Process Equipment: Selection and Design, 2nd ed., Rules of Thumb: Summary (Drivers and power recovery equipment; Pumps)',
     where: 'Gulf Professional Publishing (Elsevier), Burlington MA', year: 2005,
     read: '2026-11-24',
-    use: { pump: 'Typical ranges of pump types (flow, maximum head, efficiency) and driver efficiencies (motors 85–95 %, steam turbines 42–78 %, gas engines and turbines 28–38 %); the source of the original sheet\'s notes 8, 9 and 11.', compressor: 'Rules of thumb, Compression: reciprocating efficiencies 65 % at ratio 1.5, 75 % at 2.0, 80–85 % at 3–6 (default 80 %); large centrifugal compressors 76–78 %; exit temperature 350–400 °F; equal ratio per stage; rule 7 (air, 100 °F, ratio 3: 62 HP per million ft³/day, 306 °F) used as a test case; typical ratios per stage (Section 7.6).' },
+    use: { pump: 'Typical ranges of pump types (flow, maximum head, efficiency) and driver efficiencies (motors 85–95 %, steam turbines 42–78 %, gas engines and turbines 28–38 %); the source of the original sheet\'s notes 8, 9 and 11.', compressor: 'Rules of thumb, Compression: reciprocating efficiencies 65 % at ratio 1.5, 75 % at 2.0, 80–85 % at 3–6 (default 80 %); large centrifugal compressors 76–78 %; exit temperature 350–400 °F; equal ratio per stage; rule 7 (air, 100 °F, ratio 3: 62 HP per million ft³/day, 306 °F) used as a test case; typical ratios per stage (Section 7.6).', 'heat-exchanger': 'Rules of thumb, Heat exchangers: standard ¾ in tubes; tube side for corrosive, fouling, scaling and high-pressure fluids, shell side for viscous and condensing fluids; minimum temperature approach 20 °F with normal coolants, 10 °F or less with refrigerants; cooling water 90 °F in, 120 °F out at most.' },
   },
   {
     id: 'api-610-10', by: 'American Petroleum Institute', title: 'ANSI/API Standard 610 / ISO 13709:2003, Centrifugal Pumps for Petroleum, Petrochemical and Natural Gas Industries',
@@ -529,6 +529,36 @@ export const sources: Source[] = [
     where: 'American Petroleum Institute, 4th ed., June 1995', year: 1995,
     read: '2026-11-24',
     use: { compressor: 'Allowable discharge temperature (2.3.1): predicted discharge temperature at most 150 °C (300 °F), 135 °C (275 °F) for hydrogen-rich services (molecular weight ≤ 12) — the default limit and a warning; motor nameplate rating at least 110 % of the greatest power required (3.1.2.2), the default margin.' },
+  },
+  {
+    id: 'perry-7-11', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 11 (Heat-Transfer Equipment)',
+    where: 'McGraw-Hill, New York, pp. 11-4 to 11-6, 11-24, 11-25, 11-35', year: 1997,
+    read: '2026-11-24',
+    use: { 'heat-exchanger': 'LMTD (Eq. 11-5) and the correction factor FT for one shell pass (Fig. 11-4a, after Bowman, Mueller and Nagle 1940; F below 0.8, 0.75 at the very lowest, unacceptable); overall coefficient from film, wall and fouling resistances (Eq. 11-2); Table 11-3 typical design U in tubular exchangers including total dirt (the clickable table); standard tubes 19 and 25 mm OD, 20 ft most common; minimum tube-side water velocity 0.9–1.0 m/s against fouling.' },
+  },
+  {
+    id: 'lienhard-ahtt-6', by: 'J. H. Lienhard IV, J. H. Lienhard V', title: 'A Heat Transfer Textbook, 6th ed. (Version 6.00), Section 3.3 Heat exchanger effectiveness, Table 3.1',
+    where: 'Phlogiston Press, Cambridge MA (free edition)', year: 2024,
+    url: 'https://ahtt.mit.edu/wp-content/uploads/2024/04/AHTTv600.pdf',
+    archive: 'https://web.archive.org/web/20240915221940/https://ahtt.mit.edu/wp-content/uploads/2024/04/AHTTv600.pdf',
+    read: '2026-11-24',
+    use: { 'heat-exchanger': 'Effectiveness–NTU relations for counter- and co-current flow, one shell pass with two or more tube passes, N shell passes in series and cross-flow with one fluid mixed (rating mode and the F factor); its approximation for cross-flow with neither fluid mixed is used as a test of the exact series.' },
+  },
+  {
+    id: 'etb-hx-u', by: 'The Engineering ToolBox', title: 'Heat Exchangers – Overall Heat Transfer Coefficients',
+    where: 'engineeringtoolbox.com (2003)', year: 2003,
+    url: 'https://www.engineeringtoolbox.com/heat-transfer-coefficients-exchangers-d_450.html',
+    archive: 'https://web.archive.org/web/20260924122725/https://www.engineeringtoolbox.com/heat-transfer-coefficients-exchangers-d_450.html',
+    read: '2026-11-24',
+    use: { 'heat-exchanger': 'The original sheet\'s Note 3 list of overall coefficients by exchanger type (tubular, air-cooled, plate, spiral), checked row by row; the page names no source and does not say whether fouling is included.' },
+  },
+  {
+    id: 'etb-fouling', by: 'The Engineering ToolBox', title: 'Heat Exchangers – Fouling and Reduced Heat Transfer',
+    where: 'engineeringtoolbox.com (2010)', year: 2010,
+    url: 'https://www.engineeringtoolbox.com/fouling-heat-transfer-d_1661.html',
+    archive: 'https://web.archive.org/web/20261014012920/https://www.engineeringtoolbox.com/fouling-heat-transfer-d_1661.html',
+    read: '2026-11-24',
+    use: { 'heat-exchanger': 'The original sheet\'s Note 4 list of typical fouling factors (m²·K/W), checked; definition Rd = 1/Ud − 1/U.' },
   },
 ];
 

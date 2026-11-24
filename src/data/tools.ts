@@ -219,9 +219,10 @@ export const tools: Tool[] = [
     "tag": "E",
     "title": "Heat Exchanger",
     "name": "Heat Exchanger Design",
-    "description": "Duty, LMTD and required heat-transfer area for counter- or co-current flow, including fouling and a design margin.",
+    "description": "Sizing or rating of a two-stream exchanger: heat balance with any one unknown, condensing or boiling streams, counter-, co-current, shell-and-tube or cross-flow (LMTD with F), service or clean U with fouling, area and tube count, live temperature profile.",
     "category": "equipment",
-    "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/f83746a7440e99f8a5017d3a2b05e259f1ba0a260774e96c35f63a3b3de67413?type=grid&mode=embed"
+    "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/f83746a7440e99f8a5017d3a2b05e259f1ba0a260774e96c35f63a3b3de67413?type=grid&mode=embed",
+    "native": "hx"
   },
   {
     "slug": "sieve",

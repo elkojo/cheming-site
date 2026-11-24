@@ -2,11 +2,14 @@
 // checked button when the mode changes some other way (e.g. the visitor typed into the other field).
 
 export function segSet(root: ParentNode, name: string, value: string): void {
-  for (const b of root.querySelectorAll<HTMLButtonElement>(`[data-seg="${name}"] [data-value]`)) {
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>(`[data-seg="${name}"] [data-value]`)];
+  for (const b of buttons) {
     const on = b.dataset.value === value;
     b.setAttribute('aria-checked', String(on));
     b.tabIndex = on ? 0 : -1;
   }
+  // a group with no choice made (several groups sharing one value) stays reachable with Tab
+  if (buttons.length && !buttons.some((b) => b.dataset.value === value)) buttons[0].tabIndex = 0;
 }
 
 export function segInit(root: ParentNode, name: string, onPick: (value: string) => void): void {
