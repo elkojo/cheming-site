@@ -61,6 +61,24 @@ const UPRIGHT = new Set(['gcd', 'lcm', 'min', 'max', 'ln', 'log', 'exp', 'sin', 
 /** Formula or symbol as HTML with the variables in italics (maths convention): "A = π·r²" → "<i>A</i> = π·<i>r</i>²".
  *  Greek variables (ρ) too; "V_m" gives an upright subscript. Numbers, operators, π, √ and function names (gcd, ln, …) stay upright. */
 export function mathHtml(text: string): string {
+  // "a^b" or "a^(b/c)": superscript (the exponent is formatted the same way; parentheses dropped)
+  const k = text.indexOf('^');
+  if (k >= 0) {
+    let end: number, inner: string;
+    if (text[k + 1] === '(') {
+      let depth = 0; end = k + 1;
+      for (; end < text.length; end++) { if (text[end] === '(') depth++; else if (text[end] === ')' && --depth === 0) break; }
+      inner = text.slice(k + 2, end); end++;
+    } else {
+      const m = /^[A-Za-zα-ωΑ-Ω0-9_.,]+/.exec(text.slice(k + 1));
+      inner = m ? m[0] : ''; end = k + 1 + inner.length;
+    }
+    return mathPlain(text.slice(0, k)) + `<sup>${mathHtml(inner)}</sup>` + mathHtml(text.slice(end));
+  }
+  return mathPlain(text);
+}
+
+function mathPlain(text: string): string {
   const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   // Latin and Greek letters are variables; π (a constant) stays upright
   // "V_m" or "V_m,std": italic V with an upright subscript label

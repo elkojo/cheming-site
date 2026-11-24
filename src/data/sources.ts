@@ -315,16 +315,16 @@ export const sources: Source[] = [
   },
   // ── pumps ──
   {
-    id: 'branan-rot-3', by: 'C. R. Branan', title: 'Rules of Thumb for Chemical Engineers, 3rd ed., Section 5 Pumps: Efficiency (p. 105) and Suction System NPSH for Studies (p. 108, after F. L. Evans, Equipment Design Handbook for Refineries and Chemical Plants, Vol. 1, 2nd ed., 1979)',
+    id: 'branan-rot-3', by: 'C. R. Branan', title: 'Rules of Thumb for Chemical Engineers, 3rd ed.: Section 5 Pumps, Efficiency (p. 105) and Suction System NPSH for Studies (p. 108, after F. L. Evans, Equipment Design Handbook for Refineries and Chemical Plants, Vol. 1, 2nd ed., 1979); Section 6 Compressors (pp. 112–121)',
     where: 'Gulf Professional Publishing (Elsevier), Amsterdam/Boston', year: 2002,
     read: '2026-11-24',
-    use: { pump: 'Efficiency equation fitted to the GPSA pump-efficiency curves (efficiency in %, head 50–300 ft, flow 100–1000 US gpm, within about 7 % of the curve value); Evans\' relation n·Q^0.5/NPSH^0.75 = C with C = 7 000–10 000 (9 000 for estimates), the default suction specific speed.' },
+    use: { pump: 'Efficiency equation fitted to the GPSA pump-efficiency curves (efficiency in %, head 50–300 ft, flow 100–1000 US gpm, within about 7 % of the curve value); Evans\' relation n·Q^0.5/NPSH^0.75 = C with C = 7 000–10 000 (9 000 for estimates), the default suction specific speed.', compressor: 'Compressors chapter (pp. 115–121): polytropic and adiabatic head and power with the companion efficiency; centrifugal head per wheel 7 000–11 000 ft, at most about eight wheels per casing (one fewer per side nozzle), ratio 2.5–4 per casing; discharge temperatures (mechanical limit 450–500 °F, most designs below 250–300 °F); reciprocating mechanical efficiency 95 % on the GPSA power curves.' },
   },
   {
     id: 'walas-cpe-2', by: 'J. R. Couper, W. R. Penney, J. R. Fair, S. M. Walas', title: 'Chemical Process Equipment: Selection and Design, 2nd ed., Rules of Thumb: Summary (Drivers and power recovery equipment; Pumps)',
     where: 'Gulf Professional Publishing (Elsevier), Burlington MA', year: 2005,
     read: '2026-11-24',
-    use: { pump: 'Typical ranges of pump types (flow, maximum head, efficiency) and driver efficiencies (motors 85–95 %, steam turbines 42–78 %, gas engines and turbines 28–38 %); the source of the original sheet\'s notes 8, 9 and 11.' },
+    use: { pump: 'Typical ranges of pump types (flow, maximum head, efficiency) and driver efficiencies (motors 85–95 %, steam turbines 42–78 %, gas engines and turbines 28–38 %); the source of the original sheet\'s notes 8, 9 and 11.', compressor: 'Rules of thumb, Compression: reciprocating efficiencies 65 % at ratio 1.5, 75 % at 2.0, 80–85 % at 3–6 (default 80 %); large centrifugal compressors 76–78 %; exit temperature 350–400 °F; equal ratio per stage; rule 7 (air, 100 °F, ratio 3: 62 HP per million ft³/day, 306 °F) used as a test case; typical ratios per stage (Section 7.6).' },
   },
   {
     id: 'api-610-10', by: 'American Petroleum Institute', title: 'ANSI/API Standard 610 / ISO 13709:2003, Centrifugal Pumps for Petroleum, Petrochemical and Natural Gas Industries',
@@ -505,6 +505,30 @@ export const sources: Source[] = [
     url: 'https://doi.org/10.1063/1.1285884',
     read: '2026-11-21',
     use: { properties: 'Air: molar mass 28.9586 kg/kmol and critical point (132.5306 K, 3.786 MPa).' },
+  },
+  {
+    id: 'perry-7-10-comp', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 10 (Transport and Storage of Fluids): Compression of gases',
+    where: 'McGraw-Hill, New York, pp. 10-37 to 10-41', year: 1997,
+    read: '2026-11-24',
+    use: { compressor: 'Adiabatic head and power (Eqs. 10-64a, 10-66a, 10-67), polytropic head and efficiency (10-71, 10-72), multistage power with equal ratios and intercooling to the intake temperature (10-80a). Eq. 10-65a defines W as "kg/s × 9.806 N/kg", a slip (10-66a has no g) that the original sheet appears to have followed (COMP-1).' },
+  },
+  {
+    id: 'gpsa-12-13', by: 'Gas Processors Suppliers Association', title: 'GPSA Engineering Data Book, 12th ed. (SI), Section 13: Compressors and Expanders',
+    where: 'GPSA, Tulsa OK', year: 2004,
+    read: '2026-11-24',
+    use: { compressor: 'Actual discharge temperature with the isentropic efficiency (Eq. 13-31), polytropic head, power and discharge temperature (13-33 to 13-37), Scheel\'s mechanical losses (13-38, as printed in kW), maximum head per wheel 15 000 − 1 500·M^0.35 ft (13-41; "30 000 N·m/kg at M = 30, 33 000 at M = 16", used as a test).' },
+  },
+  {
+    id: 'ips-e-pr-750', by: 'Iranian Ministry of Petroleum', title: 'IPS-E-PR-750, Engineering Standard for Process Design of Compressors',
+    where: 'Iranian Petroleum Standards, original edition May 1997, revised February 2005', year: 2005,
+    read: '2026-11-24',
+    use: { compressor: 'Centrifugal procedure (6.2.4.3): discharge temperature Eq. 3 and 4, heads Eq. 5–7, gas power Eq. 8–9, maximum head per stage Eq. 10 (= GPSA 13-41 in metres), operating temperature normally ≤ 190 °C (default limit); reciprocating: equal ratios per stage, discharge-temperature limit per API 618, intercooler pressure drop 20–35 kPa; Table A.1 compressor limits. Its Eq. 14 (mechanical losses 0.663·P^0.4 kW) differs from GPSA\'s constant (noted).' },
+  },
+  {
+    id: 'api-618-4', by: 'American Petroleum Institute', title: 'API Standard 618, Reciprocating Compressors for Petroleum, Chemical, and Gas Industry Services',
+    where: 'American Petroleum Institute, 4th ed., June 1995', year: 1995,
+    read: '2026-11-24',
+    use: { compressor: 'Allowable discharge temperature (2.3.1): predicted discharge temperature at most 150 °C (300 °F), 135 °C (275 °F) for hydrogen-rich services (molecular weight ≤ 12) — the default limit and a warning; motor nameplate rating at least 110 % of the greatest power required (3.1.2.2), the default margin.' },
   },
 ];
 

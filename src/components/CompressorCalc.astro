@@ -1,0 +1,454 @@
+---
+// Native Compressor calculator (Phase 7): ideal-gas compression with an average Z. Flow given as suction volume, mass
+// or standard volume (visible switch); reciprocating section (fewest stages within the actual discharge-temperature
+// and ratio limits, power with intercooling, live stage sketch); centrifugal section (polytropic head, impellers from
+// the maximum head per impeller, uncooled discharge temperature); shaft power, driver input and motor rating for both.
+// Owner's decisions 2026-11-24 (ORIGINAL-ERRORS.md COMP-1…7): no company manual ("BDM") — public bases only.
+import SegToggle from './SegToggle.astro';
+import { mathHtml } from '../lib/calc/types';
+import { COMP_UNITS, COMP_DEFAULT_UNITS, type CompCat } from '../lib/calc/compressor-units';
+
+const id = (k: string) => `co-${k}`;
+const unitSel = (cat: CompCat, label: string) =>
+  `<select data-cat="${cat}" aria-label="${label} unit">${COMP_UNITS[cat].map((u) => `<option${u.label === COMP_DEFAULT_UNITS[cat] ? ' selected' : ''}>${u.label}</option>`).join('')}</select>`;
+const unitTxt = (cat: CompCat) => `<span data-ut="${cat}">${COMP_DEFAULT_UNITS[cat]}</span>`;
+
+type Row = { k: string; label: string; sym: string; v?: string; cat?: CompCat; sel?: boolean; unit?: string; out?: boolean };
+const row = (r: Row) => {
+  const cell = r.out
+    ? `<output data-o="${r.k}"></output>`
+    : `<input id="${id(r.k)}" data-k="${r.k}" value="${r.v ?? ''}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />`;
+  const name = `<span class="lb">${r.label}</span> <span class="eq">${mathHtml(r.sym)}</span>`;
+  const u = r.cat ? (r.sel ? unitSel(r.cat, r.label) : unitTxt(r.cat)) : `<span>${r.unit ?? '–'}</span>`;
+  return `<tr data-row="${r.k}"><th scope="row">${r.out ? name : `<label for="${id(r.k)}">${name}</label>`}</th><td class="v">${cell}</td><td class="u">${u}</td></tr>`;
+};
+const rows = (rs: Row[]) => `<table class="io"><tbody>${rs.map(row).join('')}</tbody></table>`;
+const pw = (k: string, label: string, sym: string) => `<tr><th scope="row"><span class="lb">${label}</span> <span class="eq">${mathHtml(sym)}</span></th><td><output data-o="${k}-r"></output></td><td><output data-o="${k}-c"></output></td><td class="cu">${unitTxt('power')}</td></tr>`;
+---
+<div class="calc comp" data-comp>
+  <div class="bar">
+    <p>Ideal-gas compression with an average compressibility <i>Z</i>: a reciprocating and a centrifugal machine for the same duty. Pressures are absolute unless the unit says (G). One unit per kind of quantity; typed values are converted.</p>
+    <button type="button" class="reset" data-reset>Clear all inputs</button>
+  </div>
+
+  <section class="grp" aria-labelledby={id('in-h')}>
+    <h2 id={id('in-h')}>Gas and duty</h2>
+    <Fragment set:html={rows([
+      { k: 'ps', label: 'Suction pressure', sym: 'P_s', v: '1', cat: 'p', sel: true },
+      { k: 'pd', label: 'Discharge pressure', sym: 'P_d', v: '4.9', cat: 'p' },
+      { k: 'r', label: 'Overall compression ratio', sym: 'r = P_d/P_s', out: true },
+    ])} />
+    <div class="switches">
+      <SegToggle label="Flow given as" name="given" value="vol" options={[{ value: 'vol', label: 'Suction volume' }, { value: 'mass', label: 'Mass' }, { value: 'std', label: 'Standard volume' }]} />
+      <SegToggle label="Standard conditions, 1 atm" name="std" value="20" options={[{ value: '0', label: '0 °C' }, { value: '15', label: '15 °C' }, { value: '20', label: '20 °C' }, { value: '60F', label: '60 °F' }]} />
+    </div>
+    <Fragment set:html={rows([
+      { k: 'v', label: 'Volume flow at suction conditions', sym: 'V_s', v: '0.4264043', cat: 'vflow', sel: true },
+      { k: 'm', label: 'Mass flow', sym: 'M = P_s·V_s·M_w/(Z_s·R·T_s)', cat: 'mflow', sel: true },
+      { k: 'vstd', label: 'Standard volume flow', sym: 'V_std = M·R·T_std/(M_w·P_std)', cat: 'vstd', sel: true },
+      { k: 'mw', label: 'Molar mass', sym: 'M_w', v: '28.97', unit: 'kg/kmol' },
+      { k: 'k', label: 'Ratio of specific heats', sym: 'k = c_p/c_v', v: '1.22' },
+      { k: 'ts', label: 'Suction temperature', sym: 'T_s', v: '20', cat: 'temp', sel: true },
+      { k: 'zs', label: 'Compressibility at suction', sym: 'Z_s', v: '1' },
+      { k: 'zd', label: 'Compressibility at discharge', sym: 'Z_d', v: '1' },
+      { k: 'z', label: 'Average compressibility', sym: 'Z = (Z_s + Z_d)/2', out: true },
+    ])} />
+    <p class="note" data-stdnote>Standard volume at 20 °C and 101.325 kPa, <i>Z</i> = 1. <i>k</i> at the average of suction and discharge temperature is closer than at suction.</p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('re-h')}>
+    <h2 id={id('re-h')}>Reciprocating compressor</h2>
+    <Fragment set:html={rows([
+      { k: 'tdLim', label: 'Discharge-temperature limit', sym: 'T_lim', v: '150', cat: 'temp' },
+      { k: 'rcLim', label: 'Maximum compression ratio per stage', sym: 'r_lim', v: '5' },
+      { k: 'etaIs', label: 'Isentropic efficiency', sym: 'η_is', v: '80', unit: '%' },
+      { k: 'nt', label: 'Stages for the temperature limit', sym: 'N_t = σ·ln r / ln[1 + η_is·(T_lim/T_s − 1)]', out: true },
+      { k: 'nr', label: 'Stages for the ratio limit', sym: 'N_r = ln r / ln r_lim', out: true },
+      { k: 'n', label: 'Number of stages', sym: 'N = ⌈max(N_t, N_r)⌉', out: true },
+      { k: 'rc', label: 'Compression ratio per stage', sym: 'r_c = r^(1/N)', out: true },
+      { k: 'tdIs', label: 'Discharge temperature, isentropic', sym: 'T_d,is = T_s·r_c^σ', cat: 'temp', out: true },
+      { k: 'td', label: 'Discharge temperature, actual', sym: 'T_d = T_s·[1 + (r_c^σ − 1)/η_is]', cat: 'temp', out: true },
+      { k: 'hIs', label: 'Isentropic head per stage', sym: 'H_is = Z·R·T_s/(M_w·σ)·(r_c^σ − 1)', cat: 'head', sel: true },
+      { k: 'gasR', label: 'Gas power', sym: 'P_gas = N·M·H_is/η_is', cat: 'power', sel: true },
+    ].map((r) => r.k === 'hIs' || r.k === 'gasR' ? { ...r, out: true } : r))} />
+    <p class="note"><i>σ</i> = (<i>k</i> − 1)/<i>k</i>. Equal ratios per stage, intercooling to <i>T</i><sub>s</sub>, no interstage pressure drop. Limit: API 618 allows at most 150 °C predicted discharge temperature (135 °C for hydrogen-rich gas, <i>M</i><sub>w</sub> ≤ 12). Efficiency (Walas): about 65 % at <i>r</i><sub>c</sub> 1.5, 75 % at 2, 80–85 % at 3–6.</p>
+    <button type="button" class="sk" data-zoom aria-haspopup="dialog" aria-label="Enlarge the stage sketch">
+      <span class="skimg" data-sketch role="img" aria-label="Compression stages with intercoolers, pressure and temperature at each stage"></span>
+      <span class="zoom" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 10l4 4M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" stroke-width="1.5"/></svg>
+        Enlarge
+      </span>
+    </button>
+    <ul class="warn" data-warn-r aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('ce-h')}>
+    <h2 id={id('ce-h')}>Centrifugal compressor</h2>
+    <Fragment set:html={rows([
+      { k: 'etaP', label: 'Polytropic efficiency', sym: 'η_p', v: '75', unit: '%' },
+      { k: 'tdLimC', label: 'Discharge-temperature limit', sym: 'T_lim', v: '190', cat: 'temp' },
+      { k: 'had', label: 'Adiabatic (isentropic) head', sym: 'H_ad = Z·R·T_s/(M_w·σ)·(r^σ − 1)', cat: 'head', out: true },
+      { k: 'nexp', label: 'Polytropic exponent', sym: '(n − 1)/n = σ/η_p', out: true },
+      { k: 'hp', label: 'Polytropic head', sym: 'H_p = Z·R·T_s/(M_w·σ/η_p)·(r^(σ/η_p) − 1)', cat: 'head', out: true },
+      { k: 'etaIsC', label: 'Equivalent isentropic efficiency', sym: 'η_is = H_ad·η_p/H_p', unit: '%', out: true },
+      { k: 'tdC', label: 'Discharge temperature', sym: 'T_d = T_s·r^(σ/η_p)', cat: 'temp', out: true },
+    ])} />
+    <div class="switches">
+      <SegToggle label="Maximum head per impeller" name="hmode" value="est" options={[{ value: 'est', label: 'Estimate', hint: '(GPSA, by Mw)' }, { value: 'typed', label: 'Typed' }]} />
+    </div>
+    <Fragment set:html={rows([
+      { k: 'hMax', label: 'Maximum polytropic head per impeller', sym: 'H_max = 0.3048·(15 000 − 1 500·M_w⁰·³⁵)', cat: 'head' },
+      { k: 'nImpX', label: 'Impellers needed', sym: 'H_p/H_max', out: true },
+      { k: 'nImp', label: 'Number of impellers', sym: 'z = ⌈H_p/H_max⌉', out: true },
+      { k: 'hImp', label: 'Polytropic head per impeller', sym: 'H_p/z', cat: 'head', out: true },
+      { k: 'gasC', label: 'Gas power', sym: 'P_gas = M·H_p/η_p', cat: 'power', out: true },
+    ])} />
+    <p class="note">The impellers of one casing are not cooled between each other: the gas leaves at the polytropic discharge temperature. The estimate (GPSA Eq. 13-41, the same as IPS-E-PR-750 Eq. 10) gives about 3 000–3 400 m per impeller; Branan quotes 7 000–11 000 ft (2 100–3 350 m), at most about eight impellers per casing, one fewer for every side nozzle, and a ratio of 2.5–4 per casing.</p>
+    <ul class="warn" data-warn-c aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('dr-h')}>
+    <h2 id={id('dr-h')}>Shaft power and driver</h2>
+    <Fragment set:html={rows([
+      { k: 'etaMechR', label: 'Mechanical efficiency, reciprocating', sym: 'η_m', v: '95', unit: '%' },
+      { k: 'etaDrv', label: 'Driver efficiency', sym: 'η_drv', v: '95', unit: '%' },
+      { k: 'margin', label: 'Motor rating margin over shaft power', sym: 'f_m', v: '110', unit: '%' },
+    ])} />
+    <table class="cs">
+      <thead><tr><th scope="col"><span class="sr">Quantity</span></th><th scope="col">Reciprocating</th><th scope="col">Centrifugal</th><th scope="col" class="cu"><span class="sr">Unit</span></th></tr></thead>
+      <tbody set:html={[
+        pw('gas', 'Gas power', 'P_gas'),
+        pw('mech', 'Mechanical losses', 'P_gas·(1/η_m − 1) | P_gas⁰·⁴'),
+        pw('shaft', 'Shaft power', 'P_sh = P_gas + losses'),
+        pw('drv', 'Driver input power', 'P_in = P_sh/η_drv'),
+        pw('rating', 'Minimum motor rating', 'f_m·P_sh'),
+      ].join('')} />
+    </table>
+    <p class="note">Centrifugal losses (bearings, seals, gear) by Scheel's equation as printed in GPSA 12th ed. SI (Eq. 13-38, kW); reciprocating mechanical efficiency 95 % as on the GPSA power curves (Branan). API 618 3.1.2.2: motor nameplate at least 110 % of the greatest power required, including gear and coupling losses.</p>
+  </section>
+
+  <section class="grp" aria-labelledby={id('basis-h')}>
+    <h2 id={id('basis-h')}>Calculation basis</h2>
+    <details class="basis" open>
+      <summary>Equations</summary>
+      <ol class="eqs">
+        <li><b>Flow</b>: <i>M</i> = <i>P</i><sub>s</sub>·<i>V</i><sub>s</sub>·<i>M</i><sub>w</sub>/(<i>Z</i><sub>s</sub>·<i>R</i>·<i>T</i><sub>s</sub>), <i>R</i> = 8.314462618 kJ/(kmol·K); standard volume <i>V</i><sub>std</sub> = <i>M</i>·<i>R</i>·<i>T</i><sub>std</sub>/(<i>M</i><sub>w</sub>·101.325 kPa) with <i>Z</i> = 1.</li>
+        <li><b>Head</b> (Perry 7th Eq. 10-64a, 10-71; GPSA 13-34): <i>H</i><sub>ad</sub> = <i>Z</i>·<i>R</i>·<i>T</i><sub>s</sub>/<i>M</i><sub>w</sub>·<i>k</i>/(<i>k</i> − 1)·[<i>r</i><sup>(<i>k</i>−1)/<i>k</i></sup> − 1] in kJ/kg; in metres of gas ÷ <i>g</i> = 9.80665 m/s². Polytropic: (<i>n</i> − 1)/<i>n</i> = (<i>k</i> − 1)/(<i>k</i>·<i>η</i><sub>p</sub>), <i>H</i><sub>p</sub> as <i>H</i><sub>ad</sub> with <i>n</i> for <i>k</i>; <i>H</i><sub>p</sub>/<i>η</i><sub>p</sub> = <i>H</i><sub>ad</sub>/<i>η</i><sub>is</sub>.</li>
+        <li><b>Reciprocating</b>: equal ratio per stage <i>r</i><sub>c</sub> = <i>r</i><sup>1/<i>N</i></sup>, intercooling to <i>T</i><sub>s</sub>; actual discharge temperature <i>T</i><sub>d</sub> = <i>T</i><sub>s</sub>·[1 + (<i>r</i><sub>c</sub><sup><i>σ</i></sup> − 1)/<i>η</i><sub>is</sub>] (GPSA 13-31, Walas 7.55); <i>N</i> is the fewest stages with <i>T</i><sub>d</sub> ≤ <i>T</i><sub>lim</sub> and <i>r</i><sub>c</sub> ≤ <i>r</i><sub>lim</sub>; gas power <i>P</i> = <i>N</i>·<i>M</i>·<i>H</i><sub>is</sub>(<i>r</i><sub>c</sub>)/<i>η</i><sub>is</sub> (Perry Eq. 10-80a).</li>
+        <li><b>Centrifugal</b>: <i>T</i><sub>d</sub> = <i>T</i><sub>s</sub>·<i>r</i><sup>(<i>n</i>−1)/<i>n</i></sup> (GPSA 13-37); gas power <i>M</i>·<i>H</i><sub>p</sub>/<i>η</i><sub>p</sub> (GPSA 13-35); maximum head per impeller <i>H</i><sub>max</sub> = 15 000 − 1 500·<i>M</i><sub>w</sub><sup>0.35</sup> ft (GPSA 13-41; IPS-E-PR-750 Eq. 10 in metres); impellers <i>z</i> = ⌈<i>H</i><sub>p</sub>/<i>H</i><sub>max</sub>⌉.</li>
+        <li><b>Shaft power</b>: centrifugal <i>P</i><sub>sh</sub> = <i>P</i><sub>gas</sub> + <i>P</i><sub>gas</sub><sup>0.4</sup> (kW; Scheel, GPSA 13-38); reciprocating <i>P</i><sub>sh</sub> = <i>P</i><sub>gas</sub>/<i>η</i><sub>m</sub>; driver input <i>P</i><sub>sh</sub>/<i>η</i><sub>drv</sub>; motor rating <i>f</i><sub>m</sub>·<i>P</i><sub>sh</sub>.</li>
+      </ol>
+    </details>
+    <details class="basis">
+      <summary>Notes</summary>
+      <ol>
+        <li>Ideal-gas relations with an average <i>Z</i> are study estimates. For strongly non-ideal gases (high pressure, near saturation) use an enthalpy–entropy chart or an equation of state; vendors' data govern.</li>
+        <li>Power is the same whichever flow is given: for a suction volume it reduces to <i>k</i>/(<i>k</i> − 1)·<i>P</i><sub>s</sub>·<i>V</i><sub>s</sub>·(<i>Z</i>/<i>Z</i><sub>s</sub>)·[<i>r</i><sup><i>σ</i></sup> − 1]/<i>η</i> (Perry Eq. 10-66a).</li>
+        <li>Interstage coolers add pressure drop (IPS-E-PR-750: 20–35 kPa per cooler), which raises the ratios slightly; not included.</li>
+        <li>Scheel's equation was published in horsepower; IPS-E-PR-750 Eq. 14 uses 0.663·<i>P</i><sup>0.4</sup> in kW. Either way the losses are about 1–5 % of the gas power.</li>
+        <li>Typical ratios per stage (Walas): pipeline compressors 1.2–2.0, process compressors 1.5–4.0, small units up to 6. Exit temperatures above 350–400 °F (175–205 °C) are avoided.</li>
+      </ol>
+    </details>
+  </section>
+  <p class="sr" aria-live="polite" data-status></p>
+
+  <dialog class="zd" aria-labelledby={id('zd-title')}>
+    <div class="zhead">
+      <h2 id={id('zd-title')}>Reciprocating compressor stages</h2>
+      <button type="button" class="zclose" data-zd-close aria-label="Close">
+        <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <div class="zimg" data-zd-img></div>
+  </dialog>
+</div>
+
+<script>
+  import { compressor, massFromVol, volFromMass, stdFromMass, massFromStd, hMaxImpeller, type CompInput, type CompResult } from '../lib/calc/compressor';
+  import { COMP_UNITS, COMP_DEFAULT_UNITS, STD_TEMPS, type CompCat } from '../lib/calc/compressor-units';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('−', '-');
+  const CAT: Record<string, CompCat> = { ps: 'p', pd: 'p', v: 'vflow', m: 'mflow', vstd: 'vstd', ts: 'temp', tdLim: 'temp', tdLimC: 'temp', hMax: 'head' };
+  const STD_LABEL: Record<string, string> = { '0': '0 °C', '15': '15 °C', '20': '20 °C', '60F': '60 °F' };
+
+  type U = { label: string; f: number; off?: number };
+  // ── stage sketch (inline SVG): compressor trapezoids, intercoolers between, p and T at each node ──
+  function sketch(r: CompResult, up: U, ut: U, W: number): string {
+    const st = r.recip.stages;
+    if (!st.length) return '';
+    const n = st.length, shown = n <= 6 ? st : [st[0], st[1], st[n - 1]];
+    const gap = n <= 6 ? 0 : 1;                             // a "…" between stage 2 and the last one
+    const cols = shown.length + gap;
+    const unitW = Math.max(118, (W - 40) / cols);
+    const Wd = Math.round(40 + unitW * cols), H = 206, yL = 92;
+    const p = (v: number) => fmt(fromSI(up as never, v)), t = (v: number) => fmt(fromSI(ut as never, v));
+    const parts: string[] = [];
+    const n1 = (v: number) => v.toFixed(1);
+    parts.push(`<line x1="8" y1="${yL}" x2="${Wd - 8}" y2="${yL}" class="ln"/>`);
+    parts.push(`<path d="M${Wd - 16},${yL - 5} L${Wd - 8},${yL} L${Wd - 16},${yL + 5}" class="ln"/>`);
+    let col = 0;
+    shown.forEach((s, j) => {
+      if (gap && j === 2) {
+        const cx = 20 + unitW * (col + 0.5);
+        parts.push(`<rect x="${n1(cx - 26)}" y="${yL - 12}" width="52" height="24" class="bg"/><text x="${n1(cx)}" y="${yL + 5}" class="dots" text-anchor="middle">…</text>`);
+        col++;
+      }
+      const x0 = 20 + unitW * col, cx = x0 + unitW * 0.32;
+      // compressor: trapezoid, wide inlet (left) to narrow outlet (right)
+      parts.push(`<path d="M${n1(cx - 20)},${yL - 26} L${n1(cx + 20)},${yL - 13} L${n1(cx + 20)},${yL + 13} L${n1(cx - 20)},${yL + 26} Z" class="cmp"/>`);
+      parts.push(`<text x="${n1(cx)}" y="${yL + 5}" class="sn" text-anchor="middle">${s.i}</text>`);
+      // pressure after the stage above the line, temperatures below
+      const lx = x0 + unitW * 0.62;
+      parts.push(`<text x="${n1(cx)}" y="${yL - 38}" class="lbl" text-anchor="middle">${p(s.pout)}</text>`);
+      parts.push(`<text x="${n1(cx)}" y="${yL + 44}" class="lbl" text-anchor="middle">${t(s.td)}</text>`);
+      const last = j === shown.length - 1;
+      if (!last) {
+        // intercooler: circle with a zigzag
+        parts.push(`<circle cx="${n1(lx + 12)}" cy="${yL}" r="13" class="cmp"/><path d="M${n1(lx + 1)},${yL + 4} l5,-8 l5,8 l5,-8 l5,8" class="zz"/>`);
+        parts.push(`<text x="${n1(lx + 12)}" y="${yL + 44}" class="lbl mut" text-anchor="middle">${t(s.tin)}</text>`);
+      }
+      col++;
+    });
+    parts.push(`<text x="10" y="${yL - 38}" class="lbl mut">${p(st[0].pin)}</text>`);
+    parts.push(`<text x="10" y="${yL + 44}" class="lbl mut">${t(st[0].tin)}</text>`);
+    parts.push(`<text x="10" y="${H - 44}" class="key">Above: discharge pressure, ${up.label}.</text>`);
+    parts.push(`<text x="10" y="${H - 28}" class="key">Below: discharge temperature (actual), ${ut.label}.</text>`);
+    parts.push(`<text x="10" y="${H - 12}" class="key">${n} stage${n > 1 ? 's' : ''}, ratio ${fmt(r.recip.rc)} each${n > 1 ? `, ${n - 1} intercooler${n > 2 ? 's' : ''} back to ${t(st[0].tin)} ${ut.label}` : ''}.</text>`);
+    return `<svg viewBox="0 0 ${Wd} ${H}" width="${Wd}" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-comp]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const units: Record<CompCat, string> = { ...COMP_DEFAULT_UNITS };
+    const unit = (c: CompCat) => COMP_UNITS[c].find((u) => u.label === units[c])!;
+    let given: 'vol' | 'mass' | 'std' = 'vol', std = '20', hmode: 'est' | 'typed' = 'est';
+    let bad = false;
+    let last: CompResult | undefined;
+
+    const read = (k: string, ok: (x: number) => boolean, c: CompCat | null = CAT[k] ?? null) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value);
+      const x = blank ? NaN : c ? toSI(unit(c), raw) : raw;
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      if (invalid) bad = true;
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, v: number | undefined, c?: CompCat, f = 1) => {
+      const o = root.querySelector<HTMLOutputElement>(`output[data-o="${k}"]`);
+      if (o) o.textContent = v === undefined || !Number.isFinite(v) ? '' : fmt(c ? fromSI(unit(c), v) : v * f);
+    };
+    const draw = () => {
+      const box = $<HTMLElement>('[data-sketch]');
+      box.innerHTML = last ? sketch(last, unit('p'), unit('temp'), Math.max(320, Math.min(760, box.clientWidth || 760))) : '';
+    };
+
+    const run = () => {
+      bad = false;
+      segSet(root, 'given', given); segSet(root, 'std', std); segSet(root, 'hmode', hmode);
+      const pos = (x: number) => x > 0, pct = (x: number) => x > 0 && x <= 100;
+      const tStd = STD_TEMPS[std];
+      $('[data-stdnote]').innerHTML = `Standard volume at ${STD_LABEL[std]} and 101.325 kPa, <i>Z</i> = 1. <i>k</i> at the average of suction and discharge temperature is closer than at suction.`;
+      const ps = read('ps', pos), pd = read('pd', pos);
+      const mw = read('mw', pos), k = read('k', (x) => x > 1 && x < 2), ts = read('ts', pos);
+      const zs = read('zs', (x) => x > 0 && x < 3), zd = read('zd', (x) => x > 0 && x < 3);
+
+      // linked flows: the given one is typed (yellow), the other two follow (green, typeable)
+      const fl: Record<string, number> = { v: NaN, m: NaN, vstd: NaN };
+      for (const f of ['v', 'm', 'vstd']) inp(f).classList.toggle('calcd', f !== { vol: 'v', mass: 'm', std: 'vstd' }[given]);
+      if (given === 'vol') fl.m = massFromVol(read('v', pos), ps, mw, zs, ts);
+      else if (given === 'mass') fl.m = read('m', pos);
+      else fl.m = massFromStd(read('vstd', pos), mw, tStd);
+      const m = fl.m;
+      const put = (f: string, val: number, c: CompCat) => { const el = inp(f); el.removeAttribute('aria-invalid'); el.value = Number.isFinite(val) ? fmtIn(fromSI(unit(c), val)) : ''; };
+      if (given !== 'vol') put('v', volFromMass(m, ps, mw, zs, ts), 'vflow');
+      if (given !== 'mass') put('m', m, 'mflow');
+      if (given !== 'std') put('vstd', stdFromMass(m, mw, tStd), 'vstd');
+
+      // maximum head per impeller: estimate from Mw (green) until typed
+      const hEl = inp('hMax');
+      hEl.classList.toggle('calcd', hmode === 'est');
+      if (hmode === 'est') { hEl.removeAttribute('aria-invalid'); hEl.value = Number.isFinite(mw) ? fmtIn(fromSI(unit('head'), hMaxImpeller(mw) * 9.80665)) : ''; }
+      const hMaxJ = read('hMax', pos);
+
+      const x: CompInput = {
+        ps, pd, m, mw, k, ts, zs, zd,
+        tdLim: read('tdLim', pos), rcLim: read('rcLim', (v) => v > 1), etaIs: read('etaIs', pct) / 100, etaMechR: read('etaMechR', pct) / 100,
+        etaP: read('etaP', pct) / 100, hMax: hMaxJ / 9.80665, tdLimC: read('tdLimC', pos),
+        etaDrv: read('etaDrv', pct) / 100, margin: read('margin', (v) => v >= 100 && v < 300) / 100,
+      };
+      const core = [ps, pd, m, mw, k, ts, zs, zd];
+      const r = core.every(Number.isFinite) && pd > ps ? compressor(x) : undefined;
+      last = r && r.recip.stages.length ? r : undefined;
+
+      show('r', r?.r); show('z', r?.z);
+      const R = r?.recip, C = r?.cent;
+      show('nt', R?.nt); show('nr', R?.nr); show('n', R?.n); show('rc', R?.rc);
+      show('tdIs', R?.tdIs, 'temp'); show('td', R?.td, 'temp'); show('hIs', R?.hIsStage, 'head'); show('gasR', R?.gas, 'power');
+      show('had', C?.had, 'head'); show('nexp', C?.nExp); show('hp', C?.hp, 'head'); show('etaIsC', C?.etaIs, undefined, 100); show('tdC', C?.td, 'temp');
+      show('nImpX', C?.nImpExact); show('nImp', C && Number.isFinite(C.nImpExact) ? C.nImp : undefined); show('hImp', C && Number.isFinite(C.nImpExact) ? C.hImp * 9.80665 : undefined, 'head');
+      show('gasC', C?.gas, 'power');
+      const mechR = R ? R.shaft - R.gas : undefined;
+      for (const [kk, vr, vc] of [['gas', R?.gas, C?.gas], ['mech', mechR, C?.mech], ['shaft', R?.shaft, C?.shaft], ['drv', R?.drv, C?.drv], ['rating', R?.rating, C?.rating]] as const) {
+        show(`${kk}-r`, vr, 'power'); show(`${kk}-c`, vc, 'power');
+      }
+
+      const tU = unit('temp'), T = (v: number) => `${fmt(fromSI(tU, v))} ${tU.label}`;
+      const wr: string[] = [], wc: string[] = [];
+      if (core.every(Number.isFinite) && !(pd > ps)) wr.push('Discharge pressure must be above the suction pressure.');
+      if (R) {
+        if (R.tdImpossible) wr.push(`The temperature limit ${T(x.tdLim)} is not above the suction temperature: no number of stages can meet it.`);
+        if (Number.isFinite(mw) && mw <= 12 && x.tdLim > 135 + 273.15) wr.push(`Hydrogen-rich gas (<i>M</i><sub>w</sub> ≤ 12): API 618 limits the predicted discharge temperature to 135 °C.`);
+        if (R.n > 6) wr.push(`${R.n} stages: the sketch shows the first two and the last.`);
+        if (R.rc < 1.5 && R.n === 1) wr.push('Ratio below 1.5: a blower or fan may suit better than a reciprocating compressor.');
+      }
+      if (C) {
+        if (C.td > x.tdLimC) wc.push(`Discharge temperature ${T(C.td)} exceeds the limit ${T(x.tdLimC)}: split the compression into sections with intercooling (Branan: most multistage machines stay below 120–150 °C; 230–260 °C is the mechanical limit).`);
+        if (C.nImp > 8) wc.push(`${C.nImp} impellers: more than about eight per casing — more than one casing (or a higher head per impeller) is needed.`);
+        if (C.etaIs > 0 && x.etaP < 0.6) wc.push('Polytropic efficiency below 60 % is unusual for centrifugal compressors (typically 70–80 %).');
+      }
+      if (bad) wr.push('Some inputs are invalid (red border).');
+      $('[data-warn-r]').innerHTML = wr.map((w) => `<li>${w}</li>`).join('');
+      $('[data-warn-c]').innerHTML = wc.map((w) => `<li>${w}</li>`).join('');
+      draw();
+    };
+
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      const c = t.dataset.cat as CompCat | undefined;
+      if (c) {
+        const from = unit(c);
+        units[c] = t.value;
+        const to = unit(c);
+        for (const s of root.querySelectorAll<HTMLSelectElement>(`select[data-cat="${c}"]`)) s.value = t.value;
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-ut="${c}"]`)) s.textContent = t.value;
+        for (const [k, kc] of Object.entries(CAT)) {
+          if (kc !== c) continue;
+          const el = inp(k), v = parseNumber(el.value);
+          if (el.value.trim() !== '' && Number.isFinite(v)) el.value = fmtIn(fromSI(to, toSI(from, v)));
+        }
+        $('[data-status]').textContent = `Unit changed to ${t.value}; values converted.`;
+      }
+      if (t.matches('select')) run();
+    });
+    root.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (!t.matches('input')) return;
+      const g = ({ v: 'vol', m: 'mass', vstd: 'std' } as const)[t.dataset.k as 'v' | 'm' | 'vstd'];
+      if (g) given = g;
+      if (t.dataset.k === 'hMax') hmode = 'typed';
+      run();
+    });
+    segInit(root, 'given', (v) => { given = v as typeof given; run(); });
+    segInit(root, 'std', (v) => {
+      // keep the typed standard volume as the given value when the reference changes
+      std = v; run();
+    });
+    segInit(root, 'hmode', (v) => { hmode = v as typeof hmode; run(); });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[data-k]')) el.value = '';
+      run(); inp({ vol: 'v', mass: 'm', std: 'vstd' }[given]).focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    const dlg = $<HTMLDialogElement>('dialog.zd');
+    $('[data-zoom]').addEventListener('click', () => {
+      if (!last) return;
+      // same drawing, scaled up (text grows with it)
+      $('[data-zd-img]').innerHTML = sketch(last, unit('p'), unit('temp'), Math.max(320, Math.min(760, $<HTMLElement>('[data-sketch]').clientWidth || 760)));
+      dlg.showModal();
+    });
+    $('[data-zd-close]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    let rt = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); }).observe($('[data-sketch]'));
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 60rem; }
+  .bar :global(i) { font-style: italic; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.375rem; font-size: 1.0625rem; font-weight: 650; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  .calc :global(table) { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  .calc :global(th), .calc :global(td) { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .calc :global(tbody th) { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  .calc :global(th label) { cursor: text; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i) { font-style: italic; padding-right: 0.05em; }
+  .calc :global(.io) { max-width: 50rem; margin-bottom: 0.25rem; }
+  .calc :global(.io .v) { width: 9.5rem; }
+  .calc :global(.io .u) { width: 9rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .calc :global(.io .u select) { max-width: 9rem; }
+  .calc :global(input), .calc :global(output), select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input.calcd) { background: var(--zoho-out); border-color: transparent; }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .calc :global(select:focus) { outline: 2px solid var(--line); outline-offset: 1px; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; margin-top: 0.5rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 50rem; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 50rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .cs { max-width: 50rem; margin-top: 0.75rem; table-layout: fixed; }
+  .cs thead th { font-weight: 600; font-size: 0.8125rem; padding: 0 0.25rem 0.25rem 0; }
+  .cs thead th:first-child { width: 42%; }
+  .cs .cu { width: 5rem; padding-left: 0.25rem; color: var(--muted); font-size: 0.875rem; }
+  .cs td { padding: 0.125rem 0.25rem 0.125rem 0; }
+  .calc :global(.sr) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  .sk { display: block; width: 100%; max-width: 50rem; margin-top: 1rem; padding: 0; border: 0; background: none; text-align: left; cursor: zoom-in; }
+  .skimg { display: block; overflow: hidden; }
+  .skimg :global(svg), .zimg :global(svg) { display: block; max-width: 100%; height: auto; }
+  .zoom { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .comp :global(.ln) { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+  .comp :global(.cmp) { fill: #fff; stroke: var(--ink); stroke-width: 1.6; }
+  .comp :global(.zz) { fill: none; stroke: var(--line); stroke-width: 1.4; }
+  .comp :global(.bg) { fill: #fff; }
+  .comp :global(.sn) { font: 600 13px var(--font-ui); fill: var(--ink); }
+  .comp :global(.dots) { font: 600 16px var(--font-ui); fill: var(--ink); }
+  .comp :global(.lbl) { font: 400 12px var(--font-ui); fill: var(--ink); font-variant-numeric: tabular-nums; }
+  .comp :global(.lbl.mut) { fill: var(--muted); }
+  .comp :global(.key) { font: 400 11px var(--font-ui); fill: var(--muted); }
+  .zd { width: min(72rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1.5px solid var(--ink); border-radius: 0; background: #fff; color: var(--ink); }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .zhead h2 { margin: 0; font-size: 1.25rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zclose:hover { background: var(--line); color: var(--paper); }
+  .zimg { padding: 1rem 1.25rem 1.5rem; display: grid; place-items: center; }
+  .zimg :global(svg) { width: 100%; max-height: calc(100dvh - 8rem); }
+
+  .basis { margin-top: 0.5rem; max-width: 60rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .basis i { font-style: italic; }
+  .basis sup, .basis sub { font-size: 0.75em; line-height: 0; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; }
+    .calc :global(.io .v) { width: 7rem; }
+    .calc :global(.io .u) { width: 6.5rem; }
+    .calc :global(.io .u select) { max-width: 6.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .cs { font-size: 0.8125rem; }
+    .cs thead th:first-child { width: 36%; }
+    .cs .cu { width: 3rem; font-size: 0.75rem; }
+  }
+</style>

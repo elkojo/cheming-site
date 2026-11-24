@@ -187,9 +187,10 @@ export const tools: Tool[] = [
     "tag": "K",
     "title": "Compressor",
     "name": "Compressor",
-    "description": "Isentropic compression of a generic compressor (compression ratio, mass and standard flows), with dedicated sections for reciprocating compressors (number of stages within discharge-temperature and ratio limits) and centrifugal compressors.",
+    "description": "Gas compression for one duty: suction, mass or standard flow; reciprocating compressor (fewest stages within the discharge-temperature and ratio limits, power with intercooling) and centrifugal compressor (polytropic head, impellers, discharge temperature); shaft power, driver and motor rating.",
     "category": "equipment",
-    "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/436c80a66d2d7e9b3d3015559dcd8229f2ba0f73db159ef93c423272633b4460?type=grid&mode=embed"
+    "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/436c80a66d2d7e9b3d3015559dcd8229f2ba0f73db159ef93c423272633b4460?type=grid&mode=embed",
+    "native": "compressor"
   },
   {
     "slug": "pump",
