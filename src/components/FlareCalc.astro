@@ -1,0 +1,558 @@
+---
+// Native Flare Stack calculator (Phase 7): API RP 521 (1997) simple approach. Two visible switches replace the sheet's
+// three columns: tip diameter from the Mach number or given; stack height required for the allowed radiation or given
+// (radiation found). Points of interest at grade under the flame and at any distance/elevation; live sketch to scale;
+// radiation along grade; stack support; smokeless steam; seal purge. Owner's choices 2026-11-25.
+import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
+import { K_TABLE, F_TABLE, F_GPSA } from '../lib/calc/flare';
+import { mathHtml } from '../lib/calc/types';
+import { FL_UNITS, FL_DEFAULT_UNITS, shortUnit, type FlCat } from '../lib/calc/flare-units';
+
+const id = (k: string) => `fl-${k}`;
+const unitSel = (cat: FlCat, label: string) =>
+  `<select data-cat="${cat}" aria-label="${label} unit">${FL_UNITS[cat].map((u) => `<option value="${u.label}"${u.label === FL_DEFAULT_UNITS[cat] ? ' selected' : ''}>${shortUnit(u.label)}</option>`).join('')}</select>`;
+const unitTxt = (cat: FlCat) => `<span data-ut="${cat}">${shortUnit(FL_DEFAULT_UNITS[cat])}</span>`;
+const inCell = (k: string, v = '') => `<input id="${id(k)}" data-k="${k}" value="${v}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />`;
+interface Row { k: string; name: string; sym: string; v?: string; out?: boolean; cat?: FlCat; sel?: boolean; unit?: string; show?: string; both?: boolean }
+const row = (r: Row) => {
+  const lab = `<span class="lb">${r.name}</span> <span class="eq">${mathHtml(r.sym)}</span>`;
+  const th = r.out ? `<th scope="row">${lab}</th>` : `<th scope="row"><label for="${id(r.k)}">${lab}</label></th>`;
+  // 'both': an input that becomes a computed (green, read-only) field in the other mode
+  const v = r.out ? `<td class="v"><output data-o="${r.k}"></output></td>` : `<td class="v">${inCell(r.k, r.v)}</td>`;
+  const u = r.cat ? (r.sel ? unitSel(r.cat, r.name) : unitTxt(r.cat)) : `<span>${r.unit ?? '–'}</span>`;
+  return `<tr data-row="${r.k}"${r.show ? ` data-show="${r.show}"` : ''}>${th}${v}<td class="u">${u}</td></tr>`;
+};
+const rows = (rs: Row[]) => rs.map(row).join('');
+
+// defaults: the Zoho sheet's example (typed there in mixed units; temperature as the sheet calculated it, 780 °C, FLR-1)
+const GAS: Row[] = [
+  { k: 'W', name: 'Relief rate', sym: 'W', v: '209435', cat: 'mflow', sel: true },
+  { k: 'M', name: 'Molar mass of the gas', sym: 'M', v: '42.081', unit: 'kg/kmol' },
+  { k: 'T', name: 'Temperature at the tip', sym: 'T', v: '780', cat: 'temp', sel: true },
+  { k: 'Z', name: 'Compressibility factor', sym: 'Z', v: '1' },
+  { k: 'k', name: 'Ratio of specific heats', sym: 'k = c_p/c_v', v: '1.16' },
+  { k: 'dp', name: 'Pressure drop across the tip', sym: 'Δp', v: '0', cat: 'dp', sel: true },
+  { k: 'LHV', name: 'Lower heating value', sym: 'LHV', v: '45801.8475', cat: 'lhv', sel: true },
+  { k: 'Q', name: 'Heat release', sym: 'Q = W·LHV', out: true, cat: 'power', sel: true },
+  { k: 'Vq', name: 'Gas volume flow at the tip', sym: 'V = W·Z·R·T/(p_2·M)', out: true, cat: 'vflow', sel: true },
+  { k: 'a', name: 'Speed of sound', sym: 'a = √(k·Z·R·T/M)', out: true, cat: 'vel', sel: true },
+];
+const TIP: Row[] = [
+  { k: 'Ma', name: 'Mach number at the tip', sym: 'Ma = 4·W/(π·d^2·p_2)·√(Z·R·T/(k·M))', v: '0.718' },
+  { k: 'd', name: 'Tip inside diameter', sym: 'd', v: '609.6', cat: 'dia', sel: true },
+  { k: 'uj', name: 'Exit velocity', sym: 'u_j = V/(π·d^2/4)', out: true, cat: 'vel' },
+];
+const FLAME: Row[] = [
+  { k: 'uw', name: 'Design wind velocity', sym: 'u_∞', v: '23', cat: 'vel' },
+  { k: 'L', name: 'Flame length (API Fig. 9)', sym: 'L(Q)', out: true, cat: 'len', sel: true },
+  { k: 'ur', name: 'Wind / exit velocity', sym: 'u_∞/u_j', out: true },
+  { k: 'fx', name: 'Horizontal distortion (API Fig. 10)', sym: 'ΣΔx/L', out: true },
+  { k: 'fy', name: 'Vertical distortion (API Fig. 10)', sym: 'ΣΔy/L', out: true },
+  { k: 'Dx', name: 'Horizontal flame extent', sym: 'ΣΔx', out: true, cat: 'len' },
+  { k: 'Dy', name: 'Vertical flame extent', sym: 'ΣΔy', out: true, cat: 'len' },
+];
+const RAD: Row[] = [
+  { k: 'F', name: 'Fraction of heat radiated', sym: 'F', v: '0.21' },
+  { k: 'RH', name: 'Relative humidity of the air', sym: 'RH', v: '40', unit: '%' },
+  { k: 'K0', name: 'Solar (background) radiation', sym: 'K_0', v: '1.02682', cat: 'flux', sel: true },
+];
+---
+<DrawingFrame>
+  <div class="calc flare" data-flare>
+    <div class="bar">
+      <p>Elevated flare: tip diameter, flame length and tilt by wind, radiation at two points of interest and the stack height, per API RP 521 (1997, simple method). One unit per kind of quantity: pick it at the first field; typed values are converted.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('s1')}>
+      <h2 id={id('s1')}><span class="no">1</span> Gas and heat release</h2>
+      <table class="io"><tbody><Fragment set:html={rows(GAS)} /></tbody></table>
+      <ul class="warn" data-warn="1" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s2')}>
+      <h2 id={id('s2')}><span class="no">2</span> Tip diameter</h2>
+      <div class="switches"><SegToggle label="Tip diameter" name="tip" value="mach" options={[{ value: 'mach', label: 'From the Mach number' }, { value: 'given', label: 'Given' }]} /></div>
+      <table class="io"><tbody><Fragment set:html={rows(TIP)} /></tbody></table>
+      <p class="note">API RP 521: up to Mach 0.5 for peak, short, infrequent flows and 0.2 for more frequent conditions on low-pressure flares; sonic flow may suit high-pressure flares. Pressure drops up to 14 kPa (2 psi) at the tip have been used. Commercial flame retainers reduce the flow area by 2–10 %.</p>
+      <ul class="warn" data-warn="2" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s3')}>
+      <h2 id={id('s3')}><span class="no">3</span> Flame</h2>
+      <table class="io"><tbody><Fragment set:html={rows(FLAME)} /></tbody></table>
+      <ul class="warn" data-warn="3" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s4')}>
+      <h2 id={id('s4')}><span class="no">4</span> Radiation</h2>
+      <div class="switches"><SegToggle label="Transmittance" name="tau" value="bs" options={[{ value: 'bs', label: 'Brzustowski & Sommer', short: 'B & S' }, { value: 'one', label: 'τ = 1', hint: '(API example 1)' }]} /></div>
+      <table class="io">
+        <tbody>
+          <tr data-row="F">
+            <th scope="row"><label for={id('F')}><span class="lb">Fraction of heat radiated</span> <span class="eq" set:html={mathHtml('F')} /></label></th>
+            <td class="v" set:html={inCell('F', '0.21')} />
+            <td class="u"><button type="button" class="tbtn" data-ftable aria-expanded="false" aria-controls={id('ftab')}>Tables</button></td>
+          </tr>
+          <Fragment set:html={rows(RAD.slice(1))} />
+        </tbody>
+      </table>
+      <div class="ftab" id={id('ftab')} data-ftab hidden>
+        <div class="two">
+          <table>
+            <caption>API RP 521 (1997) Table 9 — U.S. Bureau of Mines, gaseous diffusion flames</caption>
+            <thead><tr><th scope="col">Gas</th><th scope="col">Burner, cm</th><th scope="col"><i>F</i></th></tr></thead>
+            <tbody>{F_TABLE.map((r, i) => <tr><td><button type="button" data-fpick={`a${i}`}>{r.gas}</button></td><td class="num">{r.d.toFixed(2)}</td><td class="num">{r.F.toFixed(3)}</td></tr>)}</tbody>
+          </table>
+          <table>
+            <caption>GPSA Fig. 5-20 — vendor values for flared gases (max. 0.13)</caption>
+            <thead><tr><th scope="col">Gas</th><th scope="col"><i>F</i></th></tr></thead>
+            <tbody>{F_GPSA.map(([g, F], i) => <tr><td><button type="button" data-fpick={`g${i}`}>{g}</button></td><td class="num">{F}</td></tr>)}</tbody>
+          </table>
+        </div>
+        <p class="note">API: F from Table 9 is considered to give a reasonable but conservative stack height; with liquid droplets larger than 150 µm in the flame F is somewhat higher; with steam at about 0.3 kg per kg of gas F falls by 20 % (step 7). GPSA's vendor values are much lower; flare suppliers' F values belong to their own programs and are not interchangeable with API's method.</p>
+      </div>
+      <ul class="warn" data-warn="4" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s5')}>
+      <h2 id={id('s5')}><span class="no">5</span> Stack height and points of interest</h2>
+      <div class="switches"><SegToggle label="Stack height" name="hmode" value="req" options={[{ value: 'req', label: 'Required for the allowed radiation', short: 'Required' }, { value: 'given', label: 'Given (find the radiation)', short: 'Given' }]} /></div>
+      <div class="cols">
+        <div>
+          <table class="io"><tbody><Fragment set:html={rows([{ k: 'Hg', name: 'Stack height (tip above grade)', sym: 'H', v: '71.5366', cat: 'len', show: 'hgiven' }])} /></tbody></table>
+          <table class="poi">
+            <thead><tr><th scope="col"><span class="sr">Quantity</span></th><th scope="col">POI 1 <span class="nm">at grade under the flame</span></th><th scope="col">POI 2 <span class="nm">any point</span></th><th scope="col"><span class="sr">Unit</span></th></tr></thead>
+            <tbody>
+              <tr data-show="hreq"><th scope="row"><span class="lb">Allowed radiation, incl. solar</span> <span class="eq" set:html={mathHtml('K')} /> <button type="button" class="tbtn small" data-ktable aria-expanded="false">API Table 8</button></th><td set:html={inCell('K1', '4.73186')} /><td set:html={inCell('K2', '4.73186')} /><td class="u" set:html={unitTxt('flux')} /></tr>
+              <tr><th scope="row"><span class="lb">Horizontal distance from the stack</span> <span class="eq" set:html={mathHtml('r')} /></th><td><output data-o="r1" /></td><td set:html={inCell('r2', '77.5106')} /><td class="u" set:html={unitTxt('len')} /></tr>
+              <tr><th scope="row"><span class="lb">Elevation above grade</span> <span class="eq" set:html={mathHtml("h''")} /></th><td><output data-o="h1" /></td><td set:html={inCell('h2', '32.4917')} /><td class="u" set:html={unitTxt('len')} /></tr>
+              <tr><th scope="row"><span class="lb">Distance from the flame centre</span> <span class="eq" set:html={mathHtml('D')} /></th><td><output data-o="D1" /></td><td><output data-o="D2" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+              <tr><th scope="row"><span class="lb">Transmittance</span> <span class="eq" set:html={mathHtml('τ')} /></th><td><output data-o="t1" /></td><td><output data-o="t2" /></td><td class="u"><span>–</span></td></tr>
+              <tr data-show="hreq"><th scope="row"><span class="lb">Stack height needed</span> <span class="eq" set:html={mathHtml("H = √(D^2 − r'^2) + h'' − ½·ΣΔy")} /></th><td><output data-o="H1" /></td><td><output data-o="H2" /></td><td class="u" set:html={unitTxt('len')} /></tr>
+              <tr data-show="hgiven"><th scope="row"><span class="lb">Radiation at the point, incl. solar</span> <span class="eq" set:html={mathHtml('K = τ·F·Q/(4π·D^2) + K_0')} /></th><td><output data-o="Ka" /></td><td><output data-o="Kb" /></td><td class="u" set:html={unitTxt('flux')} /></tr>
+              <tr><th scope="row"><span class="lb">Governing</span></th><td><output data-o="g1" /></td><td><output data-o="g2" /></td><td class="u"></td></tr>
+            </tbody>
+          </table>
+          <div class="ftab" data-ktab hidden>
+            <table>
+              <caption>API RP 521 (1997) Table 8 — recommended design total radiation (click to use for both points)</caption>
+              <thead><tr><th scope="col"><i>K</i>, kW/m²</th><th scope="col">Btu/(h·ft²)</th><th scope="col">Conditions</th></tr></thead>
+              <tbody>{K_TABLE.map((r, i) => <tr><td><button type="button" data-kpick={i}>{(r.K / 1000).toFixed(2)}</button></td><td class="num">{r.btu}</td><td class="nm">{r.text}</td></tr>)}</tbody>
+            </table>
+            <p class="note">Table 8 includes solar radiation (0.79–1.04 kW/m², 250–330 Btu/(h·ft²)). On towers and elevated structures where rapid escape is not possible, ladders should be on the side away from the flare.</p>
+          </div>
+          <table class="io res">
+            <tbody>
+              <Fragment set:html={rows([{ k: 'H', name: 'Stack height', sym: 'H', out: true, cat: 'len' }])} />
+              <tr><th scope="row"><span class="lb">Support (API)</span></th><td class="v wide" colspan="2"><output data-o="sup" /></td></tr>
+              <Fragment set:html={rows([{ k: 'guy', name: 'Guy-wire radius (typical)', sym: '≈ H/2', out: true, cat: 'len' }])} />
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <button type="button" class="sk" data-zoom aria-haspopup="dialog" aria-label="Enlarge the flare sketch">
+            <span class="skimg" data-sketch role="img" aria-label="Flare stack, tilted flame, flame centre and the points of interest, to scale"></span>
+            <span class="zoom" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 10l4 4M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" stroke-width="1.5"/></svg> Enlarge</span>
+          </button>
+          <p class="note">To scale (stack width exaggerated). Flame drawn as a straight jet from the tip to (ΣΔx, ΣΔy), its centre at mid-flame; wind from the left.</p>
+        </div>
+      </div>
+      <ul class="warn" data-warn="5" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s6')}>
+      <h2 id={id('s6')}><span class="no">6</span> Radiation along grade</h2>
+      <div class="chart" data-chart role="img" aria-label="Radiation against horizontal distance from the stack"></div>
+      <p class="note">Total radiation (flame + solar) downwind and upwind of the stack, at grade and at the elevation of POI 2; dashed: the allowed radiation of POI 1.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s7')}>
+      <h2 id={id('s7')}><span class="no">7</span> Smokeless steam</h2>
+      <div class="switches"><SegToggle label="Steam-assisted" name="steam" value="no" options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }]} /></div>
+      <table class="io" data-show="steam"><tbody>
+        <Fragment set:html={rows([
+          { k: 'Ws', name: 'Steam rate (API Eq. 53, GPSA Eq. 5-35)', sym: 'W_s = W·(0.68 − 10.8/M)', out: true, cat: 'mflow' },
+          { k: 'ratio', name: 'Steam per flare gas', sym: 'W_s/W', out: true, unit: 'kg/kg' },
+        ])} />
+      </tbody></table>
+      <div class="switches" data-show="steam"><SegToggle label="Effect on F" name="fsteam" value="no" options={[{ value: 'no', label: 'F as typed' }, { value: 'yes', label: 'F − 20 %', hint: '(API, at ≈ 0.3 kg/kg)' }]} /></div>
+      <p class="note">Steam keeps the steam–CO₂ mass ratio near 0.7 (API); typical steam 0.25–1.0 kg per kg of gas, more for unsaturated gases (API Fig. 22). A proprietary smokeless tip: ask the manufacturer.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s8')}>
+      <h2 id={id('s8')}><span class="no">8</span> Purge gas</h2>
+      <div class="switches"><SegToggle label="Purge-reduction seal" name="seal" value="velocity" options={[{ value: 'velocity', label: 'Velocity seal' }, { value: 'molecular', label: 'Molecular seal' }, { value: 'none', label: 'None' }]} /></div>
+      <table class="io" data-show="seal"><tbody>
+        <Fragment set:html={rows([
+          { k: 'vp', name: 'Purge velocity in the tip', sym: 'v_p', v: '0.012192', cat: 'vel' },
+          { k: 'Qp', name: 'Purge gas flow at the tip', sym: 'Q_p = v_p·π·d^2/4', out: true, cat: 'vflow' },
+        ])} />
+      </tbody></table>
+      <p class="note" data-seal-note></p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('basis-h')}>
+      <h2 id={id('basis-h')}>Calculation basis</h2>
+      <details class="basis" open>
+        <summary>Equations</summary>
+        <ol>
+          <li><b>Tip</b>: <i>p</i><sub>2</sub> = atmospheric + Δ<i>p</i>; Mach number Ma = 4·<i>W</i>/(π·<i>d</i><sup>2</sup>·<i>p</i><sub>2</sub>)·√(<i>Z</i>·<i>R</i>·<i>T</i>/(<i>k</i>·<i>M</i>)) (API Eq. 24 with the exact constant instead of 3.23·10<sup>−5</sup>); <i>u</i><sub>j</sub> = <i>W</i>·<i>Z</i>·<i>R</i>·<i>T</i>/(<i>p</i><sub>2</sub>·<i>M</i>·π·<i>d</i><sup>2</sup>/4).</li>
+          <li><b>Flame length</b> (API Fig. 9): log<sub>10</sub> <i>L</i> = 0.45899·log<sub>10</sub> <i>Q</i>[kW] − 0.94676 (the original sheet's fit; reproduces API's example, 6.3·10<sup>5</sup> kW → 52 m, and lies within the reading accuracy of the chart, ±5 %).</li>
+          <li><b>Wind</b> (API Fig. 10): ΣΔ<i>x</i>/<i>L</i> = (0.00041747 + 34.778454·<i>u</i>)/(1 + 34.287096·<i>u</i> + 0.49941884·<i>u</i><sup>2</sup>), ΣΔ<i>y</i>/<i>L</i> = (1 + 154.33643·<i>u</i>)/(1 + 212.17435·<i>u</i> + 1448.9956·<i>u</i><sup>2</sup>), <i>u</i> = <i>u</i><sub>∞</sub>/<i>u</i><sub>j</sub> (the sheet's fits; within 0.02 of the API chart). Flame centre at (½ΣΔ<i>x</i>, <i>H</i> + ½ΣΔ<i>y</i>).</li>
+          <li><b>Distance</b> (Hajek &amp; Ludwig, API Eq. 20): <i>D</i> = √(<i>τ</i>·<i>F</i>·<i>Q</i>/(4π·(<i>K</i> − <i>K</i><sub>0</sub>))), solar radiation <i>K</i><sub>0</sub> taken off the allowed total; <i>τ</i> = 0.79·(100/<i>RH</i>)<sup>1/16</sup>·(30.5/<i>D</i>)<sup>1/16</sup> (Brzustowski &amp; Sommer, API Eq. C-2; solved together with <i>D</i>) or 1.</li>
+          <li><b>Height</b> (API Fig. C.1): <i>r</i>′ = <i>r</i> − ½ΣΔ<i>x</i>, <i>H</i> = √(<i>D</i><sup>2</sup> − <i>r</i>′<sup>2</sup>) + <i>h</i>″ − ½ΣΔ<i>y</i>; POI 1 directly under the flame centre at grade, where the radiation at grade is highest; the larger height governs. Given height: <i>K</i> = <i>τ</i>·<i>F</i>·<i>Q</i>/(4π·<i>D</i><sup>2</sup>) + <i>K</i><sub>0</sub>.</li>
+        </ol>
+      </details>
+      <details class="basis">
+        <summary>Notes</summary>
+        <ol>
+          <li>Point-source model: valid at distances of about one flame length or more. The B &amp; S transmittance was derived for luminous hydrocarbon flames, relative humidity above 10 % and 30–150 m; hydrogen and H₂S burn with little radiation.</li>
+          <li>Solar radiation (0.79–1.04 kW/m², API) adds to the flame radiation; Table 8 limits are totals.</li>
+          <li>Stack support (API 4.4.3.3): self-supported stacks are the most desirable but costliest, economically to 60–90 m; guyed stacks need a guy radius of about half the height and have been built to 180–250 m; derricks for larger stacks or where land excludes guy wires.</li>
+          <li>The original sheet's purge equation (from a later API edition) is not used: no public source was found. The continuous purge must keep the oxygen at 7.6 m (25 ft) below the tip at 6 % or less (API).</li>
+        </ol>
+      </details>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+    <dialog class="zd" aria-labelledby={id('zd-title')}>
+      <div class="zhead"><h2 id={id('zd-title')}>Flare stack, to scale</h2><button type="button" class="zclose" data-zd-close aria-label="Close"><svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
+      <div class="zimg" data-zd-img></div>
+    </dialog>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { machOf, diameterFor, sonic, exitVelocity, flame, distanceFor, heightFor, radiationAt, radiation, support, steamRate, purgeFlow, PURGE_V, K_TABLE, F_TABLE, F_GPSA, PATM, type Gas, type Flame, type Rad } from '../lib/calc/flare';
+  import { FL_UNITS, FL_DEFAULT_UNITS, shortUnit, type FlCat } from '../lib/calc/flare-units';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('−', '-');
+  const CAT: Record<string, FlCat> = { W: 'mflow', T: 'temp', dp: 'dp', LHV: 'lhv', d: 'dia', uw: 'vel', K0: 'flux', Hg: 'len', K1: 'flux', K2: 'flux', r2: 'len', h2: 'len', vp: 'vel' };
+
+  interface Pic { H: number; f: Flame; d: number; r2: number; h2: number; D1: number; D2: number; guy: number }
+  function sketch(s: Pic, Wd: number, pre: string): string {
+    const n = (x: number) => x.toFixed(1);
+    const { H, f } = s;
+    const xMin = Math.min(-Math.max(5, s.guy || 0) * 1.1, -0.15 * H), xMax = Math.max(s.r2, f.dx, s.guy || 0) * 1.1 + 5;
+    const yMax = Math.max(H + f.dy, s.h2) * 1.08 + 3;
+    const ML = 12, MR = 12, MT = 14, MB = 22;
+    const Hmax = Wd < 500 ? 330 : 430;
+    const sc = Math.min((Wd - ML - MR) / (xMax - xMin), Hmax / yMax);
+    const X = (x: number) => ML + (x - xMin) * sc, Y = (y: number) => MT + (yMax - y) * sc;
+    const vbW = X(xMax) + MR, vbH = Y(0) + MB;
+    const p: string[] = [`<defs><pattern id="${pre}h" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" class="hatch"/></pattern><marker id="${pre}a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1.5 L10,5 L0,8.5 z" class="arrf"/></marker></defs>`];
+    p.push(`<rect x="0" y="${n(Y(0))}" width="${n(vbW)}" height="10" fill="url(#${pre}h)"/><line x1="0" y1="${n(Y(0))}" x2="${n(vbW)}" y2="${n(Y(0))}" class="grade"/>`);
+    // guy wires
+    if (s.guy > 0) for (const gx of [-s.guy, s.guy]) p.push(`<line x1="${n(X(gx))}" y1="${n(Y(0))}" x2="${n(X(0))}" y2="${n(Y(H * 0.85))}" class="guy"/>`);
+    // stack (width exaggerated to stay visible)
+    const w = Math.max(3, s.d * sc);
+    p.push(`<rect x="${n(X(0) - w / 2)}" y="${n(Y(H))}" width="${n(w)}" height="${n(Y(0) - Y(H))}" class="stack"/>`);
+    // flame: tapered polygon from the tip to (Δx, H+Δy)
+    const tx = X(0), ty = Y(H), ex = X(f.dx), ey = Y(H + f.dy);
+    const len = Math.hypot(ex - tx, ey - ty) || 1, nx = -(ey - ty) / len, ny = (ex - tx) / len, wmax = Math.max(4, 0.12 * len);
+    const mid = (t: number, side: number, wd: number) => `${n(tx + (ex - tx) * t + side * nx * wd)},${n(ty + (ey - ty) * t + side * ny * wd)}`;
+    p.push(`<path d="M${n(tx)},${n(ty)} L${mid(0.35, 1, wmax * 0.8)} L${mid(0.7, 1, wmax)} L${n(ex)},${n(ey)} L${mid(0.7, -1, wmax * 0.9)} L${mid(0.35, -1, wmax * 0.6)} Z" class="flame"/>`);
+    const cx = X(f.dx / 2), cy = Y(H + f.dy / 2);
+    p.push(`<circle cx="${n(cx)}" cy="${n(cy)}" r="4" class="centre"/>`);
+    // POIs and distances
+    const P1 = [X(f.dx / 2), Y(0)], P2 = [X(s.r2), Y(s.h2)];
+    p.push(`<line x1="${n(cx)}" y1="${n(cy)}" x2="${n(P1[0])}" y2="${n(P1[1])}" class="dist"/><line x1="${n(cx)}" y1="${n(cy)}" x2="${n(P2[0])}" y2="${n(P2[1])}" class="dist"/>`);
+    p.push(`<circle cx="${n(P1[0])}" cy="${n(P1[1])}" r="4.5" class="poi"/><text x="${n(P1[0] + 7)}" y="${n(P1[1] - 6)}" class="lab">1</text>`);
+    p.push(`<circle cx="${n(P2[0])}" cy="${n(P2[1])}" r="4.5" class="poi"/><text x="${n(P2[0] + 7)}" y="${n(P2[1] - 6)}" class="lab">2</text>`);
+    if (s.h2 > 0) p.push(`<line x1="${n(P2[0])}" y1="${n(P2[1])}" x2="${n(P2[0])}" y2="${n(Y(0))}" class="ext"/>`);
+    // height dimension and wind
+    const xd = X(0) - Math.max(18, w + 10);
+    p.push(`<line x1="${n(xd)}" y1="${n(Y(0))}" x2="${n(xd)}" y2="${n(Y(H))}" class="dim" marker-start="url(#${pre}a)" marker-end="url(#${pre}a)"/><text x="${n(xd - 5)}" y="${n((Y(0) + Y(H)) / 2)}" class="dt" text-anchor="middle" transform="rotate(-90 ${n(xd - 5)} ${n((Y(0) + Y(H)) / 2)})">H</text>`);
+    p.push(`<line x1="${n(ML + 4)}" y1="${n(MT + 6)}" x2="${n(ML + 44)}" y2="${n(MT + 6)}" class="wind" marker-end="url(#${pre}a)"/><text x="${n(ML + 4)}" y="${n(MT + 20)}" class="cap">wind</text>`);
+    return `<svg viewBox="0 0 ${n(vbW)} ${n(vbH)}" width="${n(vbW)}" xmlns="http://www.w3.org/2000/svg">${p.join('')}</svg>`;
+  }
+
+  function chart(f: Flame, rad: Rad, H: number, h2: number, Kallow: number, r1: number, r2: number, Wd: number, toU: (x: number) => number, uL: string, lenU: (x: number) => number, uLen: string): string {
+    const n = (x: number) => x.toFixed(1);
+    const xMax = Math.max(r2 * 1.6, 2 * H, f.dx * 2), xMin = -0.5 * xMax;
+    const series = (h: number) => Array.from({ length: 241 }, (_, i) => { const x = xMin + (xMax - xMin) * i / 240; return [x, radiationAt(f, rad, H, x, h).K] as const; });
+    const sg = series(0), s2 = series(h2);
+    const kMax = Math.max(...sg.map((v) => v[1]), ...s2.map((v) => v[1]), Kallow || 0) * 1.1;
+    const ML = 44, MR = 10, MT = 10, MB = 30, W = Wd, Hh = W < 500 ? 200 : 240;
+    const X = (x: number) => ML + (x - xMin) / (xMax - xMin) * (W - ML - MR), Y = (k: number) => MT + (1 - k / kMax) * (Hh - MT - MB);
+    const path = (s: readonly (readonly [number, number])[]) => s.map(([x, k], i) => `${i ? 'L' : 'M'}${n(X(x))},${n(Y(k))}`).join(' ');
+    const p: string[] = [];
+    // axes and ticks
+    p.push(`<line x1="${ML}" y1="${n(Y(0))}" x2="${n(W - MR)}" y2="${n(Y(0))}" class="axis"/><line x1="${ML}" y1="${MT}" x2="${ML}" y2="${n(Y(0))}" class="axis"/>`);
+    const step = (v: number) => { const e = 10 ** Math.floor(Math.log10(v / 4)); return [1, 2, 5, 10].map((m) => m * e).find((s) => v / s <= 6)!; };
+    const kt = step(toU(kMax)); for (let k = 0; k <= toU(kMax); k += kt) { const kk = k / toU(1); p.push(`<line x1="${ML - 4}" y1="${n(Y(kk))}" x2="${n(W - MR)}" y2="${n(Y(kk))}" class="gridl"/><text x="${ML - 6}" y="${n(Y(kk) + 4)}" class="tick" text-anchor="end">${+k.toFixed(6)}</text>`); }
+    const xt = step(lenU(xMax - xMin)); for (let x = Math.ceil(lenU(xMin) / xt) * xt; x <= lenU(xMax); x += xt) { const xx = x / lenU(1); p.push(`<line x1="${n(X(xx))}" y1="${n(Y(0))}" x2="${n(X(xx))}" y2="${n(Y(0) + 4)}" class="axis"/><text x="${n(X(xx))}" y="${n(Y(0) + 16)}" class="tick" text-anchor="middle">${+x.toFixed(6)}</text>`); }
+    p.push(`<text x="${n(W - MR)}" y="${n(Hh - 2)}" class="tick" text-anchor="end">distance from the stack, ${uLen} (downwind +)</text><text x="${ML + 4}" y="${MT + 10}" class="tick">${uL}</text>`);
+    if (Kallow > 0) p.push(`<line x1="${ML}" y1="${n(Y(Kallow))}" x2="${n(W - MR)}" y2="${n(Y(Kallow))}" class="allow"/>`);
+    p.push(`<path d="${path(sg)}" class="kg"/>`);
+    if (h2 > 0) p.push(`<path d="${path(s2)}" class="k2"/>`);
+    for (const [x, lab] of [[r1, '1'], [r2, '2']] as const) if (x >= xMin && x <= xMax) p.push(`<line x1="${n(X(x))}" y1="${MT}" x2="${n(X(x))}" y2="${n(Y(0))}" class="poil"/><text x="${n(X(x) + 3)}" y="${MT + 10}" class="tick">${lab}</text>`);
+    void rad; void radiation;
+    return `<svg viewBox="0 0 ${W} ${Hh}" width="${W}" xmlns="http://www.w3.org/2000/svg">${p.join('')}</svg>`;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-flare]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const units: Record<FlCat, string> = { ...FL_DEFAULT_UNITS };
+    const unit = (c: FlCat) => FL_UNITS[c].find((u) => u.label === units[c])!;
+    const st = { tip: 'mach', tau: 'bs', hmode: 'req', steam: 'no', fsteam: 'no', seal: 'velocity' };
+    let pic: Pic | undefined, chartArgs: Parameters<typeof chart> | undefined;
+    const warns: Record<string, string[]> = {};
+    const read = (k: string, ok: (x: number) => boolean) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      if (el.readOnly) return NaN;
+      const raw = parseNumber(el.value);
+      const x = blank ? NaN : (CAT[k] ? toSI(unit(CAT[k]), raw) : raw);
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, x: number | string | undefined, c?: FlCat) => {
+      const o = $<HTMLOutputElement>(`output[data-o="${k}"]`);
+      o.textContent = x === undefined ? '' : typeof x === 'string' ? x : !Number.isFinite(x) ? '' : fmt(c ? fromSI(unit(c), x) : x);
+    };
+    const setComputed = (k: string, x: number, c?: FlCat) => { const el = inp(k); el.readOnly = true; el.classList.add('calc-out'); el.removeAttribute('aria-invalid'); el.value = Number.isFinite(x) ? fmt(c ? fromSI(unit(c), x) : x) : ''; };
+    const release = (k: string) => { const el = inp(k); if (el.readOnly) { el.readOnly = false; el.classList.remove('calc-out'); } };
+    const vis = (key: string, on: boolean) => { for (const el of root.querySelectorAll<HTMLElement>(`[data-show="${key}"]`)) el.hidden = !on; };
+    const draw = () => {
+      const box = $<HTMLElement>('[data-sketch]');
+      box.innerHTML = pic ? sketch(pic, Math.max(300, Math.min(560, box.clientWidth || 560)), 'fl') : '';
+      const cb = $<HTMLElement>('[data-chart]');
+      cb.innerHTML = chartArgs ? chart(...(chartArgs.slice(0, 7) as [Flame, Rad, number, number, number, number, number]), Math.max(300, Math.min(760, cb.clientWidth || 760)), chartArgs[8], chartArgs[9], chartArgs[10], chartArgs[11]) : '';
+    };
+
+    const run = () => {
+      for (const k of Object.keys(warns)) delete warns[k];
+      const warn = (s: string, m: string) => (warns[s] ??= []).push(m);
+      vis('hreq', st.hmode === 'req'); vis('hgiven', st.hmode === 'given'); vis('steam', st.steam === 'yes'); vis('seal', st.seal !== 'none');
+      // 1
+      const W = read('W', (x) => x > 0), M = read('M', (x) => x > 0), T = read('T', (x) => x > 0), Z = read('Z', (x) => x > 0), k = read('k', (x) => x > 0.5 && x < 3);
+      const dp = read('dp', (x) => x >= 0), LHV = read('LHV', (x) => x > 0);
+      const g: Gas | undefined = [W, M, T, Z, k, dp].every(Number.isFinite) ? { W, M, T, Z, k, p2: PATM + dp } : undefined;
+      const Q = W * LHV;
+      show('Q', Q, 'power'); show('Vq', g ? g.W * g.Z * 8.314462618 * g.T / (g.p2 * g.M / 1000) : undefined, 'vflow'); show('a', g ? sonic(g) : undefined, 'vel');
+      // 2
+      let d = NaN, Ma = NaN;
+      if (st.tip === 'mach') { release('Ma'); Ma = read('Ma', (x) => x > 0 && x <= 1.5); d = g && Ma > 0 ? diameterFor(g, Ma) : NaN; setComputed('d', d, 'dia'); }
+      else { release('d'); d = read('d', (x) => x > 0); Ma = g && d > 0 ? machOf(g, d) : NaN; setComputed('Ma', Ma); }
+      const uj = g && d > 0 ? exitVelocity(g, d) : NaN;
+      show('uj', uj, 'vel');
+      if (Ma > 1) warn('2', `Mach ${fmt(Ma)}: above sonic at the tip; the tip pressure rises (choked flow); use the pressure drop across the tip.`);
+      else if (Ma > 0.5) warn('2', `Mach ${fmt(Ma)} is above 0.5, the usual limit for short emergency flows of low-pressure flares (API); acceptable for high-pressure flares.`);
+      // 3
+      const uw = read('uw', (x) => x >= 0);
+      const f = g && d > 0 && Q > 0 && uw >= 0 ? flame(g, d, Q, uw) : undefined;
+      show('L', f?.L, 'len'); show('ur', f?.u); show('fx', f ? f.dx / f.L : undefined); show('fy', f ? f.dy / f.L : undefined); show('Dx', f?.dx, 'len'); show('Dy', f?.dy, 'len');
+      if (f && f.u > 1.2) warn('3', `u∞/uj = ${fmt(f.u)} beyond API Fig. 10 (up to about 1.2).`);
+      // 4
+      let F = read('F', (x) => x > 0 && x <= 1);
+      if (st.steam === 'yes' && st.fsteam === 'yes') F *= 0.8;
+      const RH = read('RH', (x) => x > 0 && x <= 100), K0 = read('K0', (x) => x >= 0);
+      const rad: Rad | undefined = Number.isFinite(F) && Q > 0 && RH > 0 && K0 >= 0 ? { F, Q, RH, tau: st.tau as Rad['tau'], K0 } : undefined;
+      if (RH <= 10 && st.tau === 'bs') warn('4', 'Brzustowski & Sommer\'s transmittance was derived for relative humidity above 10 %.');
+      // 5
+      const r2 = read('r2', (x) => x >= 0), h2 = read('h2', (x) => x >= 0);
+      let H = NaN; let D1 = NaN, D2 = NaN;
+      const r1 = f ? f.dx / 2 : NaN;
+      show('r1', r1, 'len'); show('h1', f ? 0 : undefined, 'len');
+      if (st.hmode === 'req') {
+        const K1 = read('K1', (x) => x > 0), K2 = read('K2', (x) => x > 0);
+        const a = rad && f ? distanceFor(rad, K1) : undefined, b = rad && f ? distanceFor(rad, K2) : undefined;
+        if (rad && K1 <= rad.K0) warn('5', 'The allowed radiation at POI 1 is not above the solar radiation.');
+        D1 = a?.D ?? NaN; D2 = b?.D ?? NaN;
+        const H1 = f && a ? heightFor(f, a.D, r1, 0) : NaN, H2 = f && b && r2 >= 0 && h2 >= 0 ? heightFor(f, b.D, r2, h2) : NaN;
+        show('D1', D1, 'len'); show('D2', D2, 'len'); show('t1', a?.tau); show('t2', b?.tau);
+        show('H1', H1, 'len'); show('H2', Number.isFinite(H2) ? H2 : (f && b ? 'not limiting' : undefined), Number.isFinite(H2) ? 'len' : undefined);
+        H = Math.max(Number.isFinite(H1) ? H1 : -Infinity, Number.isFinite(H2) ? H2 : -Infinity);
+        if (!Number.isFinite(H)) H = NaN;
+        show('g1', Number.isFinite(H) ? (H === H1 ? 'governing' : '–') : undefined); show('g2', Number.isFinite(H) ? (H === H2 ? 'governing' : '–') : undefined);
+        if (H < 0) warn('5', 'The required height is negative: the radiation limits are met even with the tip at grade (check a ground flare).');
+        for (const [D, lab] of [[D1, 'POI 1'], [D2, 'POI 2']] as const) if (st.tau === 'bs' && D > 0 && (D < 30 || D > 150)) warn('5', `${lab}: D = ${fmt(D)} m outside the 30–150 m range of the B & S transmittance.`);
+      } else {
+        H = read('Hg', (x) => x > 0);
+        const a = f && rad && H > 0 ? radiationAt(f, rad, H, r1, 0) : undefined, b = f && rad && H > 0 && r2 >= 0 && h2 >= 0 ? radiationAt(f, rad, H, r2, h2) : undefined;
+        D1 = a?.D ?? NaN; D2 = b?.D ?? NaN;
+        show('D1', D1, 'len'); show('D2', D2, 'len'); show('t1', a?.tau); show('t2', b?.tau);
+        show('Ka', a?.K, 'flux'); show('Kb', b?.K, 'flux');
+        show('g1', a && b ? (a.K >= b.K ? 'higher' : '–') : undefined); show('g2', a && b ? (b.K > a.K ? 'higher' : '–') : undefined);
+      }
+      show('H', H, 'len');
+      const sup = H > 0 ? support(H) : undefined;
+      show('sup', sup?.kind); show('guy', sup?.guy, 'len');
+      pic = f && H > 0 && d > 0 ? { H, f, d, r2: r2 >= 0 ? r2 : 0, h2: h2 >= 0 ? h2 : 0, D1, D2, guy: sup?.guy ?? NaN } : undefined;
+      const lenU = (x: number) => fromSI(unit('len'), x), fluxU = (x: number) => fromSI(unit('flux'), x);
+      const Kal = st.hmode === 'req' ? read('K1', (x) => x > 0) : NaN;
+      chartArgs = pic && rad ? [f!, rad, H, pic.h2, Kal, r1, pic.r2, 760, fluxU, shortUnit(units.flux), lenU, units.len] : undefined;
+      draw();
+      // 7
+      show('Ws', W > 0 && M > 0 ? Math.max(0, steamRate(W, M)) : undefined, 'mflow'); show('ratio', W > 0 && M > 0 ? Math.max(0, 0.68 - 10.8 / M) : undefined);
+      // 8
+      const vp = st.seal === 'none' ? NaN : read('vp', (x) => x > 0);
+      show('Qp', d > 0 && vp > 0 ? purgeFlow(d, vp) : undefined, 'vflow');
+      const [lo, hi] = st.seal === 'molecular' ? PURGE_V.molecular : PURGE_V.velocity;
+      $('[data-seal-note]').innerHTML = st.seal === 'none'
+        ? 'Without a seal the continuous purge must keep the oxygen 7.6 m (25 ft) below the tip at 6 % or less (API RP 521, 5.4.3.2.2); the rate depends on the gas and the tip diameter: ask the flare supplier.'
+        : `API RP 521 (1997) 4.4.3.4.2: ${st.seal === 'velocity' ? `a velocity seal reduces the purge velocity in the tip to ${fmt(fromSI(unit('vel'), lo))}–${fmt(fromSI(unit('vel'), hi))} ${units.vel} (0.02–0.04 ft/s), keeping oxygen below the seal at 4–8 %` : `a molecular (diffusion) seal reduces it to about ${fmt(fromSI(unit('vel'), lo))} ${units.vel} (0.01 ft/s), oxygen below the seal under 0.1 %; most are purged at higher rates against burnback`}. Volume at the tip conditions.`;
+      for (const el of root.querySelectorAll<HTMLElement>('[data-warn]')) el.innerHTML = (warns[el.dataset.warn!] ?? []).map((x) => `<li>${x}</li>`).join('');
+    };
+
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      const c = t.dataset.cat as FlCat | undefined;
+      if (c) {
+        const from = unit(c); units[c] = t.value; const to = unit(c);
+        for (const s of root.querySelectorAll<HTMLSelectElement>(`select[data-cat="${c}"]`)) s.value = t.value;
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-ut="${c}"]`)) s.textContent = shortUnit(t.value);
+        for (const [k, kc] of Object.entries(CAT)) {
+          if (kc !== c) continue;
+          const el = inp(k), x = parseNumber(el.value);
+          if (!el.readOnly && el.value.trim() !== '' && Number.isFinite(x)) el.value = fmtIn(fromSI(to, toSI(from, x)));
+        }
+        $('[data-status]').textContent = `Unit changed to ${shortUnit(t.value)}; values converted.`;
+      }
+      if (t.matches('select')) run();
+    });
+    root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input[type=text]')) run(); });
+    for (const k of ['tip', 'tau', 'hmode', 'steam', 'fsteam', 'seal'] as const) segInit(root, k, (x) => {
+      if (k === 'seal' && x !== 'none') inp('vp').value = fmtIn(fromSI(unit('vel'), (x === 'molecular' ? PURGE_V.molecular : PURGE_V.velocity)[1]));
+      if (k === 'tip') { const el = inp(x === 'mach' ? 'Ma' : 'd'); if (el.readOnly) { el.readOnly = false; el.classList.remove('calc-out'); } }
+      st[k] = x; run();
+    });
+    const toggle = (btn: string, box: string) => { const b = $<HTMLButtonElement>(btn), t = $<HTMLElement>(box); b.addEventListener('click', () => { t.hidden = !t.hidden; b.setAttribute('aria-expanded', String(!t.hidden)); }); };
+    toggle('[data-ftable]', '[data-ftab]'); toggle('[data-ktable]', '[data-ktab]');
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-fpick]')) b.addEventListener('click', () => {
+      const key = b.dataset.fpick!; const F = key[0] === 'a' ? F_TABLE[+key.slice(1)].F : F_GPSA[+key.slice(1)][1];
+      inp('F').value = String(F); $<HTMLElement>('[data-ftab]').hidden = true; run(); $('[data-status]').textContent = `F = ${F} from the table.`;
+    });
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-kpick]')) b.addEventListener('click', () => {
+      const K = K_TABLE[+b.dataset.kpick!].K;
+      for (const k of ['K1', 'K2']) inp(k).value = fmtIn(fromSI(unit('flux'), K));
+      $<HTMLElement>('[data-ktab]').hidden = true; run();
+    });
+    $('[data-reset]').addEventListener('click', () => { for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]')) if (!el.readOnly) el.value = ''; run(); inp('W').focus(); $('[data-status]').textContent = 'All input fields cleared.'; });
+    const dlg = $<HTMLDialogElement>('dialog.zd');
+    $('[data-zoom]').addEventListener('click', () => { if (!pic) return; $('[data-zd-img]').innerHTML = sketch(pic, Math.min(1000, Math.max(320, window.innerWidth - 64)), 'flz'); dlg.showModal(); });
+    $('[data-zd-close]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    let rt = 0;
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); });
+    ro.observe($('[data-sketch]')); ro.observe($('[data-chart]'));
+    segSet(root, 'tip', 'mach');
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 46rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.5rem; font-size: 1.0625rem; font-weight: 650; }
+  .no { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; margin-right: 0.5rem; border: 1.5px solid var(--ink); border-radius: 50%; font-size: 0.8125rem; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td, .calc :global(th), .calc :global(td) { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .calc :global(tbody th) { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 46rem; }
+  .io :global(.v) { width: 9.5rem; }
+  .io :global(.v.wide) { width: auto; }
+  .io :global(.u) { width: 6.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io :global(.u select) { max-width: 6.5rem; }
+  .res { margin-top: 0.75rem; }
+  .res :global(output) { font-weight: 650; }
+  [hidden] { display: none !important; }
+  .calc :global(input), .calc :global(output), select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input.calc-out) { background: var(--zoho-out); border-color: transparent; }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 46rem; }
+  .nm { color: var(--muted); font-size: 0.8125rem; font-weight: 400; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 46rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .tbtn { height: 1.875rem; padding-inline: 0.625rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.8125rem/1 var(--font-ui); cursor: pointer; }
+  .tbtn.small { height: 1.5rem; padding-inline: 0.375rem; font-size: 0.75rem; margin-left: 0.25rem; }
+  .tbtn[aria-expanded='true'], .tbtn:hover { background: var(--line); color: var(--paper); }
+  .ftab { max-width: 46rem; margin-top: 0.5rem; padding: 0.5rem 0.75rem; border: 1px solid var(--rule); }
+  .ftab caption { text-align: left; font-size: 0.8125rem; color: var(--muted); padding-bottom: 0.25rem; }
+  .ftab th { font-size: 0.8125rem; font-weight: 600; }
+  .ftab td { padding: 0 0.375rem 0 0; border-top: 1px solid var(--rule); font-size: 0.8125rem; }
+  .ftab button { display: block; width: 100%; padding: 0.25rem 0.25rem; border: 0; background: none; text-align: left; color: var(--line); font: inherit; cursor: pointer; }
+  .ftab button:hover { background: var(--wash); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+  @media (max-width: 40rem) { .two { grid-template-columns: 1fr; } }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .poi { max-width: 46rem; table-layout: fixed; margin-top: 0.25rem; }
+  .poi thead th { font-size: 0.8125rem; font-weight: 600; vertical-align: bottom; padding: 0 0.25rem 0.25rem 0; }
+  .poi thead th:first-child { width: 46%; }
+  .poi thead th:last-child { width: 4.5rem; }
+  .poi td { padding: 0.125rem 0.25rem 0.125rem 0; }
+  .poi .nm { display: block; }
+  .cols { display: grid; grid-template-columns: minmax(0, 46rem) minmax(0, 1fr); gap: 1rem 2rem; align-items: start; }
+  @media (max-width: 70rem) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .sk { display: block; width: 100%; max-width: 36rem; padding: 0; border: 0; background: none; text-align: left; cursor: zoom-in; }
+  .skimg { display: block; }
+  .skimg :global(svg), .zimg :global(svg), .chart :global(svg) { display: block; max-width: 100%; height: auto; }
+  .chart { max-width: 52rem; }
+  .zoom { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .flare :global(.grade) { stroke: var(--ink); stroke-width: 1.6; }
+  .flare :global(.hatch) { stroke: var(--muted); stroke-width: 1; }
+  .flare :global(.stack) { fill: #fff; stroke: var(--ink); stroke-width: 1.4; }
+  .flare :global(.guy) { stroke: var(--muted); stroke-width: 0.8; }
+  .flare :global(.flame) { fill: color-mix(in srgb, #b5482f 30%, #fff); stroke: #b5482f; stroke-width: 1.2; }
+  .flare :global(.centre) { fill: #b5482f; }
+  .flare :global(.dist) { stroke: #b5482f; stroke-width: 0.9; stroke-dasharray: 5 3; }
+  .flare :global(.poi) { fill: #fff; stroke: var(--line); stroke-width: 2; }
+  .flare :global(.lab) { font: 600 12px var(--font-ui); fill: var(--line); }
+  .flare :global(.ext) { stroke: var(--muted); stroke-width: 0.7; stroke-dasharray: 2 3; }
+  .flare :global(.dim) { stroke: var(--ink); stroke-width: 0.8; }
+  .flare :global(.dt) { font: italic 12px var(--font-ui); fill: var(--ink); }
+  .flare :global(.arrf) { fill: var(--ink); }
+  .flare :global(.wind) { stroke: var(--ink); stroke-width: 1.2; }
+  .flare :global(.cap) { font: 400 11px var(--font-ui); fill: var(--muted); }
+  .flare :global(.axis) { stroke: var(--ink); stroke-width: 1; }
+  .flare :global(.gridl) { stroke: var(--rule); stroke-width: 0.6; }
+  .flare :global(.tick) { font: 400 11px var(--font-ui); fill: var(--muted); }
+  .flare :global(.kg) { fill: none; stroke: #b5482f; stroke-width: 2; }
+  .flare :global(.k2) { fill: none; stroke: #b5482f; stroke-width: 1.4; stroke-dasharray: 6 3; }
+  .flare :global(.allow) { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 8 4; }
+  .flare :global(.poil) { stroke: var(--line); stroke-width: 0.8; stroke-dasharray: 2 3; }
+  .zd { width: min(64rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1.5px solid var(--ink); background: #fff; color: var(--ink); }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .zhead h2 { margin: 0; font-size: 1.25rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zimg { padding: 1rem 1.25rem 1.5rem; display: grid; place-items: center; }
+  .basis { margin-top: 0.5rem; max-width: 52rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; overflow-wrap: anywhere; }
+    .io :global(.v) { width: 7rem; }
+    .io :global(.u) { width: 5.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .poi { font-size: 0.8125rem; }
+    .poi thead th:first-child { width: 38%; }
+    .poi thead th:last-child { width: 3rem; }
+    .poi :global(input), .poi :global(output) { padding: 0 0.1875rem; }
+  }
+</style>
