@@ -305,7 +305,7 @@ export const sources: Source[] = [
     url: 'https://chemengonline.com/wp-content/uploads/2017/05/sept11_ep_sas2.pdf',
     archive: 'https://web.archive.org/web/20180827054506/http://www.chemengonline.com:80/wp-content/uploads/2017/05/sept11_ep_sas2.pdf',
     read: '2026-11-22',
-    use: { drum: 'Torispherical head geometry (crown and knuckle radii as fractions of D, head depth), ASME F&D parameters; Table 3 head capacities and the Table 4/5 strapping tables (vertical and horizontal tank) as test values.', 'psv-liquid-filled-vessel': 'Head shapes (the Drum tool\'s geometry) for the wetted surface; torispherical crown and knuckle radii, from which the closed-form head areas used as tests follow.' },
+    use: { drum: 'Torispherical head geometry (crown and knuckle radii as fractions of D, head depth), ASME F&D parameters; Table 3 head capacities and the Table 4/5 strapping tables (vertical and horizontal tank) as test values.', 'psv-liquid-filled-vessel': 'Head shapes (the Drum tool\'s geometry) for the wetted surface; torispherical crown and knuckle radii, from which the closed-form head areas used as tests follow.', 'psv-gas-filled-vessel': 'Head shapes for the exposed surface (shared with the liquid tool).' },
   },
   {
     id: 'perry-7-10-tanks', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 10 (Transport and Storage of Fluids): calculation of tank volume, Table 10-65 Volumes of heads',
@@ -534,25 +534,25 @@ export const sources: Source[] = [
     id: 'api-521-4', by: 'American Petroleum Institute', title: 'API Recommended Practice 521, Guide for Pressure-Relieving and Depressuring Systems',
     where: 'American Petroleum Institute, 4th ed., March 1997 (1999 print)', year: 1997,
     read: '2026-11-25',
-    use: { 'psv-liquid-filled-vessel': 'External fire (3.15): wetted surface up to 25 ft (7.6 m) above grade, Table 4 (portions of liquid inventory, spheres up to the maximum horizontal diameter or 25 ft, heads inside skirts not counted); heat absorption Q = 21 000·F·A^0.82 and 34 500·F·A^0.82 Btu/h (Eq. 3 and 4; SI 43 200 / 70 900 W); Table 5 environment factors; Eq. 9 environment factor from the insulation, F = k(1660 − Tf)/(21 000·t); 3.15.3.1 relief rate = heat input / latent heat; insulation conditions (3.15.5.2).' },
+    use: { 'psv-liquid-filled-vessel': 'External fire (3.15): wetted surface up to 25 ft (7.6 m) above grade, Table 4 (portions of liquid inventory, spheres up to the maximum horizontal diameter or 25 ft, heads inside skirts not counted); heat absorption Q = 21 000·F·A^0.82 and 34 500·F·A^0.82 Btu/h (Eq. 3 and 4; SI 43 200 / 70 900 W); Table 5 environment factors; Eq. 9 environment factor from the insulation, F = k(1660 − Tf)/(21 000·t); 3.15.3.1 relief rate = heat input / latent heat; insulation conditions (3.15.5.2).', 'psv-gas-filled-vessel': 'Unwetted vessel (3.15.1.2, 3.15.2.1.2): required area A = F′·A′/√P1 (Eq. 5), F′ from the wall temperature (Eq. 6) with the recommended minimum 0.01 and 0.045 when unknown, C (Eq. 7a), T1 = (P1/Pn)·Tn (Eq. 7b), relief load W (Eq. 8), Tw = 1 100 °F for carbon steel; assumptions (3.15.2.2) and other protective measures (3.15.4).' },
   },
   {
     id: 'api-520-1-7', by: 'American Petroleum Institute', title: 'API Recommended Practice 520, Sizing, Selection, and Installation of Pressure-Relieving Devices in Refineries, Part I — Sizing and Selection',
     where: 'American Petroleum Institute, 7th ed., January 2000', year: 2000,
     read: '2026-11-25',
-    use: { 'psv-liquid-filled-vessel': 'Vapour sizing in SI: critical flow A = W/(C·Kd·P1·Kb·Kc)·√(TZ/M), C = 0.03948·√(k(2/(k+1))^((k+1)/(k−1))), critical-flow pressure; subcritical flow with F2 (17.9 constant); steam by the Napier equation A = 190.4·W/(P1·Kd·Kb·Kc·KN·KSH) with KN; Kd 0.975 / 0.62 (rupture disk alone), Kc 0.9. Checked only; the equations are those of the original sheet and GPSA Section 5.' },
+    use: { 'psv-liquid-filled-vessel': 'Vapour sizing in SI: critical flow A = W/(C·Kd·P1·Kb·Kc)·√(TZ/M), C = 0.03948·√(k(2/(k+1))^((k+1)/(k−1))), critical-flow pressure; subcritical flow with F2 (17.9 constant); steam by the Napier equation A = 190.4·W/(P1·Kd·Kb·Kc·KN·KSH) with KN; Kd 0.975 / 0.62 (rupture disk alone), Kc 0.9. Checked only; the equations are those of the original sheet and GPSA Section 5.', 'psv-gas-filled-vessel': 'Flow through the required area at critical flow (Eq. 2, US units) and the coefficients Kd, Kb, Kc. Checked only.' },
   },
   {
     id: 'api-526-5', by: 'American Petroleum Institute', title: 'API Standard 526, Flanged Steel Pressure Relief Valves',
     where: 'American Petroleum Institute, 5th ed., June 2002', year: 2002,
     read: '2026-11-25',
-    use: { 'psv-liquid-filled-vessel': 'Table 1 standard effective orifice areas D to T (0.110 to 26.00 in²); Tables 2–15 (spring-loaded) and 16–29 (pilot-operated): valve bodies, inlet and outlet flange classes, maximum set pressure per temperature range and outlet pressure limits for carbon steel, chrome-molybdenum and austenitic stainless steel, used to pick the body (step 5).' },
+    use: { 'psv-liquid-filled-vessel': 'Table 1 standard effective orifice areas D to T (0.110 to 26.00 in²); Tables 2–15 (spring-loaded) and 16–29 (pilot-operated): valve bodies, inlet and outlet flange classes, maximum set pressure per temperature range and outlet pressure limits for carbon steel, chrome-molybdenum and austenitic stainless steel, used to pick the body (step 5).', 'psv-gas-filled-vessel': 'Orifice letters and the valve body by material and flange class at the relieving gas temperature (Tables 1–29), as in the liquid tool.' },
   },
   {
     id: 'gpsa-12-05', by: 'Gas Processors Suppliers Association', title: 'GPSA Engineering Data Book, 12th ed. (SI), Section 5: Relief Systems',
     where: 'GPSA, Tulsa OK', year: 2004,
     read: '2026-11-25',
-    use: { 'psv-liquid-filled-vessel': 'Public SI statement of the method: Q = 43 200·F·Aw^0.82 W (Eq. 5-13) and the wetted-surface rule; Fig. 5-16 environmental factors and the conditions for insulation credit (≈ 66 250 W/m² basis); W = 3.6·Q/Hl (Eq. 5-14); minimum latent heat 110 kJ/kg near the critical point; Napier steam equation with Kn (Eq. 5-6, 5-7); rule of thumb: subcritical when the back pressure exceeds half the inlet pressure; Kb curves (Fig. 5-10, 5-11).' },
+    use: { 'psv-liquid-filled-vessel': 'Public SI statement of the method: Q = 43 200·F·Aw^0.82 W (Eq. 5-13) and the wetted-surface rule; Fig. 5-16 environmental factors and the conditions for insulation credit (≈ 66 250 W/m² basis); W = 3.6·Q/Hl (Eq. 5-14); minimum latent heat 110 kJ/kg near the critical point; Napier steam equation with Kn (Eq. 5-6, 5-7); rule of thumb: subcritical when the back pressure exceeds half the inlet pressure; Kb curves (Fig. 5-10, 5-11).', 'psv-gas-filled-vessel': 'Eq. 5-15, the vapour-only fire equation in SI: A = 183.3·F′·A3/√P1 (A cm², A3 m², P1 kPa); the exact conversion of API\'s US equation gives 182.35 (0.5 % lower); the tool uses API\'s equation.' },
   },
   {
     id: 'perry-7-11', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 11 (Heat-Transfer Equipment)',

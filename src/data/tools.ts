@@ -44,9 +44,10 @@ export const tools: Tool[] = [
     "sub": "G",
     "title": "PSV: Gas Filled Vessel",
     "name": "PSV Sizing for Fire Case in a Vapor/Gas Filled Vessel",
-    "description": "Fire-case relief load and required orifice for a vapour- or gas-filled vessel: exposed area from vessel geometry, then PSV sizing and orifice letter selection.",
-    "standard": "API 520 Part I; relief load per API 521",
+    "description": "Fire case of a vessel holding only gas (unwetted wall): exposed area in the fire zone for horizontal, vertical or spherical vessels (sketch to scale), required orifice and relief load per API 521, API 526 orifice and valve body.",
+    "standard": "API 521 (unwetted vessel); API 520 Part I; orifices and valves per API 526",
     "category": "relief",
+    "native": "psvg",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/250a14e89cdeaf0535dc3bbb3a5b6b1a35d2acdaa3974379b8aac4dc8868852a?type=grid&mode=embed"
   },
   {

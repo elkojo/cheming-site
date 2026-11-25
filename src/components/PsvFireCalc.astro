@@ -1,5 +1,7 @@
 ---
-// Native PSV: Liquid Filled Vessel calculator (Phase 7). Four numbered steps: 1 vessel and wetted area in the fire
+// Native PSV fire-case calculator (Phase 7), two modes sharing steps 1, 4 and 5: mode="liquid" (PSV: Liquid Filled
+// Vessel) and mode="gas" (PSV: Gas Filled Vessel, API RP 521 3.15.2.1.2 Eq. 5–8; owner's choices 2026-11-25).
+// Liquid mode: Four numbered steps: 1 vessel and wetted area in the fire
 // zone (horizontal / vertical drum with the Drum tool's six exact heads, or a sphere; live sketch to scale with grade,
 // fire zone, liquid and the wetted surface), 2 fire heat input (API 521: drainage switch, environmental factor typed,
 // from Table 5 or from the insulation), 3 relieving conditions and relief load (any vapour, or water/steam from
@@ -13,6 +15,9 @@ import { TABLE526 } from '../lib/calc/psvl-api526';
 import { mathHtml } from '../lib/calc/types';
 import { PSVL_UNITS, PSVL_DEFAULT_UNITS, shortUnit, type PsvlCat } from '../lib/calc/psvl-units';
 
+interface Props { mode?: 'liquid' | 'gas' }
+const { mode = 'liquid' } = Astro.props;
+const gas = mode === 'gas';
 const id = (k: string) => `pl-${k}`;
 const unitSel = (cat: PsvlCat, label: string) =>
   `<select data-cat="${cat}" aria-label="${label} unit">${PSVL_UNITS[cat].map((u) => `<option value="${u.label}"${u.label === PSVL_DEFAULT_UNITS[cat] ? ' selected' : ''}>${shortUnit(u.label)}</option>`).join('')}</select>`;
@@ -29,20 +34,52 @@ const row = (r: Row) => {
 };
 const rows = (rs: Row[]) => rs.map(row).join('');
 
+// defaults: the Zoho sheets (liquid: horizontal 2:1, D 2, L 2.5, El 0.25; gas: vertical hemispherical, D 5, L 15, El 10)
 const VESSEL: Row[] = [
-  { k: 'D', name: 'Inside diameter', sym: 'D', v: '2.0', cat: 'len', sel: true },
-  { k: 'L', name: 'Length, tangent to tangent', sym: 'L', v: '2.5', cat: 'len', show: 'drum' },
-  { k: 'El', name: 'Elevation above grade', sym: 'El', v: '0.25', cat: 'len' },
-  { k: 'lev', name: 'Liquid level during the fire', sym: 'h_L', v: '2.0', cat: 'len' },
+  { k: 'D', name: 'Inside diameter', sym: 'D', v: gas ? '5.0' : '2.0', cat: 'len', sel: true },
+  { k: 'L', name: 'Length, tangent to tangent', sym: 'L', v: gas ? '15.0' : '2.5', cat: 'len', show: 'drum' },
+  { k: 'El', name: 'Elevation above grade', sym: 'El', v: gas ? '10.0' : '0.25', cat: 'len' },
+  ...(gas ? [] : [{ k: 'lev', name: 'Liquid level during the fire', sym: 'h_L', v: '2.0', cat: 'len' as const }]),
   { k: 'Hf', name: 'Fire-zone height above grade', sym: 'H_f', v: '7.62', cat: 'len' },
 ];
+const Wd = gas ? 'Exposed' : 'Wetted';
 const WET: Row[] = [
   { k: 'hd', name: 'Head depth', sym: 'h_d', out: true, cat: 'len', show: 'drum' },
-  { k: 'zw', name: 'Wetted up to (above grade)', sym: 'z_w', out: true, cat: 'len' },
-  { k: 'Ash', name: 'Wetted shell', sym: 'A_shell', out: true, cat: 'area', sel: true, show: 'drum' },
-  { k: 'Ahd', name: 'Wetted heads', sym: 'A_heads', out: true, cat: 'area', show: 'drum' },
-  { k: 'A', name: 'Wetted area in the fire zone', sym: "A'", out: true, cat: 'area' },
+  { k: 'zw', name: `${Wd} up to (above grade)`, sym: 'z_w', out: true, cat: 'len' },
+  { k: 'Ash', name: `${Wd} shell`, sym: 'A_shell', out: true, cat: 'area', sel: true, show: 'drum' },
+  { k: 'Ahd', name: `${Wd} heads`, sym: 'A_heads', out: true, cat: 'area', show: 'drum' },
+  { k: 'A', name: `${Wd} area in the fire zone`, sym: "A'", out: true, cat: 'area' },
   { k: 'At', name: 'Total surface of the vessel', sym: 'A_t', out: true, cat: 'area' },
+];
+// gas-filled vessel (sheet defaults: set 10 bar g, 21 %, Pn 5 bar g, Tn 90 °C; M 19.7, Z 1, k 1.143; Tw 1 100 °F)
+const G_REL: Row[] = [
+  { k: 'pset', name: 'Set pressure', sym: 'P_set', v: '10', cat: 'p', sel: true },
+  { k: 'op', name: 'Allowable overpressure (fire)', sym: 'Δp/P_set', v: '21', unit: '%' },
+  { k: 'P1', name: 'Relieving pressure', sym: 'P_1 = P_set·(1 + Δp/P_set)', out: true, cat: 'p' },
+  { k: 'p2', name: 'Back pressure', sym: 'P_2', v: '0', cat: 'p' },
+  { k: 'pn', name: 'Normal operating pressure', sym: 'P_n', v: '5', cat: 'p' },
+  { k: 'Tn', name: 'Normal operating temperature', sym: 'T_n', v: '90', cat: 'temp', sel: true },
+  { k: 'T1', name: 'Gas temperature at relieving pressure', sym: 'T_1 = (P_1/P_n)·T_n', out: true, cat: 'temp' },
+];
+const G_PROP: Row[] = [
+  { k: 'M', name: 'Molar mass of the gas', sym: 'M', v: '19.7', unit: 'kg/kmol' },
+  { k: 'Z', name: 'Compressibility factor', sym: 'Z', v: '1' },
+  { k: 'kk', name: 'Ratio of specific heats', sym: 'k = c_p/c_v', v: '1.143' },
+  { k: 'Tw', name: 'Maximum wall temperature', sym: 'T_w', v: '593.333', cat: 'temp' },
+  { k: 'W8', name: 'Relief load (gas heated by the fire)', sym: "W = 0.1406·√(M·P_1)·A'·(T_w − T_1)^1.25/T_1^1.1506", out: true, cat: 'mflow', sel: true },
+];
+const G_SIZE: Row[] = [
+  { k: 'Kd', name: 'Coefficient of discharge', sym: 'K_d', v: '0.975' },
+  { k: 'Kb', name: 'Back-pressure correction', sym: 'K_b', v: '1', show: 'bellows' },
+  { k: 'Kc', name: 'Combination correction', sym: 'K_c', v: '1', show: 'disk-up' },
+  { k: 'Pcf', name: 'Critical flow pressure', sym: 'P_cf = P_1·(2/(k + 1))^(k/(k − 1))', out: true, cat: 'p' },
+  { k: 'regime', name: 'Flow', sym: 'P_2 vs P_cf', out: true },
+  { k: 'Cus', name: 'Coefficient (US units)', sym: 'C = 520·√(k·(2/(k + 1))^((k + 1)/(k − 1)))', out: true },
+  { k: 'Fp', name: 'Coefficient from the wall temperature', sym: "F' = 0.1406/(C·K_d)·(T_w − T_1)^1.25/T_1^0.6506", out: true, show: 'fcalc' },
+  { k: 'Fpmin', name: 'Minimum (API recommendation)', sym: "F'_min", v: '0.01', show: 'fcalc' },
+  { k: 'Fpu', name: 'Coefficient used', sym: "F'", out: true },
+  { k: 'Areq', name: 'Required effective area', sym: "A = F'·A'/(√P_1·K_b·K_c)", out: true, cat: 'orif', sel: true },
+  { k: 'Wcap', name: 'Flow through this area', sym: 'W_A = A·C·K_d·P_1·K_b·K_c·√(M/(T_1·Z))', out: true, cat: 'mflow' },
 ];
 const FIRE_INS: Row[] = [
   { k: 'kins', name: 'Insulation conductivity at mean temperature', sym: 'k_ins', v: '0.58', cat: 'k', sel: true },
@@ -76,17 +113,17 @@ const SIZE_OUT: Row[] = [
 ];
 ---
 <DrawingFrame>
-  <div class="calc psvl" data-psvl>
+  <div class="calc psvl" data-psvl data-mode={mode}>
     <div class="bar">
-      <p>Fire case of a vessel full or partly full of liquid: wetted area in the fire zone, heat input and relief load per API 521, required orifice per API 520 Part I. One unit per kind of quantity: pick it at the first field; typed values are converted.</p>
+      <p>{gas ? 'Fire case of a vessel holding only gas or vapour (unwetted wall): surface exposed in the fire zone, gas expansion and required orifice per API 521 and API 520 Part I, valve per API 526.' : 'Fire case of a vessel full or partly full of liquid: wetted area in the fire zone, heat input and relief load per API 521, required orifice per API 520 Part I.'} One unit per kind of quantity: pick it at the first field; typed values are converted.</p>
       <button type="button" class="reset" data-reset>Clear all inputs</button>
     </div>
 
     <section class="grp" aria-labelledby={id('s1')}>
-      <h2 id={id('s1')}><span class="no">1</span> Vessel and wetted area</h2>
+      <h2 id={id('s1')}><span class="no">1</span> Vessel and {gas ? 'exposed' : 'wetted'} area</h2>
       <div class="switches">
-        <SegToggle label="Vessel" name="kind" value="horizontal" options={[{ value: 'horizontal', label: 'Horizontal' }, { value: 'vertical', label: 'Vertical' }, { value: 'sphere', label: 'Sphere' }]} />
-        <div data-show="vert"><SegToggle label="Elevation and level from" name="datum" value="tangent" options={[{ value: 'tangent', label: 'Bottom tangent line' }, { value: 'bottom', label: 'Bottom of head' }]} /></div>
+        <SegToggle label="Vessel" name="kind" value={gas ? 'vertical' : 'horizontal'} options={[{ value: 'horizontal', label: 'Horizontal' }, { value: 'vertical', label: 'Vertical' }, { value: 'sphere', label: 'Sphere' }]} />
+        <div data-show="vert"><SegToggle label={gas ? 'Elevation from' : 'Elevation and level from'} name="datum" value="tangent" options={[{ value: 'tangent', label: 'Bottom tangent line' }, { value: 'bottom', label: 'Bottom of head' }]} /></div>
         <div data-show="vert"><SegToggle label="Bottom head" name="skirt" value="exposed" options={[{ value: 'exposed', label: 'Exposed' }, { value: 'skirt', label: 'Inside a skirt' }]} /></div>
       </div>
       <div class="cols">
@@ -95,7 +132,7 @@ const SIZE_OUT: Row[] = [
             <tbody>
               <tr data-show="drum">
                 <th scope="row"><label for={id('head')}><span class="lb">Heads</span> <span class="eq">both ends alike</span></label></th>
-                <td class="v wide" colspan="2"><select id={id('head')} data-s="head">{HEADS.map((h) => <option value={h.id}>{h.label}</option>)}</select></td>
+                <td class="v wide" colspan="2"><select id={id('head')} data-s="head">{HEADS.map((h) => <option value={h.id} selected={gas && h.id === 'hemi'}>{h.label}</option>)}</select></td>
               </tr>
               <Fragment set:html={rows(VESSEL)} />
               <Fragment set:html={rows(WET)} />
@@ -112,12 +149,36 @@ const SIZE_OUT: Row[] = [
               Enlarge
             </span>
           </button>
-          <p class="note key"><b><span class="kw"></span> wetted surface in the fire zone</b> <b><span class="kf"></span> fire zone</b> <b><span class="kl"></span> liquid</b></p>
+          <p class="note key"><b><span class="kw"></span> {gas ? 'exposed' : 'wetted'} surface in the fire zone</b> <b><span class="kf"></span> fire zone</b> {!gas && <b><span class="kl"></span> liquid</b>}</p>
         </div>
       </div>
       <ul class="warn" data-warn="1" aria-live="polite"></ul>
     </section>
 
+{gas ? (<Fragment>
+    <section class="grp" aria-labelledby={id('s2')}>
+      <h2 id={id('s2')}><span class="no">2</span> Relieving conditions</h2>
+      <table class="io">
+        <tbody>
+          <Fragment set:html={rows(G_REL)} />
+        </tbody>
+      </table>
+      <p class="note">The gas is heated at constant volume from normal operation until the valve opens (API Eq. 7b, ideal gas).</p>
+      <ul class="warn" data-warn="2" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s3')}>
+      <h2 id={id('s3')}><span class="no">3</span> Gas, wall temperature and relief load</h2>
+      <table class="io">
+        <tbody>
+          <Fragment set:html={rows(G_PROP)} />
+        </tbody>
+      </table>
+      <p class="note">Maximum wall temperature: API recommends 593 °C (1 100 °F) for usual carbon steel plate; choose a value suited to alloy materials. The relief load is the gas actually expanded by the heat from the fire (API Eq. 8, <i>Z</i> = 1): use it for the flare and knock-out drum.</p>
+      <ul class="warn" data-warn="3" aria-live="polite"></ul>
+    </section>
+
+</Fragment>) : (<Fragment>
     <section class="grp" aria-labelledby={id('s2')}>
       <h2 id={id('s2')}><span class="no">2</span> Fire heat input</h2>
       <div class="switches">
@@ -168,22 +229,24 @@ const SIZE_OUT: Row[] = [
       <ul class="warn" data-warn="3" aria-live="polite"></ul>
     </section>
 
+</Fragment>)}
     <section class="grp" aria-labelledby={id('s4')}>
       <h2 id={id('s4')}><span class="no">4</span> PSV sizing</h2>
       <div class="switches">
         <SegToggle label="Valve" name="valve" value="conventional" options={[{ value: 'conventional', label: 'Conventional' }, { value: 'bellows', label: 'Balanced bellows' }, { value: 'pilot', label: 'Pilot-operated' }]} />
         <SegToggle label="Rupture disk" name="disk" value="none" options={[{ value: 'none', label: 'None' }, { value: 'up', label: 'Upstream of the valve' }, { value: 'only', label: 'Disk only' }]} />
+        {gas && <SegToggle label="Coefficient F′" name="fp" value="calc" options={[{ value: 'calc', label: 'From the wall temperature', short: 'From Tw' }, { value: 'unknown', label: 'Unknown: 0.045' }]} />}
       </div>
       <table class="io">
         <tbody>
-          <Fragment set:html={rows(SIZE_IN)} />
-          <Fragment set:html={rows(SIZE_OUT)} />
+          <Fragment set:html={gas ? rows(G_SIZE) : rows(SIZE_IN) + rows(SIZE_OUT)} />
           <tr class="pick">
             <th scope="row"><span class="lb">API 526 orifice</span> <span class="eq">smallest with area ≥ <i>A</i></span></th>
             <td class="v"><output data-o="orif" /></td><td class="u"><span data-o-orifa></span></td>
           </tr>
         </tbody>
       </table>
+      {gas && <p class="note">API Eq. 5 sizes the valve from <i>F</i>′ with a recommended minimum of 0.01, or 0.045 when the minimum value is unknown. With the minimum the valve passes more (<i>W</i><sub>A</sub>) than the gas generated (step 3); without it both are equal.</p>}
       <ul class="warn" data-warn="4" aria-live="polite"></ul>
       <details class="basis o526">
         <summary>API 526 orifice letters</summary>
@@ -206,7 +269,7 @@ const SIZE_OUT: Row[] = [
         <tbody>
           <tr><th scope="row"><span class="lb">Valve</span> <span class="eq">step 4</span></th><td class="v wide" colspan="2"><output data-o="vtype" /></td></tr>
           <tr><th scope="row"><span class="lb">Orifice</span> <span class="eq">step 4</span></th><td class="v"><output data-o="orif5" /></td><td class="u"><span>–</span></td></tr>
-          <tr><th scope="row"><span class="lb">Temperature range used</span> <span class="eq"><i>T</i> of step 3; between ranges the next hotter</span></th><td class="v wide" colspan="2"><output data-o="trange" /></td></tr>
+          <tr><th scope="row"><span class="lb">Temperature range used</span> <span class="eq">{gas ? <Fragment><i>T</i><sub>1</sub> of step 2</Fragment> : <Fragment><i>T</i> of step 3</Fragment>}; between ranges the next hotter</span></th><td class="v wide" colspan="2"><output data-o="trange" /></td></tr>
           <tr class="pick"><th scope="row"><span class="lb">Valve body</span> <span class="eq">inlet × orifice × outlet</span></th><td class="v wide" colspan="2"><output data-o="body" /></td></tr>
           <tr><th scope="row"><span class="lb">Flange classes</span> <span class="eq">inlet × outlet (ASME B16.5)</span></th><td class="v wide" colspan="2"><output data-o="cls" /></td></tr>
           <Fragment set:html={rows([
@@ -228,6 +291,28 @@ const SIZE_OUT: Row[] = [
 
     <section class="grp" aria-labelledby={id('basis-h')}>
       <h2 id={id('basis-h')}>Calculation basis</h2>
+{gas ? (<Fragment>
+      <details class="basis" open>
+        <summary>Equations</summary>
+        <ol class="eqs">
+          <li><b>Exposed area</b> <i>A</i>′: the outside surface of the vessel within the fire zone, up to <i>H</i><sub>f</sub> above grade (API RP 521: 7.6 m = 25 ft), both heads, parts below grade or inside a skirt not counted; surfaces integrated exactly as in the liquid tool (heads of the Drum tool, sphere zone π·<i>D</i>·Δ<i>z</i>).</li>
+          <li><b>Relieving temperature</b> (API RP 521, 1997, Eq. 7b): <i>T</i><sub>1</sub> = (<i>P</i><sub>1</sub>/<i>P</i><sub>n</sub>)·<i>T</i><sub>n</sub>, absolute pressures and temperatures; <i>P</i><sub>1</sub> = <i>P</i><sub>set</sub> + 21 % overpressure + atmospheric pressure.</li>
+          <li><b>Coefficient</b> (Eq. 6, US units: °R): <i>F</i>′ = 0.1406/(<i>C</i>·<i>K</i><sub>d</sub>)·(<i>T</i><sub>w</sub> − <i>T</i><sub>1</sub>)<sup>1.25</sup>/<i>T</i><sub>1</sub><sup>0.6506</sup>, <i>C</i> = 520·√(<i>k</i>·(2/(<i>k</i> + 1))<sup>(<i>k</i>+1)/(<i>k</i>−1)</sup>) (Eq. 7a); recommended minimum 0.01; 0.045 when the minimum value is unknown.</li>
+          <li><b>Required area</b> (Eq. 5): <i>A</i> = <i>F</i>′·<i>A</i>′/√<i>P</i><sub>1</sub> (in², ft², psia), divided by <i>K</i><sub>b</sub>·<i>K</i><sub>c</sub> for a bellows valve or a rupture disk as in API 520 (GPSA Eq. 5-15 in SI).</li>
+          <li><b>Relief load</b> (Eq. 8): <i>W</i> = 0.1406·√(<i>M</i>·<i>P</i><sub>1</sub>)·<i>A</i>′·(<i>T</i><sub>w</sub> − <i>T</i><sub>1</sub>)<sup>1.25</sup>/<i>T</i><sub>1</sub><sup>1.1506</sup> lb/h; flow through the area <i>W</i><sub>A</sub> = <i>A</i>·<i>C</i>·<i>K</i><sub>d</sub>·<i>P</i><sub>1</sub>·<i>K</i><sub>b</sub>·<i>K</i><sub>c</sub>·√(<i>M</i>/(<i>T</i><sub>1</sub>·<i>Z</i>)) (API 520, critical flow, US units).</li>
+          <li><b>Orifice and valve</b>: the smallest API 526 letter with an effective area of at least <i>A</i>; body by material and flange class at <i>T</i><sub>1</sub> (step 5).</li>
+        </ol>
+      </details>
+      <details class="basis">
+        <summary>Notes</summary>
+        <ol>
+          <li>The equations are based on the physical properties of air and the perfect-gas laws; they assume an uninsulated vessel without mass, a wall that does not reach its rupture stress, and no change in fluid temperature (API RP 521 3.15.2.2). Where these do not hold, a time-dependent calculation is warranted.</li>
+          <li>When the gas reaches the allowed wall temperature at the relieving pressure (<i>T</i><sub>1</sub> ≥ <i>T</i><sub>w</sub>), a relief valve does not protect the vessel: consider depressuring, water spray, fireproofing or earth cover (API RP 521 3.15.4).</li>
+          <li>Elevation: horizontal vessels and spheres from grade to the bottom; vertical vessels to the bottom tangent line or the bottom of the head. Inside dimensions.</li>
+          <li>Coefficients: <i>K</i><sub>d</sub> = 0.975 for a valve with or without a rupture disk upstream, 0.62 for a disk alone; <i>K</i><sub>c</sub> = 0.9 for a disk upstream without a certified combination factor; <i>K</i><sub>b</sub> from the manufacturer for balanced bellows. Critical flow is assumed (Eq. 5).</li>
+        </ol>
+      </details>
+</Fragment>) : (<Fragment>
       <details class="basis" open>
         <summary>Equations</summary>
         <ol class="eqs">
@@ -253,6 +338,7 @@ const SIZE_OUT: Row[] = [
           <li>The heat-input equations apply to process vessels and pressurised storage of liquefied gases; storage tanks at 1 barg (15 psig) or less: API Standard 2000.</li>
         </ol>
       </details>
+</Fragment>)}
     </section>
     <p class="sr" aria-live="polite" data-status></p>
 
@@ -269,7 +355,7 @@ const SIZE_OUT: Row[] = [
 </DrawingFrame>
 
 <script>
-  import { wetted, surfHead, heatInput, C_FIRE, fInsulation, F_TABLE, size, pickOrifice, pickBody, toF, PSI, API526, IN2, type Vessel, type Wetted, type ValveType } from '../lib/calc/psvl';
+  import { wetted, surfHead, heatInput, C_FIRE, fInsulation, F_TABLE, size, pickOrifice, pickBody, toF, PSI, API526, IN2, gasT1, fPrime, areaUnwetted, loadUnwetted, capacityCritical, coefC_US, pCritical, FP_UNKNOWN, TW_CS, type Vessel, type Wetted, type ValveType } from '../lib/calc/psvl';
   import { TABLE526, type Mat526 } from '../lib/calc/psvl-api526';
   import { profile, type HeadId } from '../lib/calc/drum';
   import { PSVL_UNITS, PSVL_DEFAULT_UNITS, shortUnit, type PsvlCat } from '../lib/calc/psvl-units';
@@ -280,7 +366,7 @@ const SIZE_OUT: Row[] = [
 
   const fmt = (x: number) => formatSig(x, 6, false);
   const fmtIn = (x: number) => fmt(x).replace('−', '-');
-  const CAT: Record<string, PsvlCat> = { D: 'len', L: 'len', El: 'len', lev: 'len', Hf: 'len', kins: 'k', tins: 'thk', pset: 'p', p2: 'p', lam: 'lat', T: 'temp' };
+  const CAT: Record<string, PsvlCat> = { D: 'len', L: 'len', El: 'len', lev: 'len', Hf: 'len', kins: 'k', tins: 'thk', pset: 'p', p2: 'p', lam: 'lat', T: 'temp', pn: 'p', Tn: 'temp', Tw: 'temp' };
   const PATM = 101325, M_WATER = 18.015268;
 
   // ── sketch to scale: side elevation with grade, fire zone, liquid, wetted surface (and an end view, horizontal) ──
@@ -292,9 +378,9 @@ const SIZE_OUT: Row[] = [
     const horiz = v.kind === 'horizontal';
     const width = sph ? v.D : horiz ? v.L + 2 * dep : v.D;   // vessel extent across, m
     // vertical range: grade (or the vessel bottom if below) up to the vessel top, the level and the fire zone if close
-    const zLo = Math.min(0, w.zBottom), span0 = Math.max(w.zTop, w.zLevel) - zLo;
-    const fireShown = v.Hf <= Math.max(w.zTop, w.zLevel) + 0.6 * span0;
-    let zHi = Math.max(w.zTop, Math.min(w.zLevel, w.zTop + 0.2 * span0));
+    const zLo = Math.min(0, w.zBottom), span0 = w.zTop - zLo;
+    const fireShown = v.Hf <= w.zTop + 0.6 * span0;
+    let zHi = v.gas ? w.zTop : Math.max(w.zTop, Math.min(w.zLevel, w.zTop + 0.2 * span0));
     if (fireShown) zHi = Math.max(zHi, v.Hf);
     const pad = 0.08 * (zHi - zLo);
     const zA = zLo - pad, zB = zHi + pad * 1.6;
@@ -343,7 +429,7 @@ const SIZE_OUT: Row[] = [
     parts.push(`<rect x="${fullL}" y="${n(Y(zFireTop))}" width="${n(fullR)}" height="${n(Y(0) - Y(zFireTop))}" class="fire"/>`);
     if (fireShown) parts.push(`<line x1="${fullL}" y1="${n(Y(v.Hf))}" x2="${n(fullR)}" y2="${n(Y(v.Hf))}" class="fireline"/>`);
     // liquid
-    const zLiq = Math.min(w.zLevel, w.zTop);
+    const zLiq = v.gas ? -Infinity : Math.min(w.zLevel, w.zTop);
     if (zLiq > w.zBottom) {
       parts.push(`<rect x="0" y="${n(Y(zLiq))}" width="${n(vbW)}" height="${n(Y(w.zBottom) - Y(zLiq) + 1)}" class="liq" clip-path="url(#${pre}c)"/>`);
       if (horiz) parts.push(`<rect x="0" y="${n(Y(zLiq))}" width="${n(vbW)}" height="${n(Y(w.zBottom) - Y(zLiq) + 1)}" class="liq" clip-path="url(#${pre}e)"/>`);
@@ -398,7 +484,8 @@ const SIZE_OUT: Row[] = [
     const units: Record<PsvlCat, string> = { ...PSVL_DEFAULT_UNITS };
     const unit = (c: PsvlCat) => PSVL_UNITS[c].find((u) => u.label === units[c])!;
     const headSel = $<HTMLSelectElement>('select[data-s="head"]');
-    const st = { kind: 'horizontal' as Vessel['kind'], datum: 'tangent' as Vessel['datum'], skirt: false, drain: 'adequate' as keyof typeof C_FIRE,
+    const gas = root.dataset.mode === 'gas';
+    const st = { kind: (gas ? 'vertical' : 'horizontal') as Vessel['kind'], fp: 'calc', datum: 'tangent' as Vessel['datum'], skirt: false, drain: 'adequate' as keyof typeof C_FIRE,
       fmode: 'given', fluid: 'water', valve: 'conventional' as ValveType, disk: 'none', mat: 'cs' as Mat526 };
     let last: { v: Vessel; w: Wetted } | undefined;
     const warns: Record<string, string[]> = {};
@@ -442,37 +529,77 @@ const SIZE_OUT: Row[] = [
       const sph = st.kind === 'sphere', vert = st.kind === 'vertical';
       vis('drum', !sph); vis('vert', vert); vis('insul', st.fmode === 'insul');
       vis('vap', st.fluid === 'any'); vis('bellows', st.valve === 'bellows'); vis('disk-up', st.disk === 'up');
-      $('[data-geo-note]').innerHTML = sph ? 'Sphere: elevation = height of the bottom above grade; liquid level from the bottom.'
-        : vert ? (st.datum === 'tangent' ? 'Elevation and liquid level from the bottom tangent line (as the original sheet).' : 'Elevation and liquid level from the inside bottom of the lower head.')
-        : 'Horizontal: elevation = height of the vessel bottom above grade; liquid level from the bottom of the shell.';
+      vis('fcalc', st.fp === 'calc');
+      const lv = gas ? '' : ' and liquid level';
+      $('[data-geo-note]').innerHTML = sph ? `Sphere: elevation = height of the bottom above grade${gas ? '' : '; liquid level from the bottom'}.`
+        : vert ? (st.datum === 'tangent' ? `Elevation${lv} from the bottom tangent line (as the original sheet).` : `Elevation${lv} from the inside bottom of the lower head.`)
+        : `Horizontal: elevation = height of the vessel bottom above grade${gas ? '' : '; liquid level from the bottom of the shell'}.`;
 
       // 1 — vessel
       const D = read('D', (x) => x > 0), L = sph ? 0 : read('L', (x) => x >= 0);
-      const El = read('El', () => true), lev = read('lev', () => true), Hf = read('Hf', (x) => x >= 0);
+      const El = read('El', () => true), lev = gas ? 0 : read('lev', () => true), Hf = read('Hf', (x) => x >= 0);
       let w: Wetted | undefined, v: Vessel | undefined;
       if ([D, L, El, lev, Hf].every(Number.isFinite)) {
-        v = { kind: st.kind, head: headSel.value as HeadId, D, L, datum: st.datum, El, level: lev, Hf, skirt: st.skirt };
+        v = { kind: st.kind, head: headSel.value as HeadId, D, L, datum: st.datum, El, level: lev, Hf, skirt: st.skirt, gas };
         w = wetted(v);
-        if (w.levelOutside) { inp('lev').setAttribute('aria-invalid', ''); warn('1', 'The liquid level is outside the vessel; counted up to the nearest end.'); }
+        if (!gas && w.levelOutside) { inp('lev').setAttribute('aria-invalid', ''); warn('1', 'The liquid level is outside the vessel; counted up to the nearest end.'); }
         if (w.belowGrade) warn('1', 'Part of the vessel is below grade; that part is not counted.');
-        if (w.limit === 'none') warn('1', 'No wetted surface in the fire zone (the vessel is above the fire zone or empty): no fire relief load from wetted area. Consider the unwetted-wall case.');
+        if (w.limit === 'none') warn('1', gas ? 'No surface in the fire zone: the vessel is above the fire zone, no fire case from exposure.' : 'No wetted surface in the fire zone (the vessel is above the fire zone or empty): no fire relief load from wetted area. Consider the unwetted-wall case (PSV: Gas Filled Vessel).');
       }
       show('hd', w && !sph ? w.depth : undefined, 'len');
       show('zw', w && w.limit !== 'none' ? w.zw : undefined, 'len');
       show('Ash', w && !sph ? w.shell : undefined, 'area'); show('Ahd', w && !sph ? w.bottom + w.top : undefined, 'area');
       show('A', w?.A, 'area'); show('At', w?.total, 'area');
       const lim = { level: 'the liquid level', fire: 'the fire-zone height', equator: 'the equator (maximum horizontal diameter)', none: '' };
-      $('[data-case]').textContent = w && w.limit !== 'none' ? `Wetted area limited by ${lim[w.limit]}${w.A >= w.total * (1 - 1e-9) ? ': the whole vessel is wetted' : ''}.` : '';
+      $('[data-case]').textContent = !w || w.limit === 'none' ? '' : w.A >= w.total * (1 - 1e-9) ? `The whole vessel is ${gas ? 'exposed' : 'wetted'}.`
+        : `${gas ? 'Exposed' : 'Wetted'} area limited by ${gas ? 'the fire-zone height' : lim[w.limit]}.`;
       last = v && w ? { v, w } : undefined;
       draw();
 
+      let pset = NaN, P2 = NaN, T = NaN, Areq: number | undefined;
+      if (gas) {
+        pset = read('pset', (x) => x > 0); const op = read('op', (x) => x >= 0);
+        const P1 = Number.isFinite(pset) && Number.isFinite(op) ? (pset - PATM) * (1 + op / 100) + PATM : NaN;
+        if (Number.isFinite(pset) && pset <= PATM) { inp('pset').setAttribute('aria-invalid', ''); warn('2', 'Set pressure must be above atmospheric.'); }
+        show('P1', P1 > PATM ? P1 : undefined, 'p');
+        P2 = read('p2', (x) => x >= 0);
+        const Pn = read('pn', (x) => x > 0), Tn = read('Tn', (x) => x > 0);
+        if (Pn >= P1) warn('2', 'The normal operating pressure should be below the relieving pressure.');
+        const T1 = P1 > PATM && Pn > 0 && Tn > 0 ? gasT1(P1, Pn, Tn) : NaN;
+        show('T1', T1, 'temp'); T = T1;
+        const M = read('M', (x) => x > 0, false), Z = read('Z', (x) => x > 0, false), k = read('kk', (x) => x > 0.5 && x < 3, false);
+        const Tw = read('Tw', (x) => x > 0);
+        const okW = !!w && [M, P1, Tw, T1].every(Number.isFinite);
+        const W8 = okW ? loadUnwetted(M, P1, w!.A, Tw, T1) : NaN;
+        show('W8', W8, 'mflow');
+        if (Tw > 0 && T1 > 0 && Tw <= T1) warn('3', `At the relieving pressure the gas (<i>T</i><sub>1</sub> = ${fmt(fromSI(unit('temp'), T1))} ${shortUnit(units.temp)}) already reaches the maximum wall temperature: the equations do not apply and a relief valve alone does not protect the vessel. Consider depressuring, water spray or fireproofing (API RP 521 3.15.4); with the switch "Unknown: 0.045" in step 4 an area is still given.`);
+        if (Tw > TW_CS + 0.5) warn('3', 'Wall temperature above 593 °C (1 100 °F), API\'s recommended maximum for usual carbon steel plate: make sure the material allows it.');
+        // 4 — sizing (API Eq. 5)
+        const Kd = read('Kd', (x) => x > 0 && x <= 1, false);
+        const Kb = st.valve === 'bellows' ? read('Kb', (x) => x > 0 && x <= 1, false) : 1;
+        const Kc = st.disk === 'up' ? read('Kc', (x) => x > 0 && x <= 1, false) : 1;
+        if (P2 >= P1) { inp('p2').setAttribute('aria-invalid', ''); warn('4', 'Back pressure must be below the relieving pressure.'); }
+        const Fp = [k, Kd, Tw, T1].every(Number.isFinite) ? fPrime(k, Kd, Tw, T1) : NaN;
+        const Fpmin = st.fp === 'calc' ? read('Fpmin', (x) => x >= 0, false) : NaN;
+        const Fpu = st.fp === 'unknown' ? FP_UNKNOWN : Number.isFinite(Fp) && Number.isFinite(Fpmin) ? Math.max(Fp, Fpmin) : NaN;
+        show('Fp', Fp); show('Fpu', Fpu);
+        show('Cus', Number.isFinite(k) ? coefC_US(k) : undefined);
+        const Pcf = P1 > PATM && Number.isFinite(k) ? pCritical(P1, k) : NaN;
+        show('Pcf', Pcf, 'p'); show('regime', Number.isFinite(Pcf) && P2 >= 0 ? (P2 <= Pcf ? 'critical' : 'subcritical') : undefined);
+        if (P2 > Pcf && P2 < P1) warn('4', 'Back pressure above the critical flow pressure: API Eq. 5 assumes critical flow; check the valve with the subcritical equations (PSV tool).');
+        const okA = !!w && w.A > 0 && Number.isFinite(Fpu) && P1 > PATM && P2 >= 0 && P2 < P1 && [Kb, Kc].every(Number.isFinite);
+        Areq = okA ? areaUnwetted(Fpu, w!.A, P1, Kb, Kc) : undefined;
+        show('Areq', Areq, 'orif');
+        show('Wcap', Areq !== undefined && [k, Kd, M, Z].every(Number.isFinite) ? capacityCritical(Areq, k, Kd, P1, Kb, Kc, M, T1, Z) : undefined, 'mflow');
+        if (st.valve === 'pilot') warn('4', 'Pilot-operated valve: K<sub>b</sub> = 1 when the pilot vents to atmosphere; check the back pressure with the manufacturer.');
+      } else {
       // 3 (first part) — relieving pressure and fluid, needed by the insulation factor and the relief load
-      const pset = read('pset', (x) => x > PATM * 0), op = read('op', (x) => x >= 0);
+      pset = read('pset', (x) => x > PATM * 0); const op = read('op', (x) => x >= 0);
       const P1 = Number.isFinite(pset) && Number.isFinite(op) ? (pset - PATM) * (1 + op / 100) + PATM : NaN;
       if (Number.isFinite(pset) && pset <= PATM) { inp('pset').setAttribute('aria-invalid', ''); warn('3', 'Set pressure must be above atmospheric.'); }
       show('P1', P1 > PATM ? P1 : undefined, 'p');
-      const P2 = read('p2', (x) => x >= 0);
-      let lam: number, T: number, M = NaN, Z = NaN, k = NaN;
+      P2 = read('p2', (x) => x >= 0);
+      let lam: number, M = NaN, Z = NaN, k = NaN;
       if (st.fluid === 'water') {
         let sat: ReturnType<typeof saturated> | undefined;
         if (P1 > PATM) { try { sat = saturated('p', P1); } catch { warn('3', `Water: the relieving pressure is above the critical pressure (${fmt(fromSI(unit('p'), SAT_P_MAX))} ${shortUnit(units.p)}); no latent heat.`); } }
@@ -528,11 +655,13 @@ const SIZE_OUT: Row[] = [
       if (r && steam && !r.critical) warn('4', 'Back pressure above half the relieving pressure (GPSA rule of thumb): subcritical flow, where the Napier equation does not apply. Use "Any" in step 3 with M, Z and k of steam.');
       if (r && st.valve === 'bellows' && !r.critical) warn('4', 'Balanced bellows below the critical pressure: K<sub>b</sub> from the manufacturer (API 520 curves are for set pressures of 350 kPa g and above).');
       if (st.valve === 'pilot') warn('4', 'Pilot-operated valve: K<sub>b</sub> = 1 when the pilot vents to atmosphere; check the back pressure with the manufacturer.');
+      Areq = r?.A;
+      }
       const o526a = $<HTMLElement>('[data-o-orifa]');
       for (const tr of root.querySelectorAll<HTMLElement>('[data-o526]')) tr.classList.remove('sel');
       let letter: string | undefined, nValves = 1;
-      if (r && r.A > 0) {
-        const p = pickOrifice(r.A), o = API526[p.i];
+      if (Areq !== undefined && Areq > 0) {
+        const p = pickOrifice(Areq), o = API526[p.i];
         show('orif', p.n > 1 ? `${p.n} × ${o.d}` : o.d);
         o526a.textContent = `${fmt(fromSI(unit('orif'), o.a * IN2))} ${shortUnit(units.orif)}`;
         root.querySelector(`[data-o526="${p.i}"]`)?.classList.add('sel');
@@ -601,8 +730,9 @@ const SIZE_OUT: Row[] = [
       st.datum = x as Vessel['datum'];
       // keep the physical positions: shift elevation and level by the head depth
       if (hd !== undefined && prev !== st.datum) {
-        const el = inp('El'), lv = inp('lev'), s = st.datum === 'bottom' ? 1 : -1;
-        for (const [f, sign] of [[el, -s], [lv, s]] as const) {
+        const el = inp('El'), s = st.datum === 'bottom' ? 1 : -1;
+        const fields: [HTMLInputElement, number][] = gas ? [[el, -s]] : [[el, -s], [inp('lev'), s]];
+        for (const [f, sign] of fields) {
           const v0 = parseNumber(f.value);
           if (f.value.trim() !== '' && Number.isFinite(v0)) f.value = fmtIn(fromSI(unit('len'), toSI(unit('len'), v0) + sign * hd));
         }
@@ -621,13 +751,14 @@ const SIZE_OUT: Row[] = [
       if (x === 'up') inp('Kc').value = '0.9';
       run();
     });
-    const ftab = $<HTMLElement>('[data-ftab]'), fbtn = $<HTMLButtonElement>('[data-ftable]');
-    fbtn.addEventListener('click', () => { ftab.hidden = !ftab.hidden; fbtn.setAttribute('aria-expanded', String(!ftab.hidden)); });
+    segInit(root, 'fp', (x) => { st.fp = x; run(); });
+    const ftab = root.querySelector<HTMLElement>('[data-ftab]'), fbtn = root.querySelector<HTMLButtonElement>('[data-ftable]');
+    if (ftab && fbtn) fbtn.addEventListener('click', () => { ftab.hidden = !ftab.hidden; fbtn.setAttribute('aria-expanded', String(!ftab.hidden)); });
     for (const b of root.querySelectorAll<HTMLButtonElement>('[data-fpick]')) b.addEventListener('click', () => {
       if (st.fmode !== 'given') { st.fmode = 'given'; segSet(root, 'fmode', 'given'); }
       release('F', '1');
       inp('F').value = String(F_TABLE[+b.dataset.fpick!].F);
-      ftab.hidden = true; fbtn.setAttribute('aria-expanded', 'false');
+      ftab!.hidden = true; fbtn!.setAttribute('aria-expanded', 'false');
       run(); inp('F').focus();
       $('[data-status]').textContent = `Environmental factor ${inp('F').value} from the table.`;
     });
@@ -756,7 +887,7 @@ const SIZE_OUT: Row[] = [
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   @media (max-width: 48rem) {
     .calc { border-inline: 0; padding-inline: var(--gutter); }
-    .calc :global(.eq) { white-space: normal; }
+    .calc :global(.eq) { white-space: normal; overflow-wrap: anywhere; }
     .io :global(.v) { width: 7rem; }
     .io :global(.u) { width: 5.5rem; }
     .switches { flex-direction: column; gap: 0.625rem; }

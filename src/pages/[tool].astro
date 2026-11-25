@@ -21,7 +21,7 @@ import PumpCalc from '../components/PumpCalc.astro';
 import CompressorCalc from '../components/CompressorCalc.astro';
 import HeatExchangerCalc from '../components/HeatExchangerCalc.astro';
 import PedCalc from '../components/PedCalc.astro';
-import PsvLiquidCalc from '../components/PsvLiquidCalc.astro';
+import PsvFireCalc from '../components/PsvFireCalc.astro';
 import SourceList from '../components/SourceList.astro';
 import { tools, categories } from '../data/tools';
 import { url } from '../lib/url';
@@ -77,7 +77,8 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
       : tool.native === 'compressor' ? <CompressorCalc />
       : tool.native === 'hx' ? <HeatExchangerCalc />
       : tool.native === 'ped' ? <PedCalc />
-      : tool.native === 'psvl' ? <PsvLiquidCalc />
+      : tool.native === 'psvl' ? <PsvFireCalc mode="liquid" />
+      : tool.native === 'psvg' ? <PsvFireCalc mode="gas" />
       : tool.native ? <NativeCalc id={tool.native} title={tool.title} />
       : <ZohoEmbed src={tool.zoho} title={tool.title} />}
   </div>

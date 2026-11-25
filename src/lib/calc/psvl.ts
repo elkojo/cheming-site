@@ -119,6 +119,9 @@ export interface Vessel {
   Hf: number;
   /** vertical: bottom head inside a support skirt (API 521: normally not counted) */
   skirt?: boolean;
+  /** gas-filled (unwetted) vessel: the whole inside is gas; exposed surface up to the fire-zone height only (no sphere
+   *  equator rule, which is for liquid inventory); `level` is ignored */
+  gas?: boolean;
 }
 export type Limit = 'level' | 'fire' | 'equator' | 'none';
 export interface Wetted {
@@ -140,9 +143,13 @@ export interface Wetted {
 
 export function wetted(v: Vessel): Wetted {
   const R = v.D / 2;
+  if (v.gas) {
+    const dep = v.kind === 'sphere' ? R : drumHead(v.head, v.D).depth;
+    v = { ...v, level: v.kind === 'vertical' ? v.L + dep + (v.datum === 'bottom' ? dep : 0) : v.D };
+  }
   if (v.kind === 'sphere') {
     const zB = v.El, zT = v.El + v.D, zL = v.El + v.level;
-    const fireTop = Math.max(v.Hf, v.El + R);   // API 521: up to the maximum horizontal diameter or 7.6 m, whichever is greater
+    const fireTop = v.gas ? v.Hf : Math.max(v.Hf, v.El + R);   // API 521: up to the maximum horizontal diameter or 7.6 m, whichever is greater
     const zw = Math.min(zL, fireTop, zT);
     const lo = Math.max(zB, 0);
     const A = Math.max(0, zw - lo) * PI * v.D;   // Archimedes: zone area = π·D·height
@@ -318,3 +325,29 @@ export function pickBody(letter: string, kind: 's' | 'p', mat: Mat526, setG: num
   }
   return { col, range: col >= 0 ? cols[col] : undefined, rows, chosen, why };
 }
+
+// ── gas-filled (unwetted) vessel, API RP 521 (1997) 3.15.2.1.2, Eq. 5–8 (US units inside) ──
+const R_PER_K = 1.8, IN2_M2 = 0.00064516, FT2 = 0.09290304, LBH = 0.45359237 / 3600;
+/** API 520 gas constant C in US units: 520·√(k·(2/(k+1))^((k+1)/(k−1))) */
+export const coefC_US = (k: number) => coefC(k) / 0.03948 * 520;
+/** Relieving temperature of the gas heated at constant volume: T1 = (P1/Pn)·Tn (Eq. 7b), absolute P and T. */
+export const gasT1 = (P1: number, Pn: number, Tn: number) => P1 / Pn * Tn;
+/** F′ = 0.1406/(C·Kd)·(Tw − T1)^1.25/T1^0.6506, T in °R (Eq. 6); NaN when Tw ≤ T1. */
+export function fPrime(k: number, Kd: number, Tw: number, T1: number): number {
+  if (!(Tw > T1)) return NaN;
+  return 0.1406 / (coefC_US(k) * Kd) * ((Tw - T1) * R_PER_K) ** 1.25 / (T1 * R_PER_K) ** 0.6506;
+}
+/** Required effective area A = F′·A′/√P1 (Eq. 5; in², ft², psia), m²; divided by Kb·Kc as in API 520 Eq. 2. */
+export const areaUnwetted = (Fp: number, Aexp: number, P1: number, Kb = 1, Kc = 1) =>
+  Fp * (Aexp / FT2) / Math.sqrt(P1 / PSI) / (Kb * Kc) * IN2_M2;
+/** Relief load W = 0.1406·√(M·P1)·A′·(Tw − T1)^1.25/T1^1.1506 lb/h (Eq. 8; Z = Kb = 1), kg/s. */
+export function loadUnwetted(M: number, P1: number, Aexp: number, Tw: number, T1: number): number {
+  if (!(Tw > T1)) return NaN;
+  return 0.1406 * Math.sqrt(M * P1 / PSI) * (Aexp / FT2) * ((Tw - T1) * R_PER_K) ** 1.25 / (T1 * R_PER_K) ** 1.1506 * LBH;
+}
+/** Flow through an effective area at critical flow, kg/s: W = A·C·Kd·P1·Kb·Kc·√(M/(T·Z)) (API 520 Eq. 2, US units with
+ *  C = 520·…, consistent with Eq. 5–8; the SI constant 0.03948 is rounded and differs by 0.1 %). */
+export const capacityCritical = (A: number, k: number, Kd: number, P1: number, Kb: number, Kc: number, M: number, T: number, Z: number) =>
+  (A / IN2_M2) * coefC_US(k) * Kd * (P1 / PSI) * Kb * Kc * Math.sqrt(M / (T * R_PER_K * Z)) * LBH;
+/** API: recommended minimum F′ 0.01; F′ = 0.045 when the minimum value is unknown; carbon steel Tw = 1 100 °F. */
+export const FP_MIN = 0.01, FP_UNKNOWN = 0.045, TW_CS = (1100 + 459.67) / 1.8;
