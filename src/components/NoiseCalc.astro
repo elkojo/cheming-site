@@ -1,0 +1,317 @@
+---
+// Native Noise calculator (Phase 7): noise of a relief or vent discharge to atmosphere, API RP 521 (1997) 5.4.4.3.
+// Steps: 1 gas (typed, or steam from IAPWS-IF97), 2 discharge (pressure ratio, Fig. 23 with the point marked,
+// level at 30 m), 3 at a distance (spherical / hemispherical, distance for a given level, chart), 4 several sources at
+// one point, 5 EU exposure limits for reference. Owner's choices 2026-11-25.
+import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
+import { EU_LIMITS } from '../lib/calc/noise';
+import { mathHtml } from '../lib/calc/types';
+import { NO_UNITS, NO_DEFAULT_UNITS, shortUnit, type NoCat } from '../lib/calc/noise-units';
+
+const id = (k: string) => `no-${k}`;
+const unitSel = (cat: NoCat, label: string) =>
+  `<select data-cat="${cat}" aria-label="${label} unit">${NO_UNITS[cat].map((u) => `<option value="${u.label}"${u.label === NO_DEFAULT_UNITS[cat] ? ' selected' : ''}>${shortUnit(u.label)}</option>`).join('')}</select>`;
+const unitTxt = (cat: NoCat) => `<span data-ut="${cat}">${shortUnit(NO_DEFAULT_UNITS[cat])}</span>`;
+const inCell = (k: string, v = '') => `<input id="${id(k)}" data-k="${k}" value="${v}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />`;
+interface Row { k: string; name: string; sym: string; v?: string; out?: boolean; cat?: NoCat; sel?: boolean; unit?: string }
+const row = (r: Row) => {
+  const lab = `<span class="lb">${r.name}</span> <span class="eq">${mathHtml(r.sym)}</span>`;
+  const th = r.out ? `<th scope="row">${lab}</th>` : `<th scope="row"><label for="${id(r.k)}">${lab}</label></th>`;
+  const v = r.out ? `<td class="v"><output data-o="${r.k}"></output></td>` : `<td class="v">${inCell(r.k, r.v)}</td>`;
+  const u = r.cat ? (r.sel ? unitSel(r.cat, r.name) : unitTxt(r.cat)) : `<span>${r.unit ?? '–'}</span>`;
+  return `<tr data-row="${r.k}">${th}${v}<td class="u">${u}</td></tr>`;
+};
+const rows = (rs: Row[]) => rs.map(row).join('');
+// defaults: the Zoho sheet (steam at 370 °C, 12 / 1 atm a, 500 kg/s, 1 km)
+const GAS: Row[] = [
+  { k: 'k', name: 'Ratio of specific heats', sym: 'k = c_p/c_v', v: '1.29' },
+  { k: 'T', name: 'Gas temperature at the valve', sym: 'T', v: '370', cat: 'temp', sel: true },
+  { k: 'M', name: 'Molar mass of the gas', sym: 'M', v: '18.015', unit: 'kg/kmol' },
+  { k: 'c', name: 'Speed of sound', sym: 'c = √(k·R·T/M)', out: true, cat: 'vel', sel: true },
+];
+const DIS: Row[] = [
+  { k: 'P1', name: 'Pressure upstream of the valve (restriction)', sym: 'P_1', v: '12', cat: 'p', sel: true },
+  { k: 'P2', name: 'Pressure downstream while relieving', sym: 'P_2', v: '1', cat: 'p' },
+  { k: 'PR', name: 'Pressure ratio', sym: 'PR = P_1/P_2', out: true },
+  { k: 'W', name: 'Mass flow', sym: 'W', v: '500', cat: 'mflow', sel: true },
+  { k: 'L', name: 'From API Fig. 23', sym: 'L = L_30 − 10·log(½·W·c^2)', out: true, unit: 'dB' },
+  { k: 'P', name: 'Reference power', sym: '½·W·c^2', out: true, unit: 'W' },
+  { k: 'L30', name: 'Sound pressure level at 30 m', sym: 'L_30 = L + 10·log(½·W·c^2)', out: true, unit: 'dB' },
+];
+const DIST: Row[] = [
+  { k: 'r', name: 'Distance from the point of discharge', sym: 'r', v: '1', cat: 'len', sel: true },
+  { k: 'Lp', name: 'Sound pressure level at r', sym: 'L_p = L_30 − 20·log(r/30 m)', out: true, unit: 'dB' },
+  { k: 'Lmax', name: 'Level of interest', sym: 'L_max', v: '85', unit: 'dB' },
+  { k: 'rmax', name: 'Distance where the level falls to it', sym: 'r = 30 m·10^((L_30 − L_max)/20)', out: true, cat: 'len' },
+];
+---
+<DrawingFrame>
+  <div class="calc noise" data-noise>
+    <div class="bar">
+      <p>Noise of a relief valve or vent discharging to the atmosphere, per API RP 521 (1997) 5.4.4.3: level at 30 m from the point of discharge and at any distance. One unit per kind of quantity: pick it at the first field; typed values are converted.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('s1')}>
+      <h2 id={id('s1')}><span class="no">1</span> Gas</h2>
+      <div class="switches"><SegToggle label="Gas data" name="gas" value="typed" options={[{ value: 'typed', label: 'Typed' }, { value: 'steam', label: 'Steam', hint: '(IAPWS-IF97)' }]} /></div>
+      <table class="io"><tbody><Fragment set:html={rows(GAS)} /></tbody></table>
+      <p class="note" data-gas-note></p>
+      <ul class="warn" data-warn="1" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s2')}>
+      <h2 id={id('s2')}><span class="no">2</span> Discharge and level at 30 m</h2>
+      <div class="cols">
+        <table class="io"><tbody><Fragment set:html={rows(DIS)} /></tbody></table>
+        <div class="fig" data-fig role="img" aria-label="API Fig. 23 with the operating point"></div>
+      </div>
+      <ul class="warn" data-warn="2" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s3')}>
+      <h2 id={id('s3')}><span class="no">3</span> At a distance</h2>
+      <div class="switches"><SegToggle label="Spreading" name="hemi" value="sph" options={[{ value: 'sph', label: 'Spherical' }, { value: 'hemi', label: 'Hemispherical', hint: '(+3 dB)' }]} /></div>
+      <table class="io"><tbody><Fragment set:html={rows(DIST)} /></tbody></table>
+      <div class="chart" data-chart role="img" aria-label="Sound pressure level against distance"></div>
+      <p class="note">API: the equations assume spherical spreading; if distances much larger than the height of the vent above ground are of concern, add 3 dB for hemispherical spreading. Beyond about 305 m (1 000 ft) some credit may be taken for absorption by the air (not included).</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s4')}>
+      <h2 id={id('s4')}><span class="no">4</span> Several sources at one point</h2>
+      <table class="io"><tbody>
+        <Fragment set:html={rows([
+          { k: 'Lthis', name: 'This discharge at the point', sym: 'L_p (step 3)', out: true, unit: 'dB' },
+          { k: 'S1', name: 'Other source 1', sym: 'L_1', v: '', unit: 'dB' },
+          { k: 'S2', name: 'Other source 2', sym: 'L_2', v: '', unit: 'dB' },
+          { k: 'S3', name: 'Other source 3', sym: 'L_3', v: '', unit: 'dB' },
+          { k: 'Ltot', name: 'Combined level', sym: 'L = 10·log Σ 10^(L_i/10)', out: true, unit: 'dB' },
+        ])} />
+      </tbody></table>
+      <p class="note">Simultaneous discharges add as energies: two equal sources give 3 dB more. API RP 521 asks that the combined effect be evaluated where two or more valves can discharge at the same time.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s5')}>
+      <h2 id={id('s5')}><span class="no">5</span> Exposure limits (for reference)</h2>
+      <table class="lim">
+        <caption>EU Directive 2003/10/EC, Article 3 (workers)</caption>
+        <thead><tr><th scope="col"></th><th scope="col">Daily exposure <i>L</i><sub>EX,8h</sub></th><th scope="col">Peak sound pressure</th></tr></thead>
+        <tbody>{EU_LIMITS.map((l) => <tr data-lim={l.peakdB}><th scope="row">{l.name}</th><td>{l.LEX} dB(A)</td><td>{l.peakPa} Pa = {l.peakdB} dB(C)</td></tr>)}</tbody>
+      </table>
+      <p class="note" data-lim-note>API's levels are overall sound pressure levels, not A-weighted daily exposures; the comparison is only a first indication (an A-weighted level needs the spectrum). Local regulations and API's reference to the ACGIH limits may apply; outside the plant, environmental limits govern.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('basis-h')}>
+      <h2 id={id('basis-h')}>Calculation basis</h2>
+      <details class="basis" open>
+        <summary>Equations</summary>
+        <ol>
+          <li><b>Speed of sound</b> (API Eq. 60): <i>c</i> = √(<i>k</i>·<i>R</i>·<i>T</i>/<i>M</i>), <i>R</i> = 8.314462618 J/(mol·K) (API: 91.2·√(<i>k</i>·<i>T</i>/<i>M</i>)). Steam: <i>k</i> = <i>c</i><sub>p</sub>/<i>c</i><sub>v</sub> from IAPWS-IF97 at <i>P</i><sub>1</sub> and <i>T</i>.</li>
+          <li><b>Level at 30 m</b> (API Eq. 58): <i>L</i><sub>30</sub> = <i>L</i> + 10·log<sub>10</sub>(½·<i>W</i>·<i>c</i><sup>2</sup>), <i>W</i> in kg/s, <i>c</i> in m/s; <i>L</i> from Fig. 23 against <i>PR</i> = <i>P</i><sub>1</sub>/<i>P</i><sub>2</sub>.</li>
+          <li><b>Fig. 23</b>: <i>L</i> = min(37.600·ln <i>PR</i> + 13.391; 1.844·ln <i>PR</i> + 51.900), fitted to the printed chart (within about 0.1 dB; knee at <i>PR</i> ≈ 2.94; API's example <i>PR</i> = 3 → 54 dB). The chart covers <i>PR</i> 1.5–10; outside, the lines are extended.</li>
+          <li><b>Distance</b> (API Eq. 62): <i>L</i><sub>p</sub> = <i>L</i><sub>30</sub> − 20·log<sub>10</sub>(<i>r</i>/30 m), + 3 dB for hemispherical spreading.</li>
+        </ol>
+      </details>
+      <details class="basis">
+        <summary>Notes</summary>
+        <ol>
+          <li>If pressure-relief valves prove too noisy, insulating the valve body and the downstream pipe up to about five pipe diameters from the valve deadens the sound (API).</li>
+          <li>The original sheet's fit of the chart was up to 0.9 dB higher than the printed curve, with a 0.4 dB step at the knee; its example (<i>PR</i> = 12) lies beyond the chart.</li>
+        </ol>
+      </details>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { sonic, fig23, FIG23_KNEE, FIG23_RANGE, halfWc2, L30, Lp, distanceFor, combine, EU_LIMITS } from '../lib/calc/noise';
+  import { atPT } from '../lib/calc/steam';
+  import { NO_UNITS, NO_DEFAULT_UNITS, shortUnit, type NoCat } from '../lib/calc/noise-units';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+  import { segInit } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('−', '-');
+  const CAT: Record<string, NoCat> = { T: 'temp', P1: 'p', P2: 'p', W: 'mflow', r: 'len' };
+  const M_WATER = 18.015268;
+
+  function figSvg(PR: number | undefined, W: number): string {
+    const n = (x: number) => x.toFixed(1);
+    const ML = 40, MR = 10, MT = 10, MB = 30, H = 210;
+    const lo = Math.log10(1), hi = Math.log10(20);
+    const X = (p: number) => ML + (Math.log10(p) - lo) / (hi - lo) * (W - ML - MR), Y = (l: number) => MT + (70 - l) / 50 * (H - MT - MB);
+    const p: string[] = [`<rect x="${n(X(FIG23_RANGE[0]))}" y="${MT}" width="${n(X(FIG23_RANGE[1]) - X(FIG23_RANGE[0]))}" height="${n(Y(20) - MT)}" class="inr"/>`];
+    for (const l of [20, 30, 40, 50, 60, 70]) p.push(`<line x1="${ML}" y1="${n(Y(l))}" x2="${W - MR}" y2="${n(Y(l))}" class="gridl"/><text x="${ML - 5}" y="${n(Y(l) + 4)}" class="tick" text-anchor="end">${l}</text>`);
+    for (const x of [1, 1.5, 2, 3, 5, 10, 20]) p.push(`<line x1="${n(X(x))}" y1="${MT}" x2="${n(X(x))}" y2="${n(Y(20))}" class="gridl"/><text x="${n(X(x))}" y="${n(Y(20) + 14)}" class="tick" text-anchor="middle">${x}</text>`);
+    const pts = Array.from({ length: 161 }, (_, i) => 10 ** (lo + (hi - lo) * i / 160)).filter((x) => fig23(x) >= 20);
+    p.push(`<path d="${pts.map((x, i) => `${i ? 'L' : 'M'}${n(X(x))},${n(Y(fig23(x)))}`).join(' ')}" class="curve"/>`);
+    p.push(`<text x="${W - MR}" y="${H - 4}" class="tick" text-anchor="end">pressure ratio PR (API Fig. 23: 1.5–10 shaded)</text><text x="${ML + 4}" y="${MT + 11}" class="tick">L, dB</text>`);
+    if (PR !== undefined && PR > 1 && PR <= 20 && fig23(PR) >= 20) p.push(`<circle cx="${n(X(PR))}" cy="${n(Y(fig23(PR)))}" r="5" class="pt"/>`);
+    void FIG23_KNEE;
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" xmlns="http://www.w3.org/2000/svg">${p.join('')}</svg>`;
+  }
+  function distSvg(l30: number, hemi: boolean, r: number | undefined, Lmax: number | undefined, W: number, toLen: (x: number) => number, uLen: string): string {
+    const n = (x: number) => x.toFixed(1);
+    const rMin = 10, rMax = 20000, ML = 40, MR = 10, MT = 10, MB = 30, H = 220;
+    const L = (x: number) => Lp(l30, x, hemi);
+    const top = Math.ceil(L(rMin) / 10) * 10, bot = Math.floor(L(rMax) / 10) * 10 - 10;
+    const X = (x: number) => ML + Math.log10(x / rMin) / Math.log10(rMax / rMin) * (W - ML - MR), Y = (l: number) => MT + (top - l) / (top - bot) * (H - MT - MB);
+    const p: string[] = [];
+    for (let l = bot; l <= top; l += 10) p.push(`<line x1="${ML}" y1="${n(Y(l))}" x2="${W - MR}" y2="${n(Y(l))}" class="gridl"/><text x="${ML - 5}" y="${n(Y(l) + 4)}" class="tick" text-anchor="end">${l}</text>`);
+    for (const x of [10, 30, 100, 300, 1000, 3000, 10000]) p.push(`<line x1="${n(X(x))}" y1="${MT}" x2="${n(X(x))}" y2="${n(Y(bot))}" class="gridl"/><text x="${n(X(x))}" y="${n(Y(bot) + 14)}" class="tick" text-anchor="middle">${+toLen(x).toPrecision(3)}</text>`);
+    p.push(`<line x1="${n(X(rMin))}" y1="${n(Y(L(rMin)))}" x2="${n(X(rMax))}" y2="${n(Y(L(rMax)))}" class="curve"/>`);
+    if (Lmax !== undefined && Lmax <= top && Lmax >= bot) p.push(`<line x1="${ML}" y1="${n(Y(Lmax))}" x2="${W - MR}" y2="${n(Y(Lmax))}" class="lim"/>`);
+    if (r !== undefined && r >= rMin && r <= rMax) p.push(`<circle cx="${n(X(r))}" cy="${n(Y(L(r)))}" r="5" class="pt"/>`);
+    p.push(`<text x="${W - MR}" y="${H - 4}" class="tick" text-anchor="end">distance, ${uLen}</text><text x="${ML + 4}" y="${MT + 11}" class="tick">Lp, dB</text>`);
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" xmlns="http://www.w3.org/2000/svg">${p.join('')}</svg>`;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-noise]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const units: Record<NoCat, string> = { ...NO_DEFAULT_UNITS };
+    const unit = (c: NoCat) => NO_UNITS[c].find((u) => u.label === units[c])!;
+    const st = { gas: 'typed', hemi: false };
+    const warns: Record<string, string[]> = {};
+    let figPR: number | undefined, dist: [number, boolean, number | undefined, number | undefined] | undefined;
+    const read = (k: string, ok: (x: number) => boolean) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      if (el.readOnly) return NaN;
+      const raw = parseNumber(el.value);
+      const x = blank ? NaN : (CAT[k] ? toSI(unit(CAT[k]), raw) : raw);
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, x: number | undefined, c?: NoCat) => { $<HTMLOutputElement>(`output[data-o="${k}"]`).textContent = x === undefined || !Number.isFinite(x) ? '' : fmt(c ? fromSI(unit(c), x) : x); };
+    const setComputed = (k: string, x: number) => { const el = inp(k); el.readOnly = true; el.classList.add('calc-out'); el.removeAttribute('aria-invalid'); el.value = Number.isFinite(x) ? fmt(x) : ''; };
+    const release = (k: string, def: string) => { const el = inp(k); if (el.readOnly) { el.readOnly = false; el.classList.remove('calc-out'); el.value = def; } };
+    const draw = () => {
+      const fb = $<HTMLElement>('[data-fig]'); fb.innerHTML = figSvg(figPR, Math.max(300, Math.min(440, fb.clientWidth || 440)));
+      const cb = $<HTMLElement>('[data-chart]'); cb.innerHTML = dist ? distSvg(...dist, Math.max(300, Math.min(760, cb.clientWidth || 760)), (x) => fromSI(unit('len'), x), units.len) : '';
+    };
+    const run = () => {
+      for (const k of Object.keys(warns)) delete warns[k];
+      const warn = (s: string, m: string) => (warns[s] ??= []).push(m);
+      const T = read('T', (x) => x > 0), P1 = read('P1', (x) => x > 0), P2 = read('P2', (x) => x > 0);
+      let k: number, M: number;
+      if (st.gas === 'steam') {
+        let kk = NaN;
+        if (P1 > 0 && T > 0) {
+          try { const s = atPT(P1, T); kk = s.props.kappa; if (s.phase === 'liquid') { kk = NaN; warn('1', 'Below the saturation temperature at P₁: water, not steam.'); } }
+          catch { warn('1', 'Outside the IAPWS-IF97 range (up to 800 °C and 1 000 bar).'); }
+        }
+        setComputed('k', kk); setComputed('M', M_WATER); k = kk; M = M_WATER;
+        $('[data-gas-note]').innerHTML = 'Steam: <i>k</i> = <i>c</i><sub>p</sub>/<i>c</i><sub>v</sub> at <i>P</i><sub>1</sub> and <i>T</i> from IAPWS-IF97 (as the Steam tool).';
+      } else {
+        release('k', '1.29'); release('M', '18.015');
+        k = read('k', (x) => x > 0.5 && x < 3); M = read('M', (x) => x > 0);
+        $('[data-gas-note]').innerHTML = 'Gas at the valve (upstream conditions).';
+      }
+      const c = k > 0 && T > 0 && M > 0 ? sonic(k, T, M) : NaN;
+      show('c', c, 'vel');
+      const PR = P1 / P2;
+      show('PR', PR);
+      if (PR <= 1) warn('2', 'P₁ must be above P₂.');
+      const W = read('W', (x) => x > 0);
+      const L = PR > 1 ? fig23(PR) : NaN;
+      show('L', L); show('P', halfWc2(W, c)); const l30 = L30(L, W, c); show('L30', l30);
+      if (PR > 1 && (PR < FIG23_RANGE[0] || PR > FIG23_RANGE[1])) warn('2', `PR = ${fmt(PR)} is outside API Fig. 23 (1.5–10); the line is extended.${PR > 10 ? ' Above about PR 3 the level hardly changes (choked flow).' : ''}`);
+      figPR = PR > 1 ? PR : undefined;
+      const r = read('r', (x) => x > 0), Lmax = read('Lmax', () => true);
+      const lp = Number.isFinite(l30) && r > 0 ? Lp(l30, r, st.hemi) : NaN;
+      show('Lp', lp); show('rmax', Number.isFinite(l30) && Number.isFinite(Lmax) ? distanceFor(l30, Lmax, st.hemi) : NaN, 'len');
+      if (r > 305) warn('3', 'Beyond about 305 m, absorption by the air may lower the level somewhat (API, not included).');
+      dist = Number.isFinite(l30) ? [l30, st.hemi, r > 0 ? r : undefined, Number.isFinite(Lmax) ? Lmax : undefined] : undefined;
+      const others = ['S1', 'S2', 'S3'].map((s) => read(s, () => true)).filter(Number.isFinite);
+      show('Lthis', lp); show('Ltot', Number.isFinite(lp) ? combine([lp, ...others]) : NaN);
+      draw();
+      for (const el of root.querySelectorAll<HTMLElement>('[data-warn]')) el.innerHTML = (warns[el.dataset.warn!] ?? []).map((x) => `<li>${x}</li>`).join('');
+      void EU_LIMITS;
+    };
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement; const cc = t.dataset.cat as NoCat | undefined;
+      if (cc) {
+        const from = unit(cc); units[cc] = t.value; const to = unit(cc);
+        for (const s of root.querySelectorAll<HTMLSelectElement>(`select[data-cat="${cc}"]`)) s.value = t.value;
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-ut="${cc}"]`)) s.textContent = shortUnit(t.value);
+        for (const [k, kc] of Object.entries(CAT)) { if (kc !== cc) continue; const el = inp(k), x = parseNumber(el.value); if (el.value.trim() !== '' && Number.isFinite(x)) el.value = fmtIn(fromSI(to, toSI(from, x))); }
+        $('[data-status]').textContent = `Unit changed to ${shortUnit(t.value)}; values converted.`;
+      }
+      if (t.matches('select')) run();
+    });
+    root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input[type=text]')) run(); });
+    segInit(root, 'gas', (x) => { st.gas = x; run(); });
+    segInit(root, 'hemi', (x) => { st.hemi = x === 'hemi'; run(); });
+    $('[data-reset]').addEventListener('click', () => { for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]')) if (!el.readOnly) el.value = ''; run(); inp('T').focus(); $('[data-status]').textContent = 'All input fields cleared.'; });
+    let rt = 0; const ro = new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); });
+    ro.observe($('[data-fig]')); ro.observe($('[data-chart]'));
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 46rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.5rem; font-size: 1.0625rem; font-weight: 650; }
+  .no { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; margin-right: 0.5rem; border: 1.5px solid var(--ink); border-radius: 50%; font-size: 0.8125rem; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td, .calc :global(th), .calc :global(td) { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .calc :global(tbody th) { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i), .lim :global(i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 46rem; }
+  .io :global(.v) { width: 9.5rem; }
+  .io :global(.u) { width: 6.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io :global(.u select) { max-width: 6.5rem; }
+  .calc :global(input), .calc :global(output), select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input.calc-out) { background: var(--zoho-out); border-color: transparent; }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 46rem; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 46rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .cols { display: grid; grid-template-columns: minmax(0, 46rem) minmax(0, 1fr); gap: 1rem 2rem; align-items: start; }
+  @media (max-width: 70rem) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .fig, .chart { max-width: 52rem; }
+  .fig { max-width: 30rem; }
+  .chart { margin-top: 0.75rem; }
+  .fig :global(svg), .chart :global(svg) { display: block; max-width: 100%; height: auto; }
+  .noise :global(.gridl) { stroke: var(--rule); stroke-width: 0.6; }
+  .noise :global(.tick) { font: 400 11px var(--font-ui); fill: var(--muted); }
+  .noise :global(.curve) { fill: none; stroke: var(--ink); stroke-width: 2.2; }
+  .noise :global(.inr) { fill: var(--wash); }
+  .noise :global(.pt) { fill: var(--markup); }
+  .noise :global(.lim) { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 8 4; }
+  .lim { max-width: 46rem; font-size: 0.875rem; }
+  .lim caption { text-align: left; font-size: 0.8125rem; color: var(--muted); padding-bottom: 0.25rem; }
+  .lim th, .lim td { padding: 0.25rem 0.5rem 0.25rem 0; border-top: 1px solid var(--rule); }
+  .lim thead th { font-weight: 600; font-size: 0.8125rem; border-top: 0; }
+  .basis { margin-top: 0.5rem; max-width: 52rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; overflow-wrap: anywhere; }
+    .io :global(.v) { width: 7rem; }
+    .io :global(.u) { width: 5.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+  }
+</style>
