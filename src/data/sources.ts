@@ -72,7 +72,7 @@ export const sources: Source[] = [
     url: 'https://iapws.org/technical-guidance/release/IF97-Rev',
     archive: 'https://web.archive.org/web/20250608103336/https://iapws.org/relguide/IF97-Rev.pdf',
     read: '2026-11-20',
-    use: { steam: 'All thermodynamic properties (regions 1–4, saturation line, B23 boundary); all 126 coefficients and the verification values in the tests checked against the release.', 'heat-exchanger': 'Optional property helper: specific heat of liquid water at the mean stream temperature (1 atm, or saturation above 100 °C) and the latent heat of steam at the condensing or boiling temperature.' },
+    use: { steam: 'All thermodynamic properties (regions 1–4, saturation line, B23 boundary); all 126 coefficients and the verification values in the tests checked against the release.', 'heat-exchanger': 'Optional property helper: specific heat of liquid water at the mean stream temperature (1 atm, or saturation above 100 °C) and the latent heat of steam at the condensing or boiling temperature.', 'psv-liquid-filled-vessel': 'Water: saturation temperature and latent heat of vaporization at the relieving pressure.' },
   },
   {
     id: 'iapws-visc', by: 'IAPWS', title: 'Release on the IAPWS Formulation 2008 for the Viscosity of Ordinary Water Substance, R12-08',
@@ -305,7 +305,7 @@ export const sources: Source[] = [
     url: 'https://chemengonline.com/wp-content/uploads/2017/05/sept11_ep_sas2.pdf',
     archive: 'https://web.archive.org/web/20180827054506/http://www.chemengonline.com:80/wp-content/uploads/2017/05/sept11_ep_sas2.pdf',
     read: '2026-11-22',
-    use: { drum: 'Torispherical head geometry (crown and knuckle radii as fractions of D, head depth), ASME F&D parameters; Table 3 head capacities and the Table 4/5 strapping tables (vertical and horizontal tank) as test values.' },
+    use: { drum: 'Torispherical head geometry (crown and knuckle radii as fractions of D, head depth), ASME F&D parameters; Table 3 head capacities and the Table 4/5 strapping tables (vertical and horizontal tank) as test values.', 'psv-liquid-filled-vessel': 'Head shapes (the Drum tool\'s geometry) for the wetted surface; torispherical crown and knuckle radii, from which the closed-form head areas used as tests follow.' },
   },
   {
     id: 'perry-7-10-tanks', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 10 (Transport and Storage of Fluids): calculation of tank volume, Table 10-65 Volumes of heads',
@@ -529,6 +529,30 @@ export const sources: Source[] = [
     where: 'American Petroleum Institute, 4th ed., June 1995', year: 1995,
     read: '2026-11-24',
     use: { compressor: 'Allowable discharge temperature (2.3.1): predicted discharge temperature at most 150 °C (300 °F), 135 °C (275 °F) for hydrogen-rich services (molecular weight ≤ 12) — the default limit and a warning; motor nameplate rating at least 110 % of the greatest power required (3.1.2.2), the default margin.' },
+  },
+  {
+    id: 'api-521-4', by: 'American Petroleum Institute', title: 'API Recommended Practice 521, Guide for Pressure-Relieving and Depressuring Systems',
+    where: 'American Petroleum Institute, 4th ed., March 1997 (1999 print)', year: 1997,
+    read: '2026-11-25',
+    use: { 'psv-liquid-filled-vessel': 'External fire (3.15): wetted surface up to 25 ft (7.6 m) above grade, Table 4 (portions of liquid inventory, spheres up to the maximum horizontal diameter or 25 ft, heads inside skirts not counted); heat absorption Q = 21 000·F·A^0.82 and 34 500·F·A^0.82 Btu/h (Eq. 3 and 4; SI 43 200 / 70 900 W); Table 5 environment factors; Eq. 9 environment factor from the insulation, F = k(1660 − Tf)/(21 000·t); 3.15.3.1 relief rate = heat input / latent heat; insulation conditions (3.15.5.2).' },
+  },
+  {
+    id: 'api-520-1-7', by: 'American Petroleum Institute', title: 'API Recommended Practice 520, Sizing, Selection, and Installation of Pressure-Relieving Devices in Refineries, Part I — Sizing and Selection',
+    where: 'American Petroleum Institute, 7th ed., January 2000', year: 2000,
+    read: '2026-11-25',
+    use: { 'psv-liquid-filled-vessel': 'Vapour sizing in SI: critical flow A = W/(C·Kd·P1·Kb·Kc)·√(TZ/M), C = 0.03948·√(k(2/(k+1))^((k+1)/(k−1))), critical-flow pressure; subcritical flow with F2 (17.9 constant); steam by the Napier equation A = 190.4·W/(P1·Kd·Kb·Kc·KN·KSH) with KN; Kd 0.975 / 0.62 (rupture disk alone), Kc 0.9. Checked only; the equations are those of the original sheet and GPSA Section 5.' },
+  },
+  {
+    id: 'api-526-5', by: 'American Petroleum Institute', title: 'API Standard 526, Flanged Steel Pressure Relief Valves',
+    where: 'American Petroleum Institute, 5th ed., June 2002', year: 2002,
+    read: '2026-11-25',
+    use: { 'psv-liquid-filled-vessel': 'Table 1 standard effective orifice areas D to T (0.110 to 26.00 in²); Tables 2–15 (spring-loaded) and 16–29 (pilot-operated): valve bodies, inlet and outlet flange classes, maximum set pressure per temperature range and outlet pressure limits for carbon steel, chrome-molybdenum and austenitic stainless steel, used to pick the body (step 5).' },
+  },
+  {
+    id: 'gpsa-12-05', by: 'Gas Processors Suppliers Association', title: 'GPSA Engineering Data Book, 12th ed. (SI), Section 5: Relief Systems',
+    where: 'GPSA, Tulsa OK', year: 2004,
+    read: '2026-11-25',
+    use: { 'psv-liquid-filled-vessel': 'Public SI statement of the method: Q = 43 200·F·Aw^0.82 W (Eq. 5-13) and the wetted-surface rule; Fig. 5-16 environmental factors and the conditions for insulation credit (≈ 66 250 W/m² basis); W = 3.6·Q/Hl (Eq. 5-14); minimum latent heat 110 kJ/kg near the critical point; Napier steam equation with Kn (Eq. 5-6, 5-7); rule of thumb: subcritical when the back pressure exceeds half the inlet pressure; Kb curves (Fig. 5-10, 5-11).' },
   },
   {
     id: 'perry-7-11', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 11 (Heat-Transfer Equipment)',

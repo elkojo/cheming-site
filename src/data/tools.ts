@@ -55,9 +55,10 @@ export const tools: Tool[] = [
     "sub": "L",
     "title": "PSV: Liquid Filled Vessel",
     "name": "PSV Sizing for Fire Case in a Liquid Filled Vessel",
-    "description": "Fire-case relief load for a liquid-filled vessel: wetted area from vessel geometry, heat absorption and relief load, then PSV sizing.",
-    "standard": "API 521; PSV sizing per API 520 Part I",
+    "description": "Fire-case relief for a vessel holding liquid: wetted area in the fire zone for horizontal, vertical or spherical vessels (sketch to scale), API 521 heat input with insulation credit, relief load (water from IAPWS-IF97), API 520 orifice and API 526 valve.",
+    "standard": "API 521; PSV sizing per API 520 Part I; orifices per API 526",
     "category": "relief",
+    "native": "psvl",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/6c9c61f423c0019928e17c434407830cbdf9b916d98bf8dd0521bc5f97e47a2e?type=grid&mode=embed"
   },
   {
