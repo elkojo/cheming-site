@@ -77,9 +77,10 @@ export const tools: Tool[] = [
     "tag": "KOD",
     "title": "KOD",
     "name": "Horizontal Knock Out Drum as per API RP 521, 1997, par. 5.4.2.1",
-    "description": "Sizes a horizontal knock-out drum from the droplet dropout velocity, drum dimensions and liquid levels.",
+    "description": "Horizontal flare knock-out drum: droplet dropout with the standard sphere drag curve, vapour space and required length, liquid holdup, nozzle Mach and momentum, optional mist eliminator, smallest drum and a live sketch to scale.",
     "standard": "API RP 521 (1997), §5.4.2.1",
     "category": "relief",
+    "native": "kod",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/e1c2da68bc9cbfa1c47143b3d3bda6687a1ec3cf70fffb50279965248e701fd7?type=grid&mode=embed",
   },
   {

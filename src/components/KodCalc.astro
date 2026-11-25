@@ -1,0 +1,543 @@
+---
+// Native KOD calculator (Phase 7): horizontal flare knock-out drum per API RP 521 (1997) 5.4.2.1. Steps: 1 gas and
+// droplet (standard sphere drag, solved), 2 drum and vapour space (rating: utilization, API required length; live
+// sketch to scale with the levels and the droplet path), 3 liquid (holding, surge, slop), 4 nozzles (Mach, ρv²),
+// 5 mist eliminator (optional, GPSA K with pressure derating), 6 smallest drum (diameter search), 7 quick estimate
+// (Perry 26-36, Tan). Owner's choices 2026-11-25. One unit selector per category; typed values are converted.
+import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
+import { HEADS } from '../lib/calc/drum';
+import { SIZES } from '../lib/calc/pipes';
+import { K_TABLE } from '../lib/calc/kod';
+import { mathHtml } from '../lib/calc/types';
+import { KOD_UNITS, KOD_DEFAULT_UNITS, shortUnit, type KodCat } from '../lib/calc/kod-units';
+
+const id = (k: string) => `kd-${k}`;
+const unitSel = (cat: KodCat, label: string) =>
+  `<select data-cat="${cat}" aria-label="${label} unit">${KOD_UNITS[cat].map((u) => `<option value="${u.label}"${u.label === KOD_DEFAULT_UNITS[cat] ? ' selected' : ''}>${shortUnit(u.label)}</option>`).join('')}</select>`;
+const unitTxt = (cat: KodCat) => `<span data-ut="${cat}">${shortUnit(KOD_DEFAULT_UNITS[cat])}</span>`;
+const inCell = (k: string, v = '') => `<input id="${id(k)}" data-k="${k}" value="${v}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />`;
+interface Row { k: string; name: string; sym: string; v?: string; out?: boolean; cat?: KodCat; sel?: boolean; unit?: string; show?: string }
+const row = (r: Row) => {
+  const lab = `<span class="lb">${r.name}</span> <span class="eq">${mathHtml(r.sym)}</span>`;
+  const th = r.out ? `<th scope="row">${lab}</th>` : `<th scope="row"><label for="${id(r.k)}">${lab}</label></th>`;
+  const v = r.out ? `<td class="v"><output data-o="${r.k}"></output></td>` : `<td class="v">${inCell(r.k, r.v)}</td>`;
+  const u = r.cat ? (r.sel ? unitSel(r.cat, r.name) : unitTxt(r.cat)) : `<span>${r.unit ?? '–'}</span>`;
+  return `<tr data-row="${r.k}"${r.show ? ` data-show="${r.show}"` : ''}>${th}${v}<td class="u">${u}</td></tr>`;
+};
+const rows = (rs: Row[]) => rs.map(row).join('');
+const npsOpts = (sel: string) => SIZES.filter((s) => s.value >= 1).map((s) => `<option${s.nps === sel ? ' selected' : ''}>${s.nps}</option>`).join('');
+
+// defaults: the Zoho sheet's example (typed there in US units), converted exactly
+const GAS: Row[] = [
+  { k: 'p', name: 'Operating pressure', sym: 'p', v: '6.89476', cat: 'p', sel: true },
+  { k: 'T', name: 'Temperature', sym: 'T', v: '43.3333', cat: 'temp', sel: true },
+  { k: 'M', name: 'Molar mass of the vapour', sym: 'M', v: '122.24', unit: 'kg/kmol' },
+  { k: 'Z', name: 'Compressibility factor', sym: 'Z', v: '1' },
+  { k: 'mu', name: 'Vapour viscosity', sym: 'μ', v: '0.01', cat: 'mu', sel: true },
+  { k: 'rhoL', name: 'Liquid (droplet) density', sym: 'ρ_l', v: '800.923', cat: 'rho', sel: true },
+  { k: 'Dp', name: 'Droplet diameter (API: 300–600 µm)', sym: 'D_p', v: '500', cat: 'dp', sel: true },
+  { k: 'rhoG', name: 'Vapour density', sym: 'ρ_g = p·M/(Z·R·T)', out: true, cat: 'rho' },
+  { k: 'X', name: 'Drag coefficient × Reynolds²', sym: 'C·Re^2 = 4·g·ρ_g·(ρ_l − ρ_g)·D_p^3/(3·μ^2)', out: true },
+  { k: 'Re', name: 'Droplet Reynolds number', sym: 'Re = ρ_g·U_t·D_p/μ', out: true },
+  { k: 'C', name: 'Drag coefficient (standard sphere curve)', sym: 'C(Re)', out: true },
+  { k: 'Ut', name: 'Dropout velocity', sym: 'U_t = √(4·g·D_p·(ρ_l − ρ_g)/(3·ρ_g·C))', out: true, cat: 'vel', sel: true },
+  { k: 'K', name: 'Equivalent K factor', sym: 'K = U_t·√(ρ_g/(ρ_l − ρ_g))', out: true, cat: 'vel' },
+];
+const DRUM: Row[] = [
+  { k: 'D', name: 'Inside diameter', sym: 'D', v: '1981.2', cat: 'len', sel: true },
+  { k: 'L', name: 'Length, tangent to tangent', sym: 'L', v: '3048', cat: 'len' },
+  { k: 'LLL', name: 'Low liquid level', sym: 'LLL', v: '254', cat: 'len' },
+  { k: 'NLL', name: 'Normal liquid level', sym: 'NLL', v: '762', cat: 'len' },
+  { k: 'HLL', name: 'High liquid level', sym: 'HLL', v: '1270', cat: 'len' },
+  { k: 'Ls', name: 'Inlet-to-outlet distance per pass (empty = L/n)', sym: 'L_s', v: '', cat: 'len' },
+  { k: 'W', name: 'Vapour flow', sym: 'W', v: '136077.711', cat: 'mflow', sel: true },
+  { k: 'fH1', name: 'Minimum vapour space, fraction of D (limit)', sym: 'H_1,min/D', v: '0.2' },
+  { k: 'H1min', name: 'Minimum vapour space, height (limit)', sym: 'H_1,min', v: '300', cat: 'len' },
+];
+const DRUM_OUT: Row[] = [
+  { k: 'H1', name: 'Vapour space (disengagement height)', sym: 'H_1 = D − HLL', out: true, cat: 'len' },
+  { k: 'Av', name: 'Vapour flow area above HLL', sym: 'A_v', out: true, cat: 'area', sel: true },
+  { k: 'Q', name: 'Vapour volume flow', sym: 'Q = W/ρ_g', out: true, cat: 'vflow', sel: true },
+  { k: 'Uh', name: 'Horizontal vapour velocity', sym: 'U_h = Q/(n·A_v)', out: true, cat: 'vel' },
+  { k: 'Th', name: 'Residence time', sym: 'T_h = L_s/U_h', out: true, cat: 'ts', sel: true },
+  { k: 'Tt', name: 'Dropout time', sym: 'T_t = H_1/U_t', out: true, cat: 'ts' },
+  { k: 'util', name: 'Utilization (≥ 100 %)', sym: 'T_h/T_t', out: true, unit: '%' },
+  { k: 'Lmin', name: 'Required length (API Eq. 45)', sym: 'L_min = U_h·T_t·n', out: true, cat: 'len' },
+];
+const LIQ: Row[] = [
+  { k: 'rhoD', name: 'Liquid density in the drum', sym: 'ρ_l', v: '800.923', cat: 'rho' },
+  { k: 'Wdraw', name: 'Liquid draw-off (pump-out)', sym: 'W_out', v: '6803.89', cat: 'mflow' },
+  { k: 'Wsurge', name: 'Liquid arriving with the release', sym: 'W_in', v: '1360.78', cat: 'mflow' },
+  { k: 'tSurgeMin', name: 'Required liquid holdup (API: 20–30 min)', sym: 't_surge,min', v: '30', cat: 'time', sel: true },
+  { k: 'tHoldMin', name: 'Required holding time (limit)', sym: 't_hold,min', v: '5', cat: 'time' },
+  { k: 'Vslop', name: 'Slop and drain volume below LLL (API)', sym: 'V_slop', v: '0', cat: 'vol', sel: true },
+  { k: 'Vhold', name: 'Holding volume', sym: 'V(NLL) − V(LLL)', out: true, cat: 'vol' },
+  { k: 'tHold', name: 'Holding time at the draw-off', sym: 'V_hold·ρ_l/W_out', out: true, cat: 'time' },
+  { k: 'Vsurge', name: 'Surge volume', sym: 'V(HLL) − V(NLL)', out: true, cat: 'vol' },
+  { k: 'tSurge', name: 'Surge time at the release', sym: 'V_surge·ρ_l/W_in', out: true, cat: 'time' },
+  { k: 'VLLL', name: 'Volume below LLL', sym: 'V(LLL) ≥ V_slop', out: true, cat: 'vol' },
+];
+const NOZ: Row[] = [
+  { k: 'kk', name: 'Ratio of specific heats', sym: 'k = c_p/c_v', v: '1.3' },
+  { k: 'machMax', name: 'Mach limit (limit)', sym: 'Ma_max', v: '0.7' },
+  { k: 'momMax', name: 'Inlet momentum limit (optional)', sym: 'J_max', v: '', cat: 'mom', sel: true },
+  { k: 'c', name: 'Speed of sound', sym: 'c = √(k·Z·R·T/M)', out: true, cat: 'vel' },
+];
+const MIST: Row[] = [
+  { k: 'Kmist', name: 'Design K of the mist eliminator', sym: 'K', v: '0.107', cat: 'vel' },
+  { k: 'derate', name: 'Pressure derating (GPSA Fig. 7-13)', sym: 'f_p', out: true, unit: '%' },
+  { k: 'Vmist', name: 'Allowable face velocity', sym: 'V = f_p·K·√((ρ_l − ρ_g)/ρ_g)', out: true, cat: 'vel' },
+  { k: 'Amist', name: 'Required face area (full vapour flow)', sym: 'A = Q/V', out: true, cat: 'area' },
+];
+const DES: Row[] = [
+  { k: 'ratio', name: 'Length / diameter (GPSA: 2.5–5)', sym: 'L/D', v: '3' },
+  { k: 'step', name: 'Diameter step', sym: 'ΔD', v: '50', cat: 'len' },
+  { k: 'Dmax', name: 'Largest diameter tried', sym: 'D_max', v: '6000', cat: 'len' },
+  { k: 'Ddes', name: 'Smallest diameter', sym: 'D', out: true, cat: 'len' },
+  { k: 'Ldes', name: 'Length', sym: 'L = (L/D)·D', out: true, cat: 'len' },
+];
+---
+<DrawingFrame>
+  <div class="calc kod" data-kod>
+    <div class="bar">
+      <p>Horizontal flare knock-out drum per API RP 521 (1997) 5.4.2.1: droplet dropout, vapour space and length, liquid holdup, nozzles; smallest drum for the same level fractions. One unit per kind of quantity: pick it at the first field; typed values are converted.</p>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+
+    <section class="grp" aria-labelledby={id('s1')}>
+      <h2 id={id('s1')}><span class="no">1</span> Vapour and droplet</h2>
+      <table class="io"><tbody><Fragment set:html={rows(GAS)} /></tbody></table>
+      <p class="note">Drag coefficient from the standard curve for rigid spheres (Clift, Grace &amp; Weber), solved for the Reynolds number from <i>C</i>·<i>Re</i><sup>2</sup>, which does not contain the velocity (API Fig. 20, GPSA Fig. 7-4). Liquid drops behave as rigid spheres up to <i>Re</i> ≈ 100 (Perry).</p>
+      <p class="note" data-renote></p>
+      <ul class="warn" data-warn="1" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s2')}>
+      <h2 id={id('s2')}><span class="no">2</span> Drum and vapour space</h2>
+      <div class="switches">
+        <SegToggle label="Vapour passes" name="n" value="1" options={[{ value: '1', label: 'One', hint: '(inlet at one end)' }, { value: '2', label: 'Two', hint: '(centre inlet or outlet)' }]} />
+      </div>
+      <div class="cols">
+        <div>
+          <table class="io">
+            <tbody>
+              <tr>
+                <th scope="row"><label for={id('head')}><span class="lb">Heads</span> <span class="eq">both ends alike</span></label></th>
+                <td class="v wide" colspan="2"><select id={id('head')} data-s="head">{HEADS.map((h) => <option value={h.id}>{h.label}</option>)}</select></td>
+              </tr>
+              <Fragment set:html={rows(DRUM)} />
+              <Fragment set:html={rows(DRUM_OUT)} />
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <button type="button" class="sk" data-zoom aria-haspopup="dialog" aria-label="Enlarge the drum sketch">
+            <span class="skimg" data-sketch role="img" aria-label="Drum sketch to scale with the liquid levels and the droplet path"></span>
+            <span class="zoom" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="14" height="14"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 10l4 4M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" stroke-width="1.5"/></svg>
+              Enlarge
+            </span>
+          </button>
+          <p class="note">To scale. The droplet path starts at the top of the inlet and falls at <i>U</i><sub>t</sub> while the vapour carries it at <i>U</i><sub>h</sub>; it must reach HLL before the outlet (blue: it does, red: it does not).</p>
+        </div>
+      </div>
+      <ul class="warn" data-warn="2" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s3')}>
+      <h2 id={id('s3')}><span class="no">3</span> Liquid holdup</h2>
+      <table class="io"><tbody><Fragment set:html={rows(LIQ)} /></tbody></table>
+      <p class="note">API RP 521: the liquid holdup from a release lasting 20–30 minutes, plus the slop and drain volume, must stay below the vapour space (here: arriving liquid from NLL to HLL; slop below LLL). The holding time protects the pump-out; its limit is yours to set.</p>
+      <ul class="warn" data-warn="3" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s4')}>
+      <h2 id={id('s4')}><span class="no">4</span> Nozzles</h2>
+      <table class="io">
+        <tbody>
+          <Fragment set:html={rows(NOZ)} />
+        </tbody>
+      </table>
+      <table class="nz">
+        <thead><tr><th scope="col">Nozzle</th><th scope="col">NPS</th><th scope="col">Schedule</th><th scope="col">Velocity <span class="hu" set:html={unitTxt('vel')} /></th><th scope="col">Mach</th><th scope="col">Momentum <i>J</i> = <i>ρv</i><sup>2</sup> <span class="hu" set:html={unitTxt('mom')} /></th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Inlet <span class="nm">(full flow)</span></th><td><select data-s="nIn" aria-label="Inlet NPS" set:html={npsOpts('18')} /></td><td><select data-s="sIn" aria-label="Inlet schedule" /></td><td><output data-o="vIn" /></td><td><output data-o="mIn" /></td><td><output data-o="rIn" /></td></tr>
+          <tr><th scope="row">Outlet <span class="nm">(per pass)</span></th><td><select data-s="nOut" aria-label="Outlet NPS" set:html={npsOpts('14')} /></td><td><select data-s="sOut" aria-label="Outlet schedule" /></td><td><output data-o="vOut" /></td><td><output data-o="mOut" /></td><td><output data-o="rOut" /></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Inside diameters from ASME B36.10M / B36.19M (as the pipe tools). The limits are yours: the original sheet used Mach 0.70 without a source; enter a momentum limit if your inlet device has one.</p>
+      <ul class="warn" data-warn="4" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s5')}>
+      <h2 id={id('s5')}><span class="no">5</span> Mist eliminator</h2>
+      <div class="switches">
+        <SegToggle label="Mist eliminator" name="mist" value="none" options={[{ value: 'none', label: 'None', hint: '(usual for flare KO drums)' }, { value: 'yes', label: 'Check one' }]} />
+      </div>
+      <div data-show="mist">
+        <table class="io"><tbody><Fragment set:html={rows(MIST)} /></tbody></table>
+        <details class="basis">
+          <summary>GPSA K factors (click to use the upper value)</summary>
+          <table class="t526">
+            <thead><tr><th scope="col">Device</th><th scope="col"><i>K</i>, m/s</th><th scope="col">Note</th></tr></thead>
+            <tbody>{K_TABLE.map((r, i) => <tr><td><button type="button" class="kpick" data-kpick={i}>{r.dev}</button></td><td class="num">{r.K[0]}–{r.K[1]}</td><td class="nm">{r.note}</td></tr>)}</tbody>
+          </table>
+          <p class="note">GPSA Engineering Data Book, 12th ed., Section 7. The K factor of mesh pads is derated at higher pressure (Fig. 7-13, interpolated here) and for high liquid loading (above about 2.5 m³/h per m² of pad); for horizontal separators with mesh pads K = 0.15 m/s is normally the upper limit.</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s6')}>
+      <h2 id={id('s6')}><span class="no">6</span> Smallest drum</h2>
+      <table class="io"><tbody><Fragment set:html={rows(DES)} /></tbody></table>
+      <p class="note" data-des-note>Same level fractions of <i>D</i> as in step 2, same limits (utilization ≥ 100 %, vapour space, holdup and holding times, slop); diameters tried in steps from Δ<i>D</i>.</p>
+      <button type="button" class="tbtn" data-use>Use this drum in step 2</button>
+      <ul class="warn" data-warn="6" aria-live="polite"></ul>
+    </section>
+
+    <section class="grp" aria-labelledby={id('s7')}>
+      <h2 id={id('s7')}><span class="no">7</span> Quick estimate</h2>
+      <table class="io"><tbody><Fragment set:html={rows([{ k: 'Dtan', name: 'Drum diameter (Tan, Perry Eq. 26-36)', sym: 'W = 360·D^2·√((ρ_l − ρ_g)·M·P/T)', out: true, cat: 'len' }])} /></tbody></table>
+      <p class="note">US units in the equation (lb/h, ft, lb/ft³, psia, °R); for droplets of 400 µm and larger; separation only, not holdup. For reference.</p>
+    </section>
+
+    <section class="grp" aria-labelledby={id('basis-h')}>
+      <h2 id={id('basis-h')}>Calculation basis</h2>
+      <details class="basis" open>
+        <summary>Equations</summary>
+        <ol>
+          <li><b>Vapour density</b> <i>ρ</i><sub>g</sub> = <i>p</i>·<i>M</i>/(<i>Z</i>·<i>R</i>·<i>T</i>), <i>R</i> = 8.314462618 J/(mol·K).</li>
+          <li><b>Dropout velocity</b> (API RP 521 Eq. 30): <i>U</i><sub>t</sub> = √(4·<i>g</i>·<i>D</i><sub>p</sub>·(<i>ρ</i><sub>l</sub> − <i>ρ</i><sub>g</sub>)/(3·<i>ρ</i><sub>g</sub>·<i>C</i>)) (API writes 1.15·√(…/<i>C</i>), 1.15 ≈ √(4/3)); <i>C</i> from the standard drag curve of rigid spheres (Clift, Grace &amp; Weber 1978, Table 5.2), solved for <i>Re</i> from <i>C</i>·<i>Re</i><sup>2</sup> = 4·<i>g</i>·<i>ρ</i><sub>g</sub>·(<i>ρ</i><sub>l</sub> − <i>ρ</i><sub>g</sub>)·<i>D</i><sub>p</sub><sup>3</sup>/(3·<i>μ</i><sup>2</sup>) (API Eq. 32: 0.13·10<sup>8</sup> with <i>μ</i> in cP); <i>g</i> = 9.80665 m/s².</li>
+          <li><b>Vapour space</b>: area above HLL <i>A</i><sub>v</sub> = π·<i>D</i><sup>2</sup>/4 − segment(HLL); <i>U</i><sub>h</sub> = <i>Q</i>/(<i>n</i>·<i>A</i><sub>v</sub>); residence time <i>T</i><sub>h</sub> = <i>L</i><sub>s</sub>/<i>U</i><sub>h</sub>; dropout time <i>T</i><sub>t</sub> = (<i>D</i> − HLL)/<i>U</i><sub>t</sub> (API Eq. 41); the drum separates when <i>T</i><sub>h</sub> ≥ <i>T</i><sub>t</sub>; required length <i>L</i><sub>min</sub> = <i>U</i><sub>h</sub>·<i>T</i><sub>t</sub>·<i>n</i> (API Eq. 43–45).</li>
+          <li><b>Liquid volumes</b> between levels with the heads (Drum tool: exact volumes of the six head shapes); times = volume·<i>ρ</i><sub>l</sub>/mass flow.</li>
+          <li><b>Nozzles</b>: <i>v</i> = <i>Q</i>/(π·<i>d</i><sub>i</sub><sup>2</sup>/4) (inlet full flow, outlet per pass), Mach = <i>v</i>/<i>c</i>, <i>c</i> = √(<i>k</i>·<i>Z</i>·<i>R</i>·<i>T</i>/<i>M</i>), momentum <i>ρ</i><sub>g</sub>·<i>v</i><sup>2</sup>.</li>
+          <li><b>Mist eliminator</b> (GPSA Eq. 7-8): <i>V</i> = <i>K</i>·√((<i>ρ</i><sub>l</sub> − <i>ρ</i><sub>g</sub>)/<i>ρ</i><sub>g</sub>) with <i>K</i> derated for pressure (Fig. 7-13: 100 % at atmospheric, 90 % at 1 034 kPa g, 85 % at 2 068, 80 % at 4 136, 75 % at 7 929; linear in between); face area <i>Q</i>/<i>V</i>.</li>
+        </ol>
+      </details>
+      <details class="basis">
+        <summary>Notes</summary>
+        <ol>
+          <li>API RP 521: droplets of 300–600 µm are removed in the drum (the flare handles smaller ones); the liquid holdup is a release lasting 20–30 minutes plus slop and drain volume; any liquid retained from earlier releases adds to it. The volume of the heads may be neglected for simplicity (API); here it is included.</li>
+          <li>Two vapour passes: centre inlet with an outlet at each end, or an inlet at each end with a centre outlet (API designs d and e); each pass carries half the vapour over about half the length.</li>
+          <li>The minimum vapour space, the holding-time and Mach limits are plain limits (the original sheet's values, no public source found); set your own.</li>
+          <li>Horizontal separators: <i>L</i>/<i>D</i> normally 2.5–5 (GPSA Section 7).</li>
+        </ol>
+      </details>
+    </section>
+    <p class="sr" aria-live="polite" data-status></p>
+    <dialog class="zd" aria-labelledby={id('zd-title')}>
+      <div class="zhead">
+        <h2 id={id('zd-title')}>Knock-out drum, to scale</h2>
+        <button type="button" class="zclose" data-zd-close aria-label="Close"><svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5"/></svg></button>
+      </div>
+      <div class="zimg" data-zd-img></div>
+    </dialog>
+  </div>
+</DrawingFrame>
+
+<script>
+  import { settling, gasDensity, sonic, rate, liquidVolume, kDerate, mistVelocity, nozzle, tanDiameter, designSearch, K_TABLE, type Drum, type RateOut } from '../lib/calc/kod';
+  import { profile, head, type HeadId } from '../lib/calc/drum';
+  import { pipe, id as pipeId, schedulesFor, type Schedule } from '../lib/calc/pipes';
+  import { KOD_UNITS, KOD_DEFAULT_UNITS, shortUnit, type KodCat } from '../lib/calc/kod-units';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+  import { segInit } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('−', '-');
+  const CAT: Record<string, KodCat> = { p: 'p', T: 'temp', mu: 'mu', rhoL: 'rho', Dp: 'dp', D: 'len', L: 'len', LLL: 'len', NLL: 'len', HLL: 'len', Ls: 'len', W: 'mflow',
+    H1min: 'len', rhoD: 'rho', Wdraw: 'mflow', Wsurge: 'mflow', tSurgeMin: 'time', tHoldMin: 'time', Vslop: 'vol', momMax: 'mom', Kmist: 'vel', step: 'len', Dmax: 'len' };
+  const PATM = 101325;
+  const DEF_SCHED: Record<string, Schedule> = { '18': '20', '14': '30' };
+
+  interface Sk { drum: Drum; LLL: number; NLL: number; HLL: number; n: number; r?: RateOut; Ut: number }
+  function sketch(s: Sk, W: number, pre: string): string {
+    const n2 = (x: number) => x.toFixed(1);
+    const { D, L } = s.drum, hd = head(s.drum.head, D), dep = hd.depth, prof = profile(hd);
+    const ML = 14, MR = 52, MT = 26, MB = 26;
+    const sc = Math.min((W - ML - MR) / (L + 2 * dep), (W < 500 ? 170 : 240) / D);
+    const xt1 = ML + dep * sc, xt2 = xt1 + L * sc, yT = MT, yB = MT + D * sc, yc = (yT + yB) / 2;
+    const Y = (h: number) => yB - h * sc;
+    const vbW = xt2 + dep * sc + MR, vbH = yB + MB;
+    const out = [`M${n2(xt1)},${n2(yT)} L${n2(xt2)},${n2(yT)}`,
+      ...prof.map(([z, r]) => `L${n2(xt2 + z * sc)},${n2(yc - r * sc)}`),
+      ...[...prof].reverse().map(([z, r]) => `L${n2(xt2 + z * sc)},${n2(yc + r * sc)}`),
+      `L${n2(xt1)},${n2(yB)}`,
+      ...prof.map(([z, r]) => `L${n2(xt1 - z * sc)},${n2(yc + r * sc)}`),
+      ...[...prof].reverse().map(([z, r]) => `L${n2(xt1 - z * sc)},${n2(yc - r * sc)}`), 'Z'].join(' ');
+    const p: string[] = [`<defs><clipPath id="${pre}c"><path d="${out}"/></clipPath><marker id="${pre}a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1.5 L10,5 L0,8.5 z" class="arrf"/></marker></defs>`];
+    p.push(`<rect x="0" y="${n2(Y(s.NLL))}" width="${n2(vbW)}" height="${n2(yB - Y(s.NLL) + 1)}" class="liq" clip-path="url(#${pre}c)"/>`);
+    p.push(`<path d="${out}" class="wall"/>`);
+    // levels
+    const labs: [string, number][] = [['HLL', s.HLL], ['NLL', s.NLL], ['LLL', s.LLL]];
+    labs.forEach(([t, h]) => { p.push(`<line x1="${n2(xt1)}" y1="${n2(Y(h))}" x2="${n2(xt2 + dep * sc + 6)}" y2="${n2(Y(h))}" class="lvl"/>`); });
+    const ty = labs.map(([, h]) => Y(h));
+    for (let i = 1; i < ty.length; i++) ty[i] = Math.max(ty[i], ty[i - 1] + 13);
+    labs.forEach(([t], i) => p.push(`<text x="${n2(xt2 + dep * sc + 9)}" y="${n2(ty[i] + 4)}" class="lab">${t}</text>`));
+    // inlet / outlets and the droplet path(s)
+    const nozzleAt = (x: number, inlet: boolean) => inlet
+      ? `<line x1="${n2(x)}" y1="${n2(yT - 20)}" x2="${n2(x)}" y2="${n2(yT + 2)}" class="flow" marker-end="url(#${pre}a)"/>`
+      : `<line x1="${n2(x)}" y1="${n2(yT + 2)}" x2="${n2(x)}" y2="${n2(yT - 20)}" class="flow" marker-end="url(#${pre}a)"/>`;
+    const span = L / s.n;   // inlet-to-outlet per pass (drawn between tangent lines)
+    const passes: [number, number][] = s.n === 1 ? [[xt1, xt2]] : [[xt1 + L / 2 * sc, xt1], [xt1 + L / 2 * sc, xt2]];
+    passes.forEach(([xi, xo], i) => { if (i === 0 || s.n === 1) p.push(nozzleAt(xi, true)); p.push(nozzleAt(xo, false)); });
+    if (s.r) {
+      const ok = s.r.util >= 1;
+      for (const [xi, xo] of passes) {
+        const dir = Math.sign(xo - xi), xd = Math.min(s.r.xDrop, span * 1.6) * sc;
+        p.push(`<line x1="${n2(xi)}" y1="${n2(yT + 3)}" x2="${n2(xi + dir * xd)}" y2="${n2(Y(s.HLL))}" class="${ok ? 'path' : 'pathbad'}"/>`);
+        p.push(`<circle cx="${n2(xi + dir * xd)}" cy="${n2(Y(s.HLL))}" r="3" class="${ok ? 'dot' : 'dotbad'}"/>`);
+      }
+    }
+    // dimensions
+    const yd = yB + 16;
+    p.push(`<line x1="${n2(xt1)}" y1="${n2(yd)}" x2="${n2(xt2)}" y2="${n2(yd)}" class="dim"/><text x="${n2((xt1 + xt2) / 2)}" y="${n2(yd - 3)}" class="dt" text-anchor="middle">L</text>`);
+    return `<svg viewBox="0 0 ${n2(vbW)} ${n2(vbH)}" width="${n2(vbW)}" xmlns="http://www.w3.org/2000/svg">${p.join('')}</svg>`;
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-kod]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const units: Record<KodCat, string> = { ...KOD_DEFAULT_UNITS };
+    const unit = (c: KodCat) => KOD_UNITS[c].find((u) => u.label === units[c])!;
+    const sel = (k: string) => $<HTMLSelectElement>(`select[data-s="${k}"]`);
+    const st = { n: 1, mist: 'none' };
+    let last: Sk | undefined, des: { D: number; L: number } | undefined;
+    const warns: Record<string, string[]> = {};
+    const read = (k: string, ok: (x: number) => boolean) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value);
+      const x = blank ? NaN : (CAT[k] ? toSI(unit(CAT[k]), raw) : raw);
+      const invalid = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', invalid);
+      return invalid ? NaN : x;
+    };
+    const show = (k: string, x: number | string | undefined, c?: KodCat) => {
+      const o = $<HTMLOutputElement>(`output[data-o="${k}"]`);
+      o.textContent = x === undefined ? '' : typeof x === 'string' ? x : !Number.isFinite(x) ? '' : fmt(c ? fromSI(unit(c), x) : x);
+    };
+    const vis = (key: string, on: boolean) => { for (const el of root.querySelectorAll<HTMLElement>(`[data-show="${key}"]`)) el.hidden = !on; };
+    const fillSched = (nk: string, sk: string) => {
+      const s = sel(sk), nps = sel(nk).value, cur = s.value;
+      const list = schedulesFor(nps);
+      s.innerHTML = list.map((x) => `<option>${x}</option>`).join('');
+      s.value = list.includes(cur as Schedule) ? cur : (DEF_SCHED[nps] && list.includes(DEF_SCHED[nps]) ? DEF_SCHED[nps] : list.includes('STD') ? 'STD' : list[0]);
+    };
+    const draw = () => {
+      const box = $<HTMLElement>('[data-sketch]');
+      box.innerHTML = last ? sketch(last, Math.max(300, Math.min(560, box.clientWidth || 560)), 'kd') : '';
+    };
+
+    const run = () => {
+      for (const k of Object.keys(warns)) delete warns[k];
+      const warn = (s: string, m: string) => (warns[s] ??= []).push(m);
+      vis('mist', st.mist === 'yes');
+      // 1
+      const p = read('p', (x) => x > 0), T = read('T', (x) => x > 0), M = read('M', (x) => x > 0), Z = read('Z', (x) => x > 0);
+      const mu = read('mu', (x) => x > 0), rhoL = read('rhoL', (x) => x > 0), Dp = read('Dp', (x) => x > 0);
+      const rhoG = [p, T, M, Z].every(Number.isFinite) ? gasDensity(p, T, M, Z) : NaN;
+      show('rhoG', rhoG, 'rho');
+      if (rhoL <= rhoG) warn('1', 'The liquid must be denser than the vapour.');
+      const s = [rhoG, rhoL, Dp, mu].every(Number.isFinite) && rhoL > rhoG ? settling(rhoG, rhoL, Dp, mu) : undefined;
+      show('X', s?.X); show('Re', s?.Re); show('C', s?.C); show('Ut', s?.Ut, 'vel'); show('K', s?.K, 'vel');
+      if (s?.outside) warn('1', 'Reynolds number above 10⁶: outside the standard drag curve.');
+      $('[data-renote]').textContent = s && s.Re > 100 ? `Re = ${fmt(s.Re)}: above about 100, drops deform and settle somewhat slower than rigid spheres (Perry); API's method treats them as spheres.` : '';
+      if (Dp > 0 && (Dp < 300e-6 || Dp > 600e-6)) warn('1', 'API RP 521 bases flare knock-out drums on droplets of 300–600 µm.');
+      // 2
+      const hid = sel('head').value as HeadId;
+      const D = read('D', (x) => x > 0), L = read('L', (x) => x > 0);
+      const LLL = read('LLL', (x) => x >= 0), NLL = read('NLL', (x) => x >= 0), HLL = read('HLL', (x) => x > 0);
+      const LsIn = read('Ls', (x) => x > 0), W = read('W', (x) => x > 0);
+      const fH1 = read('fH1', (x) => x >= 0 && x < 1), H1min = read('H1min', (x) => x >= 0);
+      const drum: Drum | undefined = D > 0 && L > 0 ? { head: hid, D, L } : undefined;
+      for (const [k, v] of [['LLL', LLL], ['NLL', NLL], ['HLL', HLL]] as const) if (D > 0 && v > D) { inp(k).setAttribute('aria-invalid', ''); warn('2', `${k} is above the top of the drum.`); }
+      if (LLL >= NLL || NLL >= HLL) warn('2', 'The levels should rise LLL < NLL < HLL.');
+      let r: RateOut | undefined;
+      const okR = drum && HLL < D && W > 0 && rhoG > 0 && s;
+      if (okR) r = rate({ drum: drum!, LLL, NLL, HLL, W, rhoG, Ut: s!.Ut, n: st.n, Ls: Number.isFinite(LsIn) ? LsIn : undefined });
+      show('H1', r?.H1, 'len'); show('Av', r?.Av, 'area'); show('Q', r?.Q, 'vflow'); show('Uh', r?.Uh, 'vel');
+      show('Th', r?.Th, 'ts'); show('Tt', r?.Tt, 'ts'); show('util', r ? r.util * 100 : undefined); show('Lmin', r?.Lmin, 'len');
+      if (r && r.util < 1) warn('2', `Utilization ${fmt(r.util * 100)} % below 100 %: the droplets do not reach HLL before the outlet. Longer or larger drum (API needs at least ${fmt(fromSI(unit('len'), r.Lmin))} ${shortUnit(units.len)}), lower HLL, or two passes.`);
+      if (r && D > 0 && r.H1 < Math.max((fH1 || 0) * D, H1min || 0) - 1e-12) warn('2', `Vapour space ${fmt(fromSI(unit('len'), r.H1))} ${shortUnit(units.len)} below your minimum (${fmt(fromSI(unit('len'), Math.max((fH1 || 0) * D, H1min || 0)))} ${shortUnit(units.len)}).`);
+      if (D > 0 && L > 0 && (L / D < 2.5 || L / D > 5)) warn('2', `L/D = ${fmt(L / D)}: horizontal separators normally have L/D of 2.5–5 (GPSA).`);
+      last = drum && HLL < D ? { drum, LLL, NLL, HLL, n: st.n, r, Ut: s?.Ut ?? NaN } : undefined;
+      draw();
+      // 3
+      const rhoD = read('rhoD', (x) => x > 0), Wdraw = read('Wdraw', (x) => x > 0), Wsurge = read('Wsurge', (x) => x > 0);
+      const tSurgeMin = read('tSurgeMin', (x) => x >= 0), tHoldMin = read('tHoldMin', (x) => x >= 0), Vslop = read('Vslop', (x) => x >= 0);
+      const V = (h: number) => (drum && h >= 0 && h <= D ? liquidVolume(drum, h) : NaN);
+      const Vhold = V(NLL) - V(LLL), Vsurge = V(HLL) - V(NLL);
+      const tHold = Vhold * rhoD / Wdraw, tSurge = Vsurge * rhoD / Wsurge;
+      show('Vhold', Vhold, 'vol'); show('tHold', tHold, 'time'); show('Vsurge', Vsurge, 'vol'); show('tSurge', tSurge, 'time'); show('VLLL', V(LLL), 'vol');
+      if (tSurge < tSurgeMin) warn('3', `Surge time ${fmt(fromSI(unit('time'), tSurge))} ${units.time} is shorter than the required holdup (${fmt(fromSI(unit('time'), tSurgeMin))} ${units.time}).`);
+      if (tHold < tHoldMin) warn('3', `Holding time ${fmt(fromSI(unit('time'), tHold))} ${units.time} is shorter than your limit.`);
+      if (Vslop > 0 && V(LLL) < Vslop) warn('3', 'The slop and drain volume does not fit below LLL.');
+      // 4
+      const kk = read('kk', (x) => x > 0.5 && x < 3), machMax = read('machMax', (x) => x > 0), momMax = read('momMax', (x) => x > 0);
+      const c = [kk, T, M, Z].every(Number.isFinite) ? sonic(kk, T, M, Z) : NaN;
+      show('c', c, 'vel');
+      for (const [nk, sk, o, q] of [['nIn', 'sIn', 'In', r?.Q], ['nOut', 'sOut', 'Out', r ? r.Q / st.n : undefined]] as const) {
+        const pp = pipe(sel(nk).value, sel(sk).value as Schedule);
+        const z = pp && q && c > 0 ? nozzle(q, pipeId(pp) * 0.0254, c, rhoG) : undefined;
+        const s4 = (k: string, x: number | undefined, c?: KodCat) => { $<HTMLOutputElement>(`output[data-o="${k}"]`).textContent = x === undefined || !Number.isFinite(x) ? '' : formatSig(c ? fromSI(unit(c), x) : x, 4, false); };
+        s4(`v${o}`, z?.v, 'vel'); s4(`m${o}`, z?.mach); s4(`r${o}`, z?.rv2, 'mom');
+        if (z && z.mach > machMax) warn('4', `${o === 'In' ? 'Inlet' : 'Outlet'} nozzle at Mach ${fmt(z.mach)}, above your limit.`);
+        if (z && o === 'In' && z.rv2 > momMax) warn('4', `Inlet momentum ${fmt(fromSI(unit('mom'), z.rv2))} ${units.mom} above your limit.`);
+      }
+      // 5
+      if (st.mist === 'yes') {
+        const K = read('Kmist', (x) => x > 0);
+        const f = p > 0 ? kDerate(p - PATM) : NaN;
+        const Vm = K > 0 && f > 0 && rhoL > rhoG ? f * mistVelocity(K, rhoL, rhoG) : NaN;
+        show('derate', f * 100); show('Vmist', Vm, 'vel'); show('Amist', r && Vm > 0 ? r.Q / Vm : undefined, 'area');
+      }
+      // 6
+      const ratio = read('ratio', (x) => x > 0), step = read('step', (x) => x > 0), Dmax = read('Dmax', (x) => x > 0);
+      des = undefined;
+      if (drum && s && W > 0 && rhoG > 0 && [ratio, step, Dmax].every(Number.isFinite) && HLL < D && Dmax / step <= 2000) {
+        const d = designSearch({ head: hid, ratio, fLLL: LLL / D, fNLL: NLL / D, fHLL: HLL / D, fH1: fH1 || 0, H1min: H1min || 0, W, rhoG, Ut: s.Ut, n: st.n,
+          surgeQ: Wsurge / rhoD, surgeMin: tSurgeMin, drawQ: Wdraw / rhoD, holdMin: tHoldMin, step, Dmax });
+        if (d.ok) des = { D: d.D, L: d.L }; else warn('6', 'No diameter up to the largest one tried meets every check.');
+      }
+      show('Ddes', des?.D, 'len'); show('Ldes', des?.L, 'len');
+      $<HTMLButtonElement>('[data-use]').disabled = !des;
+      // 7
+      show('Dtan', s && W > 0 ? tanDiameter(W, rhoL, rhoG, M, p, T) : undefined, 'len');
+      for (const el of root.querySelectorAll<HTMLElement>('[data-warn]')) el.innerHTML = (warns[el.dataset.warn!] ?? []).map((x) => `<li>${x}</li>`).join('');
+    };
+
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      const c = t.dataset.cat as KodCat | undefined;
+      if (c) {
+        const from = unit(c); units[c] = t.value; const to = unit(c);
+        for (const s of root.querySelectorAll<HTMLSelectElement>(`select[data-cat="${c}"]`)) s.value = t.value;
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-ut="${c}"]`)) s.textContent = shortUnit(t.value);
+        for (const [k, kc] of Object.entries(CAT)) {
+          if (kc !== c) continue;
+          const el = inp(k), x = parseNumber(el.value);
+          if (el.value.trim() !== '' && Number.isFinite(x)) el.value = fmtIn(fromSI(to, toSI(from, x)));
+        }
+        $('[data-status]').textContent = `Unit changed to ${shortUnit(t.value)}; values converted.`;
+      }
+      if (t.dataset.s === 'nIn') fillSched('nIn', 'sIn');
+      if (t.dataset.s === 'nOut') fillSched('nOut', 'sOut');
+      if (t.matches('select')) run();
+    });
+    root.addEventListener('input', (e) => { if ((e.target as HTMLElement).matches('input[type=text]')) run(); });
+    segInit(root, 'n', (x) => { st.n = +x; run(); });
+    segInit(root, 'mist', (x) => { st.mist = x; run(); });
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-kpick]')) b.addEventListener('click', () => {
+      inp('Kmist').value = fmtIn(fromSI(unit('vel'), K_TABLE[+b.dataset.kpick!].K[1])); run();
+    });
+    $('[data-use]').addEventListener('click', () => {
+      if (!des) return;
+      const D0 = toSI(unit('len'), parseNumber(inp('D').value)), f = des.D / D0;
+      for (const k of ['LLL', 'NLL', 'HLL']) { const x = parseNumber(inp(k).value); if (Number.isFinite(x)) inp(k).value = fmtIn(x * f); }
+      inp('D').value = fmtIn(fromSI(unit('len'), des.D)); inp('L').value = fmtIn(fromSI(unit('len'), des.L));
+      run(); $('[data-status]').textContent = 'Drum of step 6 copied to step 2, levels scaled.';
+    });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]')) el.value = '';
+      run(); inp('p').focus(); $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    const dlg = $<HTMLDialogElement>('dialog.zd');
+    $('[data-zoom]').addEventListener('click', () => { if (!last) return; $('[data-zd-img]').innerHTML = sketch(last, Math.min(1000, Math.max(320, window.innerWidth - 64)), 'kdz'); dlg.showModal(); });
+    $('[data-zd-close]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    let rt = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); }).observe($('[data-sketch]'));
+    fillSched('nIn', 'sIn'); fillSched('nOut', 'sOut');
+    run();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 46rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.5rem; font-size: 1.0625rem; font-weight: 650; }
+  .no { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; margin-right: 0.5rem; border: 1.5px solid var(--ink); border-radius: 50%; font-size: 0.8125rem; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  th, td, .calc :global(th), .calc :global(td) { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .calc :global(tbody th) { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 46rem; }
+  .io :global(.v) { width: 9.5rem; }
+  .io :global(.v.wide) { width: auto; }
+  .io :global(.v.wide select) { max-width: 18rem; }
+  .io :global(.u) { width: 6.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io :global(.u select) { max-width: 6.5rem; }
+  [hidden] { display: none !important; }
+  .calc :global(input), .calc :global(output), select { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 46rem; }
+  .nm { color: var(--muted); font-size: 0.8125rem; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 46rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .tbtn { margin-top: 0.5rem; height: 2rem; padding-inline: 0.75rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.8125rem/1 var(--font-ui); cursor: pointer; }
+  .tbtn:hover:not(:disabled) { background: var(--line); color: var(--paper); }
+  .tbtn:disabled { opacity: 0.45; cursor: default; }
+  .nz { max-width: 46rem; margin-top: 0.5rem; table-layout: fixed; }
+  .nz thead th { font-size: 0.8125rem; font-weight: 600; vertical-align: bottom; padding-right: 0.25rem; }
+  .nz td { padding-right: 0.25rem; }
+  .hu { display: block; color: var(--muted); font-weight: 400; }
+  .cols { display: grid; grid-template-columns: minmax(0, 46rem) minmax(0, 1fr); gap: 1rem 2rem; align-items: start; }
+  @media (max-width: 70rem) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .sk { display: block; width: 100%; max-width: 36rem; padding: 0; border: 0; background: none; text-align: left; cursor: zoom-in; }
+  .skimg { display: block; }
+  .skimg :global(svg), .zimg :global(svg) { display: block; max-width: 100%; height: auto; }
+  .zoom { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; color: var(--line); font-size: 0.75rem; font-weight: 600; }
+  .kod :global(.wall) { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+  .kod :global(.liq) { fill: color-mix(in srgb, var(--line) 24%, #fff); }
+  .kod :global(.lvl) { stroke: var(--line); stroke-width: 1; stroke-dasharray: 6 3; }
+  .kod :global(.lab) { font: 600 11px var(--font-ui); fill: var(--line); }
+  .kod :global(.flow) { stroke: var(--ink); stroke-width: 1.4; }
+  .kod :global(.arrf) { fill: var(--ink); }
+  .kod :global(.path) { stroke: var(--line); stroke-width: 1.6; stroke-dasharray: 3 3; }
+  .kod :global(.pathbad) { stroke: var(--markup); stroke-width: 1.6; stroke-dasharray: 3 3; }
+  .kod :global(.dot) { fill: var(--line); }
+  .kod :global(.dotbad) { fill: var(--markup); }
+  .kod :global(.dim) { stroke: var(--muted); stroke-width: 0.8; }
+  .kod :global(.dt) { font: italic 12px var(--font-ui); fill: var(--ink); }
+  .zd { width: min(64rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1.5px solid var(--ink); background: #fff; color: var(--ink); }
+  .zd::backdrop { background: rgb(27 36 51 / 0.55); }
+  .zhead { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.75rem 0.75rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .zhead h2 { margin: 0; font-size: 1.25rem; }
+  .zclose { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); background: none; color: var(--line); cursor: pointer; }
+  .zimg { padding: 1rem 1.25rem 1.5rem; display: grid; place-items: center; }
+  .t526 { max-width: 46rem; font-size: 0.875rem; }
+  .t526 th, .t526 td { padding: 0.1875rem 0.5rem 0.1875rem 0; border-top: 1px solid var(--rule); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .kpick { border: 0; background: none; color: var(--line); font: inherit; text-align: left; cursor: pointer; padding: 0; }
+  .kpick:hover { text-decoration: underline; }
+  .basis { margin-top: 0.5rem; max-width: 52rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; overflow-wrap: anywhere; }
+    .io :global(.v) { width: 7rem; }
+    .io :global(.u) { width: 5.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .nz { font-size: 0.75rem; }
+    .nz :global(output) { padding: 0 0.125rem; }
+  }
+</style>

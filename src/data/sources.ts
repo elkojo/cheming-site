@@ -146,7 +146,7 @@ export const sources: Source[] = [
     url: 'https://www.engineeringtoolbox.com/steel-pipes-dimensions-d_43.html',
     archive: 'https://web.archive.org/web/20261020002132/https://www.engineeringtoolbox.com/steel-pipes-dimensions-d_43.html',
     read: '2026-11-20',
-    use: { 'pipe-size': 'Outside diameters, Schedule STD and 10S walls, NPS 1/8–18.', 'pressure-loss-single-phase': 'Walls of all schedules, NPS 1/8–18: one of three agreeing sources for the pipe table (fixes PIP-1, PIP-2).' },
+    use: { 'pipe-size': 'Outside diameters, Schedule STD and 10S walls, NPS 1/8–18.', 'pressure-loss-single-phase': 'Walls of all schedules, NPS 1/8–18: one of three agreeing sources for the pipe table (fixes PIP-1, PIP-2).', kod: 'Nozzle inside diameters (pipe table shared with the pressure-loss tools).' },
   },
   {
     id: 'etb-ss-pipes', by: 'The Engineering ToolBox', title: 'Stainless Steel Pipes – Dimensions and Weights (ASME B36.19)',
@@ -167,7 +167,7 @@ export const sources: Source[] = [
     url: 'https://pypi.org/project/fluids/',
     archive: 'https://web.archive.org/web/20260414063257/https://pypi.org/project/fluids/',
     read: '2026-11-22',
-    use: { ro: 'Independent check of the ISO 5167 orifice equations (C_Reader_Harris_Gallagher, orifice_expansibility, dP_orifice, differential_pressure_meter_solver): agreement within 1e-6.', cv: 'Independent check of the IEC 60534-2-1 liquid and gas sizing (size_control_valve_l, size_control_valve_g): agreement within 0.3 % (rounded handbook constants).', 'pressure-loss-two-phase': 'Independent checks: Churchill friction factor (1e-12), Chisholm with all B branches and Friedel (within 1 %; fluids uses the Colebrook friction factor), Rouhani–Axelsson void fraction (1e-12); pipe table as for Single Phase.', 'pressure-loss-single-phase': 'Schedule tables (after ASME B36.10M/B36.19M, in mm): the main source of the pipe table, checked against the ToolBox and Wikipedia. Independent check of the Colebrook solution (agrees to 1e-10) and of the API RP 14E formula.' },
+    use: { ro: 'Independent check of the ISO 5167 orifice equations (C_Reader_Harris_Gallagher, orifice_expansibility, dP_orifice, differential_pressure_meter_solver): agreement within 1e-6.', cv: 'Independent check of the IEC 60534-2-1 liquid and gas sizing (size_control_valve_l, size_control_valve_g): agreement within 0.3 % (rounded handbook constants).', 'pressure-loss-two-phase': 'Independent checks: Churchill friction factor (1e-12), Chisholm with all B branches and Friedel (within 1 %; fluids uses the Colebrook friction factor), Rouhani–Axelsson void fraction (1e-12); pipe table as for Single Phase.', 'pressure-loss-single-phase': 'Schedule tables (after ASME B36.10M/B36.19M, in mm): the main source of the pipe table, checked against the ToolBox and Wikipedia. Independent check of the Colebrook solution (agrees to 1e-10) and of the API RP 14E formula.', kod: 'Independent check of the settling velocity: v_terminal with Clift, Grace & Weber\'s standard drag curve; pipe schedules for the nozzle inside diameters (as the pipe tools).' },
   },
   {
     id: 'colebrook-1939', by: 'C. F. Colebrook', title: 'Turbulent flow in pipes, with particular reference to the transition region between the smooth and rough pipe laws',
@@ -208,7 +208,7 @@ export const sources: Source[] = [
     id: 'perry-7-6', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 6 (Fluid and Particle Dynamics, J. N. Tilton)',
     where: 'McGraw-Hill, New York', year: 1997,
     read: '2026-11-22',
-    use: { 'pressure-loss-non-circular-piping': 'p. 6-12: the hydraulic diameter for turbulent flow; "the hydraulic diameter method does not work well for laminar flow" (shape-dependent; equivalent diameters), the basis of the shape constants used here.', 'pressure-loss-two-phase': 'p. 6-26/27: Baker chart (Fig. 6-25) with λ, ψ and their reference values (air 1.20 kg/m³, σ 0.073 N/m: fixes 2P-3); the sheet\'s six boundaries and its Lockhart–Martinelli curve fits were overlaid on Fig. 6-25 and Fig. 6-26 and coincide.' },
+    use: { 'pressure-loss-non-circular-piping': 'p. 6-12: the hydraulic diameter for turbulent flow; "the hydraulic diameter method does not work well for laminar flow" (shape-dependent; equivalent diameters), the basis of the shape constants used here.', 'pressure-loss-two-phase': 'p. 6-26/27: Baker chart (Fig. 6-25) with λ, ψ and their reference values (air 1.20 kg/m³, σ 0.073 N/m: fixes 2P-3); the sheet\'s six boundaries and its Lockhart–Martinelli curve fits were overlaid on Fig. 6-25 and Fig. 6-26 and coincide.', kod: 'Particle settling: terminal velocity and drag of rigid spheres (Eq. 6-230 to 6-235, Fig. 6-57); liquid drops in gases behave as rigid spheres up to Re ≈ 100.' },
   },
   {
     id: 'haraburda-chafin-2000', by: 'S. S. Haraburda, S. Chafin', title: 'Calculating Two-Phase Pressure Drop, and its Two Phase Flow Calculation Spreadsheet v1.04 (River City Engineering)',
@@ -534,7 +534,7 @@ export const sources: Source[] = [
     id: 'api-521-4', by: 'American Petroleum Institute', title: 'API Recommended Practice 521, Guide for Pressure-Relieving and Depressuring Systems',
     where: 'American Petroleum Institute, 4th ed., March 1997 (1999 print)', year: 1997,
     read: '2026-11-25',
-    use: { 'psv-liquid-filled-vessel': 'External fire (3.15): wetted surface up to 25 ft (7.6 m) above grade, Table 4 (portions of liquid inventory, spheres up to the maximum horizontal diameter or 25 ft, heads inside skirts not counted); heat absorption Q = 21 000·F·A^0.82 and 34 500·F·A^0.82 Btu/h (Eq. 3 and 4; SI 43 200 / 70 900 W); Table 5 environment factors; Eq. 9 environment factor from the insulation, F = k(1660 − Tf)/(21 000·t); 3.15.3.1 relief rate = heat input / latent heat; insulation conditions (3.15.5.2).', 'psv-gas-filled-vessel': 'Unwetted vessel (3.15.1.2, 3.15.2.1.2): required area A = F′·A′/√P1 (Eq. 5), F′ from the wall temperature (Eq. 6) with the recommended minimum 0.01 and 0.045 when unknown, C (Eq. 7a), T1 = (P1/Pn)·Tn (Eq. 7b), relief load W (Eq. 8), Tw = 1 100 °F for carbon steel; assumptions (3.15.2.2) and other protective measures (3.15.4).' },
+    use: { 'psv-liquid-filled-vessel': 'External fire (3.15): wetted surface up to 25 ft (7.6 m) above grade, Table 4 (portions of liquid inventory, spheres up to the maximum horizontal diameter or 25 ft, heads inside skirts not counted); heat absorption Q = 21 000·F·A^0.82 and 34 500·F·A^0.82 Btu/h (Eq. 3 and 4; SI 43 200 / 70 900 W); Table 5 environment factors; Eq. 9 environment factor from the insulation, F = k(1660 − Tf)/(21 000·t); 3.15.3.1 relief rate = heat input / latent heat; insulation conditions (3.15.5.2).', 'psv-gas-filled-vessel': 'Unwetted vessel (3.15.1.2, 3.15.2.1.2): required area A = F′·A′/√P1 (Eq. 5), F′ from the wall temperature (Eq. 6) with the recommended minimum 0.01 and 0.045 when unknown, C (Eq. 7a), T1 = (P1/Pn)·Tn (Eq. 7b), relief load W (Eq. 8), Tw = 1 100 °F for carbon steel; assumptions (3.15.2.2) and other protective measures (3.15.4).', kod: 'Knockout drum sizing (5.4.2.1): droplets of 300–600 µm, dropout velocity Eq. 30, drag coefficient from C(Re)² (Eq. 31/32, Fig. 20), liquid holdup of 20–30 min plus slop and drain volume, worked example (Eq. 33–45: vapour area, dropout time, vapour velocity per pass, required length); drum designs a–f (passes).' },
   },
   {
     id: 'api-520-1-7', by: 'American Petroleum Institute', title: 'API Recommended Practice 520, Sizing, Selection, and Installation of Pressure-Relieving Devices in Refineries, Part I — Sizing and Selection',
@@ -553,6 +553,24 @@ export const sources: Source[] = [
     where: 'GPSA, Tulsa OK', year: 2004,
     read: '2026-11-25',
     use: { 'psv-liquid-filled-vessel': 'Public SI statement of the method: Q = 43 200·F·Aw^0.82 W (Eq. 5-13) and the wetted-surface rule; Fig. 5-16 environmental factors and the conditions for insulation credit (≈ 66 250 W/m² basis); W = 3.6·Q/Hl (Eq. 5-14); minimum latent heat 110 kJ/kg near the critical point; Napier steam equation with Kn (Eq. 5-6, 5-7); rule of thumb: subcritical when the back pressure exceeds half the inlet pressure; Kb curves (Fig. 5-10, 5-11).', 'psv-gas-filled-vessel': 'Eq. 5-15, the vapour-only fire equation in SI: A = 183.3·F′·A3/√P1 (A cm², A3 m², P1 kPa); the exact conversion of API\'s US equation gives 182.35 (0.5 % lower); the tool uses API\'s equation.' },
+  },
+  {
+    id: 'clift-1978', by: 'R. Clift, J. R. Grace, M. E. Weber', title: 'Bubbles, Drops, and Particles, Table 5.2: standard drag curve for rigid spheres',
+    where: 'Academic Press, New York, 1978 (Dover reprint 2005)', year: 1978,
+    read: '2026-11-25',
+    use: { kod: 'Drag coefficient of the droplet over the whole range (nine correlations, Re ≤ 10⁶), as given in the book and in the fluids library (Clift), solved for the settling velocity.' },
+  },
+  {
+    id: 'gpsa-12-07', by: 'Gas Processors Suppliers Association', title: 'GPSA Engineering Data Book, 12th ed. (SI), Section 7: Separation Equipment',
+    where: 'GPSA, Tulsa OK', year: 2004,
+    read: '2026-11-25',
+    use: { kod: 'Settling (Eq. 7-1 to 7-3, Fig. 7-4, the chart the original sheet fitted); K factors of mesh pads and vane packs (Figs. 7-12, 7-15), vertical and horizontal separators (Figs. 7-18, 7-19, K = 0.15 m/s upper limit), Souders–Brown Eq. 7-8, pressure derating Fig. 7-13, liquid loading above 2.5 m³/h/m² high; L/D of horizontal separators 2.5–5.' },
+  },
+  {
+    id: 'perry-7-26', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 26 (Process Safety): sizing of knockout drums',
+    where: 'McGraw-Hill, New York, pp. 26-35, 26-36', year: 1997,
+    read: '2026-11-25',
+    use: { kod: 'Quick estimate of the drum diameter, Eq. 26-36 (Tan, Hydrocarbon Processing, Oct. 1967, p. 149): W = 360·D²·√((ρL − ρv)·M·P/T), US units, droplets of 400 µm and larger.' },
   },
   {
     id: 'perry-7-11', by: 'R. H. Perry, D. W. Green (eds.)', title: 'Perry\'s Chemical Engineers\' Handbook, 7th ed., Section 11 (Heat-Transfer Equipment)',
