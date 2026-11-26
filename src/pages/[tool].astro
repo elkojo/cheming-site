@@ -55,7 +55,7 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
       </div>
     </div>
     <div class="aside">
-      <Legend compact native={!!tool.native} />
+      <Legend compact native={!!tool.native} keeps={tool.native === 'psv'} />
       <a class="open" href={openUrl} target="_blank" rel="noopener">
         {tool.native ? 'Original Zoho sheet' : 'Open sheet full screen'}
         <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M4.5 2H10v5.5M10 2 2.5 9.5" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
@@ -127,7 +127,7 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
   .title p { margin: 0.25rem 0 0; max-width: 70ch; }
   .std { font: 400 0.9375rem/1.3 var(--font-drawing); letter-spacing: 0.02em; }
   .desc, .credit { color: var(--muted); font-size: 0.9375rem; }
-  .aside { display: grid; justify-items: end; gap: 0.625rem; max-width: 30rem; }
+  .aside { display: grid; justify-items: end; gap: 0.625rem; max-width: 32rem; }
   .aside :global(.legend) { justify-content: flex-end; }
   .open {
     display: inline-flex;

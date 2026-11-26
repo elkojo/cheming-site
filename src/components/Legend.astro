@@ -1,17 +1,16 @@
 ---
 // How the calculators work. Yellow and green match the cells inside the Zoho sheets;
 // native calculators (Phase 7) use the same colours.
-interface Props { compact?: boolean; native?: boolean }
-const { compact = false, native = false } = Astro.props;
+interface Props { compact?: boolean; native?: boolean; /** the tool keeps its inputs in the browser (PSV) */ keeps?: boolean }
+const { compact = false, native = false, keeps = false } = Astro.props;
 ---
-<dl class:list={['legend', { compact }]} aria-label="How to use the sheets">
-  <div><dt><span class="sw in" aria-hidden="true"></span>Yellow cells</dt><dd>input: type your values</dd></div>
-  <div><dt><span class="sw out" aria-hidden="true"></span>Green cells</dt><dd>calculated output</dd></div>
+<dl class:list={['legend', { compact }]} aria-label="How to use the calculator">
+  <div><dt><span class="sw in" aria-hidden="true"></span>Input</dt></div>
+  <div><dt><span class="sw out" aria-hidden="true"></span>Result</dt>{native && <dd>updates as you type</dd>}</div>
   {native ? (
-    <>
-      <div><dt>Results</dt><dd>update as you type</dd></div>
-      <div><dt>Clear</dt><dd>button above the fields; reload for the examples</dd></div>
-    </>
+    keeps
+      ? <div><dt>Cases kept</dt><dd>“Restore example” resets</dd></div>
+      : <div><dt>Reload</dt><dd>restores the example</dd></div>
   ) : (
     <>
       <div><dt>Units</dt><dd>double-click to change</dd></div>
