@@ -1,0 +1,536 @@
+---
+// Native Pressurizing & Depressurizing calculator (Phase 7). Owner's choices 2026-11-26: depressurize or pressurize a
+// gas volume through a control valve (IEC 60534, Fisher representative Cv/xT as in the CV tool, or typed) or a
+// restriction orifice (as the RO tool); isothermal or adiabatic gas, each explained; time for a device or the device for
+// a target time; live pressure/temperature chart, key results, a short table with CSV; API RP 521 depressuring check;
+// standard conditions switch (20 °C default). The sheet's company-specific Cv table and FL default are not used.
+import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
+import { STYLES } from '../lib/calc/cv';
+import { mathHtml } from '../lib/calc/types';
+import { PRS_UNITS, PRS_DEFAULT_UNITS, shortUnit, type PrsCat } from '../lib/calc/prs-units';
+
+const id = (k: string) => `prs-${k}`;
+const unitSel = (cat: PrsCat, label: string) =>
+  `<select data-cat="${cat}" aria-label="${label} unit">${PRS_UNITS[cat].map((u) => `<option value="${u.label}"${u.label === PRS_DEFAULT_UNITS[cat] ? ' selected' : ''}>${shortUnit(u.label)}</option>`).join('')}</select>`;
+const unitTxt = (cat: PrsCat) => `<span data-ut="${cat}">${shortUnit(PRS_DEFAULT_UNITS[cat])}</span>`;
+interface Row { k: string; name: string; sym: string; v?: string; out?: boolean; cat?: PrsCat; sel?: boolean; unit?: string; show?: string }
+const row = (r: Row) => {
+  const lab = `<span class="lb">${r.name}</span> <span class="eq">${mathHtml(r.sym)}</span>`;
+  const th = r.out ? `<th scope="row">${lab}</th>` : `<th scope="row"><label for="${id(r.k)}">${lab}</label></th>`;
+  const v = r.out ? `<td class="v"><output data-o="${r.k}"></output></td>` : `<td class="v"><input id="${id(r.k)}" data-k="${r.k}" value="${r.v ?? ''}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>`;
+  const u = r.cat ? (r.sel ? unitSel(r.cat, r.name) : unitTxt(r.cat)) : `<span>${r.unit ?? '–'}</span>`;
+  return `<tr data-row="${r.k}"${r.show ? ` data-show="${r.show}"` : ''}>${th}${v}<td class="u">${u}</td></tr>`;
+};
+const rows = (rs: Row[]) => rs.map(row).join('');
+
+const GAS: Row[] = [
+  { k: 'V', name: 'Volume of the system', sym: 'V', v: '1767', cat: 'vol', sel: true },
+  { k: 'M', name: 'Molar mass of the gas', sym: 'M', v: '16', unit: 'kg/kmol' },
+  { k: 'Z', name: 'Compressibility factor (constant)', sym: 'Z', v: '1' },
+  { k: 'k', name: 'Ratio of specific heats', sym: 'k = c_p/c_v', v: '1.31' },
+  { k: 'T0', name: 'Gas temperature in the vessel at the start', sym: 'T_0', v: '25', cat: 'temp', sel: true },
+  { k: 'Ts', name: 'Supply gas temperature', sym: 'T_s', v: '25', cat: 'temp', show: 'press' },
+];
+const PRESS: Row[] = [
+  { k: 'P0', name: 'Vessel pressure at the start', sym: 'P_0', v: '800', cat: 'p', sel: true },
+  { k: 'Pend', name: 'Vessel pressure at the end', sym: 'P_end', v: '15', cat: 'p' },
+];
+const API: Row[] = [
+  { k: 'Pdes', name: 'Design pressure of the vessel (optional)', sym: 'P_design', v: '', cat: 'p' },
+  { k: 'ttgt', name: 'Target time', sym: 't_target', v: '15', unit: 'min' },
+];
+const VALVE: Row[] = [
+  { k: 'cv', name: 'Valve flow coefficient (fully open)', sym: 'C_v', v: '59.7', show: 'valve' },
+  { k: 'xt', name: 'Pressure differential ratio factor', sym: 'x_T', v: '0.69', show: 'valve' },
+];
+const ORI: Row[] = [
+  { k: 'd', name: 'Orifice bore', sym: 'd', v: '25', cat: 'len', sel: true, show: 'orifice-rate' },
+  { k: 'D', name: 'Pipe inside diameter', sym: 'D', v: '100', cat: 'len', show: 'orifice' },
+  { k: 'mu', name: 'Gas viscosity', sym: 'μ', v: '0.011', cat: 'mu', sel: true, show: 'orifice' },
+];
+---
+<DrawingFrame>
+<div class="calc prs" data-prs>
+  <div class="bar">
+    <p>Time to depressurize or pressurize a gas volume through a control valve or a restriction orifice, or the valve or orifice needed for a target time; API RP 521 depressuring check. One unit per kind of quantity: pick it at the first field; typed values are converted.</p>
+    <button type="button" class="reset" data-reset>Clear all inputs</button>
+  </div>
+
+  <section class="grp" aria-labelledby={id('s1')}>
+    <h2 id={id('s1')}><span class="no">1</span> Process, gas and vessel</h2>
+    <div class="switches">
+      <SegToggle label="Process" name="mode" value="depress" options={[{ value: 'depress', label: 'Depressurize' }, { value: 'press', label: 'Pressurize' }]} />
+      <SegToggle label="Gas in the vessel" name="thermo" value="isothermal" options={[{ value: 'isothermal', label: 'Isothermal' }, { value: 'adiabatic', label: 'Adiabatic' }]} />
+    </div>
+    <p class="explain" data-thermo-note></p>
+    <table class="io"><tbody set:html={rows(GAS)} /></table>
+    <ul class="warn" data-warn="1" aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s2')}>
+    <h2 id={id('s2')}><span class="no">2</span> Pressures</h2>
+    <div class="switches">
+      <SegToggle label="Standard conditions" name="std" value="20C" options={[{ value: '0C', label: '0 °C' }, { value: '15C', label: '15 °C' }, { value: '20C', label: '20 °C' }, { value: '60F', label: '60 °F' }]} />
+    </div>
+    <table class="io">
+      <tbody>
+        <Fragment set:html={rows(PRESS)} />
+        <tr data-row="Pext">
+          <th scope="row"><label for={id('Pext')}><span class="lb" data-pext-name>Back pressure (outlet of the device)</span> <span class="eq" set:html={mathHtml('P_ext')} /></label></th>
+          <td class="v"><input id={id('Pext')} data-k="Pext" value="0" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></td>
+          <td class="u" set:html={unitTxt('p')} />
+        </tr>
+      </tbody>
+    </table>
+    <p class="note" data-p-note></p>
+    <div data-show="depress">
+      <h3>API RP 521 depressuring check</h3>
+      <table class="io">
+        <tbody>
+          <Fragment set:html={rows(API)} />
+          <Fragment set:html={rows([
+            { k: 'P50', name: '50 % of the design pressure', sym: 'P_50 = 0.5·P_design', out: true, cat: 'p' },
+            { k: 'Pfire', name: 'Fire, light hydrocarbons: lower of 6.9 bar g and P₅₀', sym: 'min(690 kPa g, P_50)', out: true, cat: 'p' },
+          ])} />
+        </tbody>
+      </table>
+      <div class="btns"><button type="button" class="tbtn" data-use="P50">End pressure = 50 % of design</button> <button type="button" class="tbtn" data-use="Pfire">End pressure = fire target</button></div>
+      <p class="note">API RP 521 (1997) 3.19.1: depressuring should bring the pressure to 50 % of the vessel design pressure within about 15 minutes; this applies to walls of about 25 mm (1 in) or more, thinner walls need faster depressuring. Where fire governs, equipment handling light hydrocarbons may be depressured to 690 kPa g (100 psig) or 50 % of design, whichever is lower, in 15 minutes, possibly limited to facilities at 1 724 kPa g (250 psig) and above. Vapour generated by the fire during depressuring is not included here.</p>
+    </div>
+    <ul class="warn" data-warn="2" aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s3')}>
+    <h2 id={id('s3')}><span class="no">3</span> Valve or orifice</h2>
+    <div class="switches">
+      <SegToggle label="Device" name="dev" value="valve" options={[{ value: 'valve', label: 'Control valve' }, { value: 'orifice', label: 'Restriction orifice', short: 'Orifice' }]} />
+      <SegToggle label="Calculate" name="calc" value="time" options={[{ value: 'time', label: 'Time for this device', short: 'Time' }, { value: 'size', label: 'Device for a target time', short: 'Device' }]} />
+    </div>
+    <table class="io">
+      <tbody>
+        <tr data-show="valve">
+          <th scope="row"><label for={id('style')}><span class="lb">Valve style</span> <span class="eq">Fisher representative values, or typed</span></label></th>
+          <td class="v wide" colspan="2"><select id={id('style')} data-s="style"><option value="typed">Typed Cv and xT</option>{STYLES.map((s) => <option value={s.id} selected={s.id === 'globe-eq'}>{s.name}</option>)}</select></td>
+        </tr>
+        <tr data-show="valve-style">
+          <th scope="row"><label for={id('size')}><span class="lb">Valve size</span> <span class="eq">nominal, in</span></label></th>
+          <td class="v wide" colspan="2"><select id={id('size')} data-s="size"></select></td>
+        </tr>
+        <Fragment set:html={rows(VALVE)} />
+        <Fragment set:html={rows(ORI)} />
+        <Fragment set:html={rows([{ k: 'tsz', name: 'Time to reach the end pressure', sym: 't_target', v: '15', unit: 'min', show: 'size' }])} />
+      </tbody>
+    </table>
+    <table class="io res" data-show="size">
+      <tbody>
+        <Fragment set:html={rows([
+          { k: 'cvReq', name: 'Required valve coefficient (with the xT above)', sym: 'C_v,req', out: true, show: 'valve' },
+          { k: 'dReq', name: 'Required orifice bore', sym: 'd_req', out: true, cat: 'len', show: 'orifice' },
+          { k: 'betaReq', name: 'Diameter ratio', sym: 'β = d/D', out: true, show: 'orifice' },
+        ])} />
+        <tr class="pick" data-show="valve-style"><th scope="row"><span class="lb">Smallest valve of this style for the target</span> <span class="eq">its own <i>C</i><sub>v</sub>, <i>x</i><sub>T</sub></span></th><td class="v wide" colspan="2"><output data-o="pickSize" /></td></tr>
+      </tbody>
+    </table>
+    <p class="note" data-dev-note></p>
+    <ul class="warn" data-warn="3" aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s4')}>
+    <h2 id={id('s4')}><span class="no">4</span> Results</h2>
+    <p class="note" data-res-cap></p>
+    <div class="cols">
+      <div class="colL">
+        <table class="io">
+          <tbody set:html={rows([
+            { k: 't', name: 'Time to reach the end pressure', sym: 't', out: true, cat: 'time', sel: true },
+            { k: 'dm', name: 'Mass vented', sym: 'Δm = |m_end − m_0|', out: true, cat: 'mass', sel: true },
+            { k: 'W0', name: 'Flow at the start', sym: 'W_0', out: true, cat: 'mflow', sel: true },
+            { k: 'Q0', name: 'Standard volume flow at the start', sym: 'Q_std,0', out: true, cat: 'qstd', sel: true },
+            { k: 'Wend', name: 'Flow at the end', sym: 'W_end', out: true, cat: 'mflow' },
+            { k: 'Qend', name: 'Standard volume flow at the end', sym: 'Q_std,end', out: true, cat: 'qstd' },
+            { k: 'Tend', name: 'Gas temperature at the end', sym: 'T_end', out: true, cat: 'temp', show: 'adiabatic' },
+            { k: 't50', name: 'Time to 50 % of the design pressure', sym: 't(P_50)', out: true, cat: 'time', show: 'api' },
+            { k: 'tfire', name: 'Time to the fire target', sym: 't(min(690 kPa g, P_50))', out: true, cat: 'time', show: 'api' },
+          ])} />
+        </table>
+        <p class="case" data-api-verdict></p>
+      </div>
+      <div class="colR">
+        <span class="skimg" data-chart role="img" aria-label="Vessel pressure (and temperature) against time"></span>
+        <p class="note key"><b><span class="kp"></span> vessel pressure</b> <b data-show="adiabatic"><span class="kt"></span> gas temperature</b> <b data-show="api"><span class="ka"></span> API RP 521 targets</b></p>
+      </div>
+    </div>
+    <ul class="warn" data-warn="4" aria-live="polite"></ul>
+    <details class="basis tbl">
+      <summary>Course of the transient (21 points) <button type="button" class="tbtn small" data-csv>CSV</button></summary>
+      <table class="t20"><thead data-thead></thead><tbody data-tbody></tbody></table>
+    </details>
+  </section>
+
+  <section class="grp" aria-labelledby={id('basis-h')}>
+    <h2 id={id('basis-h')}>Calculation basis</h2>
+    <details class="basis" open>
+      <summary>Equations</summary>
+      <ol class="eqs">
+        <li><b>Gas in the vessel</b> (ideal gas, constant <i>Z</i>): <i>m</i> = <i>P</i>·<i>V</i>·<i>M</i>/(<i>Z</i>·<i>R</i>·<i>T</i>), <i>R</i> = 8.314 46 kJ/(kmol·K).</li>
+        <li><b>Isothermal</b>: <i>T</i> = <i>T</i><sub>0</sub> throughout, so <i>m</i> ∝ <i>P</i>.</li>
+        <li><b>Adiabatic, depressurizing</b>: the gas left in the vessel expands isentropically, <i>m</i>·d<i>T</i> = (<i>k</i> − 1)·<i>T</i>·d<i>m</i>, hence <i>T</i> = <i>T</i><sub>0</sub>·(<i>m</i>/<i>m</i><sub>0</sub>)<sup><i>k</i>−1</sup> = <i>T</i><sub>0</sub>·(<i>P</i>/<i>P</i><sub>0</sub>)<sup>(<i>k</i>−1)/<i>k</i></sup>. <b>Adiabatic, pressurizing</b>: the incoming gas brings its enthalpy, <i>m</i>·d<i>T</i> = (<i>k</i>·<i>T</i><sub>s</sub> − <i>T</i>)·d<i>m</i>, hence <i>m</i>·<i>T</i> = <i>m</i><sub>0</sub>·<i>T</i><sub>0</sub> + <i>k</i>·<i>T</i><sub>s</sub>·(<i>m</i> − <i>m</i><sub>0</sub>) (energy balance of an open vessel, ideal gas, constant <i>c</i><sub>p</sub>, <i>c</i><sub>v</sub>).</li>
+        <li><b>Time</b>: d<i>t</i> = |d<i>m</i>|/<i>W</i>(<i>P</i>, <i>T</i>), integrated over the mass from start to end (Simpson's rule, 2 000 steps); the flow is evaluated at the vessel state at each step.</li>
+        <li><b>Control valve</b> (IEC 60534-2-1, as the CV tool; <i>W</i> kg/h, <i>P</i> bar a, <i>T</i> K): <i>W</i> = 94.8·<i>C</i><sub>v</sub>·<i>P</i><sub>1</sub>·<i>Y</i>·√(<i>x</i>·<i>M</i>/(<i>T</i><sub>1</sub>·<i>Z</i>)), <i>x</i> = (<i>P</i><sub>1</sub> − <i>P</i><sub>2</sub>)/<i>P</i><sub>1</sub> limited to <i>F</i><sub>k</sub>·<i>x</i><sub>T</sub> (choked), <i>Y</i> = 1 − <i>x</i>/(3·<i>F</i><sub>k</sub>·<i>x</i><sub>T</sub>), <i>F</i><sub>k</sub> = <i>k</i>/1.40. Representative <i>C</i><sub>v</sub> and <i>x</i><sub>T</sub> at rated travel from the Fisher Control Valve Handbook, 3rd ed.</li>
+        <li><b>Restriction orifice</b> (as the RO tool): ISO 5167-2 orifice with flange taps below the critical pressure ratio, critical flow <i>W</i> = <i>C</i><sub>d</sub>·<i>A</i>·√(<i>k</i>·<i>ρ</i><sub>1</sub>·<i>P</i><sub>1</sub>·(2/(<i>k</i> + 1))<sup>(<i>k</i>+1)/(<i>k</i>−1)</sup>) above it.</li>
+        <li><b>Upstream and downstream</b>: depressurizing, the vessel is upstream and the back pressure downstream; pressurizing, the supply (pressure and temperature constant) is upstream and the vessel downstream.</li>
+        <li><b>Sizing</b>: the valve flow is proportional to <i>C</i><sub>v</sub>, so <i>C</i><sub>v,req</sub> = <i>C</i><sub>v</sub>·<i>t</i>/<i>t</i><sub>target</sub> at the same <i>x</i><sub>T</sub>; each Fisher size of the style is checked with its own <i>C</i><sub>v</sub> and <i>x</i><sub>T</sub>. Orifice bore by bisection (the time falls as the bore grows).</li>
+        <li><b>Standard volume flow</b>: <i>Q</i><sub>std</sub> = (<i>W</i>/<i>M</i>)·<i>R</i>·<i>T</i><sub>std</sub>/101.325 kPa.</li>
+      </ol>
+    </details>
+    <details class="basis">
+      <summary>Notes</summary>
+      <ol>
+        <li>Isothermal or adiabatic: real vessels lie between the two. Slow venting or filling (hours) with heat exchanged through the walls is close to isothermal; a fast blowdown or filling (minutes) is close to adiabatic. The adiabatic case gives the lowest gas temperature in a blowdown (low-temperature embrittlement, minimum design metal temperature) and the highest when filling; the metal stays warmer than the gas.</li>
+        <li>The valve is fully open the whole time (a blowdown valve or a control valve that fails open). Inlet and outlet piping losses are not included; the back pressure is the pressure after the device and is held constant.</li>
+        <li>Liquids, condensation and vapour generated by heat input (fire) are not included; for fire, add the vapour load to the depressuring flow (API RP 521 3.19.2).</li>
+        <li>The original sheet used the Masoneilan gas equation with a valve table and an FL default from company-specific material; they are replaced by the public IEC 60534 method and Fisher values (as the CV tool). Its 99 pressure steps overstated the time by about 4 %; the transient is integrated accurately here.</li>
+      </ol>
+    </details>
+  </section>
+  <p class="sr" aria-live="polite" data-status></p>
+</div>
+</DrawingFrame>
+
+<script>
+  import { run, timeAt, sample, cvForTime, boreForTime, stdFlow, api521Target, STD_T, PATM, type Case, type Device, type Result } from '../lib/calc/prs';
+  import { STYLES } from '../lib/calc/cv';
+  import { PRS_UNITS, PRS_DEFAULT_UNITS, shortUnit, type PrsCat } from '../lib/calc/prs-units';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber } from '../lib/calc/types';
+  import { segInit } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('−', '-');
+  const CAT: Record<string, PrsCat> = { V: 'vol', T0: 'temp', Ts: 'temp', P0: 'p', Pend: 'p', Pext: 'p', Pdes: 'p', d: 'len', D: 'len', mu: 'mu' };
+  const NOTES = {
+    isothermal: '<b>Isothermal:</b> the gas keeps its starting temperature, as if heat from the vessel walls and the surroundings replaced what expansion (or compression) changes. Suits slow venting or filling, over hours. This is the original sheet\'s assumption.',
+    adiabatic: '<b>Adiabatic:</b> no heat exchanged with the walls. Venting, the gas left in the vessel cools as it expands (isentropically); filling, the gas heats up as it is compressed by the inflow. Suits fast blowdown or filling, over minutes, and gives the extreme gas temperature for the material check (embrittlement, minimum design metal temperature).',
+  };
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-prs]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const inp = (k: string) => $<HTMLInputElement>(`input[data-k="${k}"]`);
+    const units: Record<PrsCat, string> = { ...PRS_DEFAULT_UNITS };
+    const unit = (c: PrsCat) => PRS_UNITS[c].find((u) => u.label === units[c])!;
+    const st = { mode: 'depress' as Case['mode'], thermo: 'isothermal' as Case['thermo'], std: '20C', dev: 'valve', calc: 'time' };
+    const styleSel = $<HTMLSelectElement>('select[data-s="style"]'), sizeSel = $<HTMLSelectElement>('select[data-s="size"]');
+    let last: { r: Result; c: Case; P50?: number; Pfire?: number } | undefined;
+
+    const vis = (key: string, on: boolean) => { for (const el of root.querySelectorAll<HTMLElement>(`[data-show="${key}"]`)) el.hidden = !on; };
+    const read = (k: string, ok: (x: number) => boolean) => {
+      const el = inp(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value), x = blank ? NaN : CAT[k] ? toSI(unit(CAT[k]), raw) : raw;
+      const bad = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', bad);
+      return bad ? NaN : x;
+    };
+    const show = (k: string, x: number | string | undefined, c?: PrsCat) => {
+      const o = root.querySelector<HTMLOutputElement>(`output[data-o="${k}"]`);
+      if (o) o.textContent = x === undefined ? '' : typeof x === 'string' ? x : !Number.isFinite(x) ? '' : fmt(c ? fromSI(unit(c), x) : x);
+    };
+    const style = () => STYLES.find((s) => s.id === styleSel.value);
+    const fillSizes = (keep = true) => {
+      const s = style(), prev = sizeSel.value;
+      sizeSel.innerHTML = s ? s.sizes.map((z) => `<option value="${z.size}">${z.size}″ (Cv ${z.cv}, xT ${z.xt})</option>`).join('') : '';
+      if (s) sizeSel.value = keep && s.sizes.some((z) => z.size === prev) ? prev : (s.sizes.find((z) => z.size === '2') ?? s.sizes[0]).size;
+    };
+    const applySize = () => { const z = style()?.sizes.find((x) => x.size === sizeSel.value); if (z) { inp('cv').value = String(z.cv); inp('xt').value = String(z.xt); } };
+
+    // ── chart: P(t) and, adiabatic, T(t) on a second axis ──
+    const nice = (lo: number, hi: number, n = 5) => {
+      const span = hi - lo || Math.abs(hi) || 1, raw = span / n, mag = 10 ** Math.floor(Math.log10(raw));
+      const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n) ?? 10 * mag;
+      const a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step, t: number[] = [];
+      for (let x = a; x <= b + step * 1e-9; x += step) t.push(+x.toPrecision(12));
+      return t;
+    };
+    const chart = (W: number) => {
+      const box = $<HTMLElement>('[data-chart]');
+      if (!last) { box.innerHTML = ''; return; }
+      const { r } = last, pu = unit('p'), tu = unit('time'), Tu = unit('temp');
+      const pts = sample(r, 120);
+      const xs = pts.map((p) => fromSI(tu, p.t)), ps = pts.map((p) => fromSI(pu, p.P)), Ts = pts.map((p) => fromSI(Tu, p.T));
+      const adi = st.thermo === 'adiabatic';
+      const H = 300, ML = 56, MR = adi ? 56 : 18, MT = 14, MB = 40;
+      const tx = nice(0, Math.max(...xs)), ty = nice(Math.min(...ps, 0), Math.max(...ps));
+      const tt = adi ? nice(Math.min(...Ts), Math.max(...Ts)) : [];
+      const X = (x: number) => ML + (x - tx[0]) / (tx[tx.length - 1] - tx[0]) * (W - ML - MR);
+      const Y = (y: number) => MT + (ty[ty.length - 1] - y) / (ty[ty.length - 1] - ty[0]) * (H - MT - MB);
+      const YT = (y: number) => MT + (tt[tt.length - 1] - y) / (tt[tt.length - 1] - tt[0] || 1) * (H - MT - MB);
+      const n = (v: number) => v.toFixed(1);
+      const g: string[] = [];
+      for (const v of ty) g.push(`<line class="grid" x1="${ML}" x2="${W - MR}" y1="${n(Y(v))}" y2="${n(Y(v))}"/><text class="tick" x="${ML - 6}" y="${n(Y(v) + 4)}" text-anchor="end">${fmt(v)}</text>`);
+      for (const v of tx) g.push(`<line class="grid" y1="${MT}" y2="${H - MB}" x1="${n(X(v))}" x2="${n(X(v))}"/><text class="tick" x="${n(X(v))}" y="${H - MB + 15}" text-anchor="middle">${fmt(v)}</text>`);
+      if (adi) for (const v of tt) g.push(`<text class="tick tt" x="${W - MR + 6}" y="${n(YT(v) + 4)}">${fmt(v)}</text>`);
+      g.push(`<text class="ax" x="${(ML + W - MR) / 2}" y="${H - 6}" text-anchor="middle">t, ${shortUnit(units.time)}</text>`);
+      g.push(`<text class="ax" x="12" y="${(MT + H - MB) / 2}" text-anchor="middle" transform="rotate(-90 12 ${(MT + H - MB) / 2})">P, ${shortUnit(units.p)}</text>`);
+      if (adi) g.push(`<text class="ax tt" x="${W - 10}" y="${(MT + H - MB) / 2}" text-anchor="middle" transform="rotate(90 ${W - 10} ${(MT + H - MB) / 2})">T, ${shortUnit(units.temp)}</text>`);
+      if (last.P50 !== undefined && st.mode === 'depress') for (const [P, lab] of [[last.P50, '50 %'], [last.Pfire!, 'fire']] as [number, string][]) {
+        const yv = fromSI(pu, P); if (yv < ty[0] || yv > ty[ty.length - 1]) continue;
+        g.push(`<line class="api" x1="${ML}" x2="${W - MR}" y1="${n(Y(yv))}" y2="${n(Y(yv))}"/><text class="apil" x="${W - MR - 4}" y="${n(Y(yv) - 4)}" text-anchor="end">${lab}</text>`);
+      }
+      const tgt = last.P50 !== undefined && st.mode === 'depress' ? read('ttgt', (x) => x > 0) * 60 : NaN;
+      if (tgt > 0 && fromSI(tu, tgt) <= tx[tx.length - 1]) g.push(`<line class="api" y1="${MT}" y2="${H - MB}" x1="${n(X(fromSI(tu, tgt)))}" x2="${n(X(fromSI(tu, tgt)))}"/>`);
+      g.push(`<polyline class="pl" points="${xs.map((x, i) => `${n(X(x))},${n(Y(ps[i]))}`).join(' ')}"/>`);
+      if (adi) g.push(`<polyline class="tl" points="${xs.map((x, i) => `${n(X(x))},${n(YT(Ts[i]))}`).join(' ')}"/>`);
+      box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" xmlns="http://www.w3.org/2000/svg">${g.join('')}</svg>`;
+    };
+    const draw = () => chart(Math.max(300, Math.min(560, $<HTMLElement>('[data-chart]').clientWidth || 520)));
+
+    const run1 = () => {
+      const warns: Record<string, string[]> = {};
+      const warn = (s: string, m: string) => (warns[s] ??= []).push(m);
+      const dep = st.mode === 'depress';
+      vis('press', !dep); vis('depress', dep); vis('adiabatic', st.thermo === 'adiabatic');
+      vis('valve', st.dev === 'valve'); vis('orifice', st.dev === 'orifice');
+      vis('valve-style', st.dev === 'valve' && styleSel.value !== 'typed');
+      vis('size', st.calc === 'size'); vis('orifice-rate', st.dev === 'orifice' && st.calc === 'time');
+      $('[data-thermo-note]').innerHTML = NOTES[st.thermo];
+      $('[data-pext-name]').textContent = dep ? 'Back pressure (outlet of the device)' : 'Supply pressure (inlet of the device)';
+      $('[data-p-note]').textContent = dep ? 'The vessel vents through the device to the constant back pressure (flare header, atmosphere).' : 'The vessel fills through the device from a supply at constant pressure and temperature.';
+      $('tr[data-row="dm"] th .lb').textContent = dep ? 'Mass vented' : 'Mass added';
+
+      const V = read('V', (x) => x > 0), M = read('M', (x) => x > 0), Z = read('Z', (x) => x > 0), k = read('k', (x) => x > 1 && x < 2);
+      const T0 = read('T0', (x) => x > 0), Ts = dep ? T0 : read('Ts', (x) => x > 0);
+      const P0 = read('P0', (x) => x > 0), Pend = read('Pend', (x) => x > 0), Pext = read('Pext', (x) => x > 0);
+      const c: Case = { mode: st.mode, thermo: st.thermo, gas: { M, Z, k }, V, P0, Pend, T0, Pext, Ts };
+      if ([P0, Pend, Pext].every(Number.isFinite)) {
+        if (dep && !(P0 > Pend)) warn('2', 'Depressurizing: the end pressure must be below the start pressure.');
+        if (dep && !(Pend > Pext)) warn('2', 'The end pressure must be above the back pressure (the flow stops at the back pressure; the time would be infinite).');
+        if (!dep && !(P0 < Pend)) warn('2', 'Pressurizing: the end pressure must be above the start pressure.');
+        if (!dep && !(Pend < Pext)) warn('2', 'The end pressure must be below the supply pressure.');
+      }
+      // API 521 targets
+      let P50: number | undefined, Pfire: number | undefined;
+      const Pdes = dep ? read('Pdes', (x) => x > PATM) : NaN;
+      if (dep && Number.isFinite(Pdes)) { const a = api521Target(Pdes); P50 = a.half; Pfire = a.fire; }
+      show('P50', P50, 'p'); show('Pfire', Pfire, 'p');
+      vis('api', dep && P50 !== undefined);
+
+      // device
+      let dev: Device | undefined;
+      const sizing = st.calc === 'size';
+      const tsz = sizing ? read('tsz', (x) => x > 0) * 60 : NaN;
+      show('cvReq', undefined); show('dReq', undefined); show('betaReq', undefined); show('pickSize', undefined);
+      const caseOk = [V, M, Z, k, T0, Ts, P0, Pend, Pext].every(Number.isFinite);
+      if (st.dev === 'valve') {
+        const cv = read('cv', (x) => x > 0), xt = read('xt', (x) => x > 0 && x < 1.2);
+        if (sizing) {
+          if (caseOk && Number.isFinite(xt) && tsz > 0) {
+            const req = cvForTime(c, xt, tsz);
+            show('cvReq', req);
+            if (Number.isFinite(req)) dev = { kind: 'valve', cv: req, xt };
+            const s = style();
+            if (s) {
+              const fit = s.sizes.find((z) => { const r = run(c, { kind: 'valve', cv: z.cv, xt: z.xt }, 400); return r.ok && r.t <= tsz * (1 + 1e-9); });
+              show('pickSize', fit ? `${fit.size}″ (Cv ${fit.cv}, xT ${fit.xt}): ${fmt(fromSI(unit('time'), run(c, { kind: 'valve', cv: fit.cv, xt: fit.xt }).t))} ${shortUnit(units.time)}` : 'none of the listed sizes is large enough: several valves in parallel');
+            }
+          }
+        } else if (Number.isFinite(cv) && Number.isFinite(xt)) dev = { kind: 'valve', cv, xt };
+        $('[data-dev-note]').innerHTML = 'Fully open valve, IEC 60534 gas equation; Fisher representative <i>C</i><sub>v</sub> and <i>x</i><sub>T</sub> at rated travel (choose a size or type the vendor\'s values).';
+      } else {
+        const D = read('D', (x) => x > 0), mu = read('mu', (x) => x > 0);
+        c.gas.mu = mu;
+        if (sizing) {
+          if (caseOk && D > 0 && mu > 0 && tsz > 0) {
+            const b = boreForTime(c, D, tsz);
+            show('dReq', b.d, 'len'); show('betaReq', b.d / D);
+            if (!b.reachable) warn('3', 'Even the largest useful bore (β near its maximum) does not reach the target time: use several orifices, a larger pipe or a valve.');
+            dev = { kind: 'orifice', d: b.d, D };
+          }
+        } else {
+          const d = read('d', (x) => x > 0);
+          if (d > 0 && D > 0 && mu > 0) { dev = { kind: 'orifice', d, D }; if (d / D > 0.75 || d / D < 0.1) warn('3', `β = ${fmt(d / D)}: outside ISO 5167-2 limits (0.10–0.75); the result is an estimate.`); }
+        }
+        $('[data-dev-note]').innerHTML = 'Square-edged orifice with flange taps, as the RO tool: ISO 5167-2 below the critical pressure ratio, critical flow with <i>C</i><sub>d</sub> 0.75–0.84 above it.';
+      }
+
+      // transient
+      const r = caseOk && dev ? run(c, dev) : undefined;
+      if (r && !r.ok && r.why && !warns['2']) warn('4', r.why);
+      last = r?.ok ? { r, c, P50, Pfire } : undefined;
+      const std = STD_T[st.std];
+      const stdLab = { '0C': '0 °C', '15C': '15 °C', '20C': '20 °C', '60F': '60 °F' }[st.std];
+      $('[data-res-cap]').innerHTML = !last ? '' : `${sizing ? (st.dev === 'valve' ? 'For the required valve coefficient.' : 'For the required orifice bore.') : 'For the device in step 3.'} Standard volume flows at ${stdLab} and 1.01325 bar.`;
+      show('t', last?.r.t, 'time'); show('dm', last?.r.dm, 'mass');
+      show('W0', last?.r.W0, 'mflow'); show('Wend', last?.r.Wend, 'mflow');
+      show('Q0', last ? stdFlow(last.r.W0, M, std) : undefined, 'qstd'); show('Qend', last ? stdFlow(last.r.Wend, M, std) : undefined, 'qstd');
+      show('Tend', last ? last.r.Tend : undefined, 'temp');
+      const t50 = last && P50 !== undefined ? timeAt(last.r, P50) : NaN, tf = last && Pfire !== undefined ? timeAt(last.r, Pfire) : NaN;
+      show('t50', last && P50 !== undefined ? (Number.isFinite(t50) ? t50 : 'not reached (end pressure higher)') : undefined, Number.isFinite(t50) ? 'time' : undefined);
+      show('tfire', last && Pfire !== undefined ? (Number.isFinite(tf) ? tf : 'not reached (end pressure higher)') : undefined, Number.isFinite(tf) ? 'time' : undefined);
+      const tgt = read('ttgt', (x) => x > 0) * 60;
+      const verdict = $('[data-api-verdict]');
+      if (last && P50 !== undefined && tgt > 0) {
+        const ok = (t: number) => (Number.isFinite(t) ? (t <= tgt ? '✓ within' : '✗ beyond') : '–');
+        verdict.innerHTML = `Target ${fmt(tgt / 60)} min: 50 % of design ${ok(t50)}, fire target ${ok(tf)}.`;
+        if (P0 <= P50) warn('2', 'The start pressure is already at or below 50 % of the design pressure.');
+      } else verdict.textContent = '';
+      if (last && st.thermo === 'adiabatic' && dep) warn('4', `Adiabatic blowdown: the gas cools to ${fmt(fromSI(unit('temp'), last.r.Tmin))} ${shortUnit(units.temp)}. Check the minimum design metal temperature and hydrate or liquid formation; the real gas (and the metal) stays warmer because of heat from the walls.`);
+      if (last && st.thermo === 'adiabatic' && !dep) warn('4', `Adiabatic filling: the gas heats up to ${fmt(fromSI(unit('temp'), last.r.Tmax))} ${shortUnit(units.temp)} (at most k·T<sub>s</sub>).`);
+      // table
+      const tb = $('[data-tbody]'), th = $('[data-thead]');
+      th.innerHTML = `<tr><th scope="col">t <span class="hu">${shortUnit(units.time)}</span></th><th scope="col">P <span class="hu">${shortUnit(units.p)}</span></th><th scope="col">T <span class="hu">${shortUnit(units.temp)}</span></th><th scope="col">W <span class="hu">${shortUnit(units.mflow)}</span></th><th scope="col">Q<sub>std</sub> <span class="hu">${shortUnit(units.qstd)}</span></th><th scope="col">${dep ? 'Vented' : 'Added'} <span class="hu">${shortUnit(units.mass)}</span></th></tr>`;
+      tb.innerHTML = last ? sample(last.r, 20).map((p) => `<tr>${[fromSI(unit('time'), p.t), fromSI(unit('p'), p.P), fromSI(unit('temp'), p.T), fromSI(unit('mflow'), p.W), fromSI(unit('qstd'), stdFlow(p.W, M, std)), fromSI(unit('mass'), p.moved)].map((v) => `<td class="num">${fmt(v)}</td>`).join('')}</tr>`).join('') : '';
+      draw();
+      for (const el of root.querySelectorAll<HTMLElement>('[data-warn]')) el.innerHTML = (warns[el.dataset.warn!] ?? []).map((x) => `<li>${x}</li>`).join('');
+    };
+
+    root.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (!t.matches('input[type=text]')) return;
+      if ((t.dataset.k === 'cv' || t.dataset.k === 'xt') && styleSel.value !== 'typed') { styleSel.value = 'typed'; }
+      run1();
+    });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      const c = t.dataset.cat as PrsCat | undefined;
+      if (c) {
+        const from = unit(c); units[c] = t.value; const to = unit(c);
+        for (const s of root.querySelectorAll<HTMLSelectElement>(`select[data-cat="${c}"]`)) s.value = t.value;
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-ut="${c}"]`)) s.textContent = shortUnit(t.value);
+        for (const [k, kc] of Object.entries(CAT)) {
+          if (kc !== c) continue;
+          const el = inp(k), x = parseNumber(el.value);
+          if (el.value.trim() !== '' && Number.isFinite(x)) el.value = fmtIn(fromSI(to, toSI(from, x)));
+        }
+        $('[data-status]').textContent = `Unit changed to ${shortUnit(t.value)}; values converted.`;
+      }
+      if (t === styleSel) { fillSizes(); applySize(); }
+      if (t === sizeSel) applySize();
+      if (t.matches('select')) run1();
+    });
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-use]')) b.addEventListener('click', () => {
+      const P = b.dataset.use === 'P50' ? last?.P50 ?? (() => { const d = read('Pdes', (x) => x > PATM); return Number.isFinite(d) ? api521Target(d).half : undefined; })()
+        : (() => { const d = read('Pdes', (x) => x > PATM); return Number.isFinite(d) ? api521Target(d).fire : undefined; })();
+      if (P === undefined) { $('[data-status]').textContent = 'Type the design pressure first.'; inp('Pdes').focus(); return; }
+      inp('Pend').value = fmtIn(fromSI(unit('p'), P)); run1();
+      $('[data-status]').textContent = 'End pressure set to the API RP 521 target.';
+    });
+    $('[data-csv]').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!last) return;
+      const rowsT = [...root.querySelectorAll('[data-thead] th')].map((x) => x.textContent!.replace(/\s+/g, ' ').trim());
+      const body = [...root.querySelectorAll('[data-tbody] tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent));
+      const csv = [rowsT, ...body].map((r) => r.join(',')).join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = 'pressurizing-depressurizing.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    segInit(root, 'mode', (x) => {
+      st.mode = x as Case['mode'];
+      // a consistent example for each direction when the fields still hold the other one's example
+      const p = (k: string) => inp(k).value.trim();
+      if (st.mode === 'press' && p('P0') === '800' && p('Pend') === '15' && p('Pext') === '0') { inp('P0').value = '0'; inp('Pend').value = '700'; inp('Pext').value = '800'; }
+      if (st.mode === 'depress' && p('P0') === '0' && p('Pend') === '700' && p('Pext') === '800') { inp('P0').value = '800'; inp('Pend').value = '15'; inp('Pext').value = '0'; }
+      run1();
+    });
+    segInit(root, 'thermo', (x) => { st.thermo = x as Case['thermo']; run1(); });
+    segInit(root, 'std', (x) => { st.std = x; run1(); });
+    segInit(root, 'dev', (x) => { st.dev = x; run1(); });
+    segInit(root, 'calc', (x) => { st.calc = x; run1(); });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const el of root.querySelectorAll<HTMLInputElement>('input[type=text]')) el.value = '';
+      styleSel.value = 'typed';
+      run1(); inp('V').focus();
+      $('[data-status]').textContent = 'All input fields cleared.';
+    });
+    fillSizes(false);
+    let rt = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(draw); }).observe($('[data-chart]'));
+    run1();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 46rem; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.5rem; font-size: 1.0625rem; font-weight: 650; }
+  h3 { margin: 1rem 0 0.25rem; font-size: 0.9375rem; font-weight: 650; }
+  .no { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; margin-right: 0.5rem; border: 1.5px solid var(--ink); border-radius: 50%; font-size: 0.8125rem; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  .calc :global(th), .calc :global(td) { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .calc :global(tbody th) { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  .calc :global(th label) { cursor: text; }
+  .calc :global(.lb) { margin-right: 0.625rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i), .explain :global(i), .case :global(i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 46rem; }
+  .io :global(.v) { width: 9.5rem; }
+  .io :global(.v.wide) { width: auto; }
+  .io :global(.v.wide select) { max-width: 24rem; }
+  .io :global(.v.wide output) { white-space: normal; height: auto; min-height: 1.875rem; line-height: 1.35; padding-block: 0.25rem; }
+  .io :global(.u) { width: 6.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io :global(.u select) { max-width: 6.5rem; }
+  .io.res { margin-top: 0.5rem; }
+  [hidden], .calc :global([hidden]) { display: none !important; }
+  .calc :global(input), .calc :global(output), .calc :global(select) { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .calc :global(select:focus) { outline: 2px solid var(--line); outline-offset: 1px; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+  .explain { margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--line); background: var(--wash); font-size: 0.875rem; line-height: 1.5; max-width: 50rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 50rem; }
+  .note:empty { display: none; }
+  .case { margin: 0.375rem 0 0; font-size: 0.875rem; font-weight: 600; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 50rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .pick th .lb { font-weight: 600; }
+  .pick output { font-weight: 650; }
+  .btns { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.375rem; }
+  .tbtn { height: 2rem; padding-inline: 0.75rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.8125rem/1 var(--font-ui); cursor: pointer; }
+  .tbtn:hover { background: var(--line); color: var(--paper); }
+  .tbtn.small { height: 1.5rem; padding-inline: 0.5rem; margin-left: 0.5rem; font-size: 0.75rem; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0.5rem; }
+  .hu { font-weight: 400; color: var(--muted); }
+  .cols { display: grid; grid-template-columns: minmax(0, 40rem) minmax(0, 1fr); gap: 1rem 2rem; align-items: start; }
+  @media (max-width: 70rem) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .skimg { display: block; max-width: 36rem; }
+  .skimg :global(svg) { display: block; max-width: 100%; height: auto; }
+  .prs :global(.grid) { stroke: var(--rule); stroke-width: 0.6; }
+  .prs :global(.tick) { font: 400 11px var(--font-ui); fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .prs :global(.ax) { font: 400 12px var(--font-ui); fill: var(--ink); }
+  .prs :global(.tt) { fill: #3f88bd; }
+  .prs :global(.pl) { fill: none; stroke: var(--ink); stroke-width: 2; }
+  .prs :global(.tl) { fill: none; stroke: #3f88bd; stroke-width: 1.8; stroke-dasharray: 6 3; }
+  .prs :global(.api) { stroke: var(--markup); stroke-width: 1; stroke-dasharray: 4 3; }
+  .prs :global(.apil) { font: 600 11px var(--font-ui); fill: var(--markup); }
+  .key b { font-weight: 400; white-space: nowrap; margin-right: 0.75rem; }
+  .key span { display: inline-block; width: 1.25rem; height: 0; margin: 0 0.25rem 0.2rem 0; vertical-align: middle; }
+  .kp { border-top: 2px solid var(--ink); }
+  .kt { border-top: 2px dashed #3f88bd; }
+  .ka { border-top: 1px dashed var(--markup); }
+  .t20 { max-width: 46rem; font-size: 0.8125rem; margin-top: 0.25rem; }
+  .t20 :global(th), .t20 :global(td) { padding: 0.1875rem 0.5rem 0.1875rem 0; border-top: 1px solid var(--rule); }
+  .t20 :global(thead th) { font-weight: 600; border-top: 0; text-align: right; }
+  .basis { margin-top: 0.75rem; max-width: 52rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; overflow-wrap: anywhere; }
+    .io :global(.v) { width: 7rem; }
+    .io :global(.u) { width: 5.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .t20 { font-size: 0.6875rem; }
+  }
+</style>

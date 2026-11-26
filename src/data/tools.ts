@@ -101,9 +101,10 @@ export const tools: Tool[] = [
     "tag": "BDV",
     "title": "Pressurization & Depressurization",
     "name": "Pressurization and Depressurization",
-    "description": "Time to pressurize or depressurize a system through a valve of known Cv, calculated step by step, with Cv tables for globe, butterfly and gate valves.",
-    "standard": "Masoneilan Control Valve Sizing Handbook (OZ1000)",
+    "description": "Time to depressurize or pressurize a gas volume through a control valve (IEC 60534, Fisher Cv) or a restriction orifice, or the valve or orifice for a target time; isothermal or adiabatic gas with its end temperature, live pressure chart, API 521 depressuring check.",
+    "standard": "IEC 60534-2-1 (valve), ISO 5167-2 (orifice), API RP 521 (depressuring)",
     "category": "relief",
+    "native": "prs",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/a4b4bb874058313fd40b0142e22fba59c6e9ab72440d528e214207945373ce98?type=grid&mode=embed"
   },
   {
