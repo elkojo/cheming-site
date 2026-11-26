@@ -608,7 +608,7 @@ const caseTable = (rows: Row[]) => `<table class="cs">${head}<tbody>${rows.map(c
   .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
 
   /* case tables: quantity | three cases | unit */
-  .calc :global(.cs) { max-width: 60rem; margin-top: 0.75rem; table-layout: fixed; }
+  .calc :global(.cs) { width: 100%; max-width: 60rem; margin-top: 0.75rem; table-layout: fixed; border-collapse: collapse; }
   .calc :global(.cs thead th) { font-weight: 600; font-size: 0.8125rem; vertical-align: bottom; padding: 0 0.25rem 0.25rem 0; }
   .calc :global(.cs thead th:first-child) { width: 38%; }
   .calc :global(.cs .cu) { width: 8.5rem; padding-left: 0.25rem; color: var(--muted); font-size: 0.875rem; }
@@ -662,9 +662,11 @@ const caseTable = (rows: Row[]) => `<table class="cs">${head}<tbody>${rows.map(c
     .io .u :global(select) { max-width: 6.5rem; }
     .switches { flex-direction: column; gap: 0.625rem; }
     .calc :global(.cs) { font-size: 0.75rem; }
-    .calc :global(.cs thead th:first-child) { width: 31%; }
-    .calc :global(.cs thead th:not(:first-child):not(.cu)) { width: 19%; }
-    .calc :global(.cs .cu) { width: 4.5rem; font-size: 0.6875rem; }
+    .calc :global(.cs th), .calc :global(.cs td) { box-sizing: border-box; }
+    .calc :global(.cs thead th:first-child) { width: 22%; }
+    .calc :global(.cs thead th:not(:first-child):not(.cu)) { width: 20%; }
+    .calc :global(.cs .cu) { width: 18%; font-size: 0.6875rem; }
+    .calc :global(.cs .cu select) { max-width: 100%; }
     .calc :global(.cs .cu select) { font-size: 0.6875rem; padding: 0; }
     .calc :global(.cs input), .calc :global(.cs output) { padding: 0 0.1875rem; }
     .ty { display: block; overflow-x: auto; }
