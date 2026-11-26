@@ -1,20 +1,18 @@
 ---
 import Base from '../layouts/Base.astro';
 import Bubble from '../components/Bubble.astro';
-import Legend from '../components/Legend.astro';
 import { categories, tools } from '../data/tools';
 
-// Index columns (owner, 2026-11-21): Properties under General, Equipment under Relief & Flare, Piping & Flow alone.
-const cat = (id: string) => categories.find((c) => c.id === id)!;
-const columns = [[cat('general'), cat('properties')], [cat('relief'), cat('equipment')], [cat('piping')]];
+// Index layout (owner, 2026-11-26): as compact as possible, General always first (top left). The script below measures
+// the categories and packs them into the number of columns and the arrangement with the smallest height; without
+// script the categories flow in a plain grid in category order.
 import { url } from '../lib/url';
 ---
 <Base>
   <div class="sheet">
     <section class="intro" aria-labelledby="intro-h">
       <h1 id="intro-h">Engineering calculation tools for oil &amp; gas and petrochemical processes</h1>
-      <p>{tools.length} calculators, each with its references and equations. Free to use; check every result independently.</p>
-      <Legend />
+      <p>Every tool shows its equations and references.</p>
     </section>
 
     <div class="finder" role="search">
@@ -24,28 +22,24 @@ import { url } from '../lib/url';
     </div>
 
     <div class="index" id="index">
-      {columns.map((col) => (
-        <div class="col">
-          {col.map((c) => (
-            <section class="cat" aria-labelledby={`cat-${c.id}`} style={`--o: ${categories.indexOf(c)}`}>
-              <h2 id={`cat-${c.id}`}>{c.title}</h2>
-              <ul>
-                {tools.filter((t) => t.category === c.id).map((t) => (
-                  <li data-search={[t.tag, t.sub, t.title, t.name, t.standard, t.slug].filter(Boolean).join(' ').toLowerCase()}>
-                    <a href={url(`${t.slug}/`)}>
-                      <Bubble tag={t.tag} sub={t.sub} native={!!t.native} />
-                      <span class="txt">
-                        <span class="name">{t.title}</span>
-                        <span class="desc">{t.description ?? t.name}</span>
-                      </span>
-                    </a>
-                    {t.credit && <p class="credit">Credits: <a href={t.credit.url} rel="noopener">{t.credit.name}</a></p>}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+      {categories.map((c) => (
+        <section class="cat" aria-labelledby={`cat-${c.id}`} data-cat={c.id}>
+          <h2 id={`cat-${c.id}`}>{c.title}</h2>
+          <ul>
+            {tools.filter((t) => t.category === c.id).map((t) => (
+              <li data-search={[t.tag, t.sub, t.title, t.name, t.standard, t.slug].filter(Boolean).join(' ').toLowerCase()}>
+                <a href={url(`${t.slug}/`)}>
+                  <Bubble tag={t.tag} sub={t.sub} native={!!t.native} />
+                  <span class="txt">
+                    <span class="name">{t.title}</span>
+                    <span class="desc">{t.description ?? t.name}</span>
+                  </span>
+                </a>
+                {t.credit && <p class="credit">Credits: <a href={t.credit.url} rel="noopener">{t.credit.name}</a></p>}
+              </li>
+            ))}
+          </ul>
+        </section>
       ))}
     </div>
 
@@ -61,8 +55,8 @@ import { url } from '../lib/url';
 <script>
   const q = document.getElementById('q') as HTMLInputElement;
   const rows = [...document.querySelectorAll<HTMLLIElement>('#index li')];
-  const cats = [...document.querySelectorAll<HTMLElement>('#index .cat')];
-  const cols = [...document.querySelectorAll<HTMLElement>('#index .col')];
+  const index = document.getElementById('index')!;
+  const cats = [...index.querySelectorAll<HTMLElement>('.cat')];   // in category order; cats[0] = General
   const count = document.getElementById('count')!;
   const empty = document.getElementById('empty')!;
   const emptyQ = document.getElementById('empty-q')!;
@@ -76,11 +70,60 @@ import { url } from '../lib/url';
       if (hit) shown++;
     }
     for (const c of cats) c.hidden = !c.querySelector('li:not([hidden])');
-    for (const col of cols) col.hidden = !col.querySelector('.cat:not([hidden])');
+    layout();
     count.textContent = shown === rows.length ? `${rows.length} tools` : `${shown} of ${rows.length}`;
     empty.hidden = shown > 0;
     emptyQ.textContent = q.value.trim();
   }
+  // ── compact layout: try 1–4 columns and every assignment of the categories to them; keep the smallest height ──
+  const MIN_COL = 17.5, GAP_X = 2.5, GAP_Y = 2;   // rem
+  let lastKey = '';
+  function layout() {
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const W = index.clientWidth, gx = GAP_X * rem, gy = GAP_Y * rem;
+    const vis = cats.filter((c) => !c.hidden);
+    const kMax = Math.max(1, Math.min(4, vis.length, Math.floor((W + gx) / (MIN_COL * rem + gx))));
+    // measure every category at each candidate column width
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;visibility:hidden;left:0;top:0';
+    document.body.append(probe);
+    let best: { h: number; cols: HTMLElement[][]; k: number; spread: number } | undefined;
+    for (let k = 1; k <= kMax; k++) {
+      const colW = (W - gx * (k - 1)) / k;
+      probe.style.width = `${colW}px`;
+      const h = new Map(vis.map((c) => { const cl = c.cloneNode(true) as HTMLElement; probe.append(cl); const v = cl.offsetHeight; cl.remove(); return [c, v]; }));
+      // General (vis[0] when shown) is fixed in column 0; the others take every assignment
+      const rest = vis[0] === cats[0] ? vis.slice(1) : vis;
+      const n = rest.length;
+      for (let code = 0; code < k ** n; code++) {
+        const cols: HTMLElement[][] = Array.from({ length: k }, () => []);
+        if (vis[0] === cats[0]) cols[0].push(cats[0]);
+        let x = code;
+        for (const c of rest) { cols[x % k].push(c); x = Math.floor(x / k); }
+        if (cols.some((col) => !col.length)) continue;
+        const heights = cols.map((col) => col.reduce((s, c) => s + h.get(c)!, 0) + gy * (col.length - 1));
+        const H = Math.max(...heights), spread = H - Math.min(...heights);
+        if (!best || H < best.h - 1 || (Math.abs(H - best.h) <= 1 && spread < best.spread)) best = { h: H, cols, k, spread };
+      }
+    }
+    probe.remove();
+    if (!best) return;
+    // columns in the order of their first category; categories in category order inside a column
+    const ord = (c: HTMLElement) => cats.indexOf(c);
+    for (const col of best.cols) col.sort((a, b) => ord(a) - ord(b));
+    best.cols.sort((a, b) => ord(a[0]) - ord(b[0]));
+    const key = best.cols.map((col) => col.map(ord).join(',')).join('|');
+    if (key === lastKey) return;
+    lastKey = key;
+    index.classList.add('packed');
+    index.style.setProperty('--k', String(best.k));
+    for (const old of index.querySelectorAll('.col')) old.replaceWith(...old.children);
+    for (const col of best.cols) { const d = document.createElement('div'); d.className = 'col'; d.append(...col); index.append(d); }
+    for (const c of cats.filter((x) => x.hidden)) index.append(c);
+  }
+  let rt = 0, lastW = 0;
+  new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(() => { if (index.clientWidth !== lastW) { lastW = index.clientWidth; lastKey = ''; layout(); } }); }).observe(index);
+
   q.addEventListener('input', apply);
   q.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -129,11 +172,10 @@ import { url } from '../lib/url';
     gap: 2rem 2.5rem;
     align-items: start;
   }
-  /* Combined columns only when all three fit side by side; narrower, each category flows on its own as before. */
-  .index { container-type: inline-size; }
-  .col { display: grid; gap: 2rem; align-content: start; }
-  @container (max-width: 61.9rem) { .col { display: contents; } .cat { order: var(--o); } }
-  .col[hidden] { display: none; }
+  /* packed by the script: --k equal columns, each a stack of categories */
+  .index.packed { grid-template-columns: repeat(var(--k), minmax(0, 1fr)); }
+  .index :global(.col) { display: grid; gap: 2rem; align-content: start; }
+  .cat[hidden] { display: none; }
   .cat h2 {
     margin: 0 0 0.25rem;
     padding-bottom: 0.5rem;
