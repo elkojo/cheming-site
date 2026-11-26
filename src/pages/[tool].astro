@@ -25,6 +25,7 @@ import PsvFireCalc from '../components/PsvFireCalc.astro';
 import KodCalc from '../components/KodCalc.astro';
 import FlareCalc from '../components/FlareCalc.astro';
 import NoiseCalc from '../components/NoiseCalc.astro';
+import PsvCalc from '../components/PsvCalc.astro';
 import SourceList from '../components/SourceList.astro';
 import { tools, categories } from '../data/tools';
 import { url } from '../lib/url';
@@ -80,6 +81,7 @@ const description = tool.description ?? `${tool.name}. Free engineering calculat
       : tool.native === 'compressor' ? <CompressorCalc />
       : tool.native === 'hx' ? <HeatExchangerCalc />
       : tool.native === 'ped' ? <PedCalc />
+      : tool.native === 'psv' ? <PsvCalc />
       : tool.native === 'psvl' ? <PsvFireCalc mode="liquid" />
       : tool.native === 'psvg' ? <PsvFireCalc mode="gas" />
       : tool.native === 'kod' ? <KodCalc />

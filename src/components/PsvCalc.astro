@@ -1,0 +1,782 @@
+---
+// Native PSV calculator (Phase 7): relief valve sizing for up to eight cases side by side, one valve for all of them.
+// Owner's choices 2026-11-26: one table with the cases as columns (desktop: all; narrow screens: as many as fit,
+// chips pick which), governing case always shown; + Add / Duplicate / Remove up to 8, starting with the Zoho example;
+// MAWP + accumulation per case preset by the scenario; vapour, liquid, steam (Napier, KN, KSH) and two-phase (omega
+// method, the sheet's sum of areas beside it); coefficients in a collapsed group; ⓘ per row with the symbols,
+// basis and accuracy (from the sheet's cell notes, corrected); Kb/Kp refitted to the API charts; Kv by the API 520 10th-edition (2020) equation; copy/CSV export;
+// cases kept in this browser with "Restore example"; reaction force of an open discharge; API 526 body.
+import DrawingFrame from './DrawingFrame.astro';
+import SegToggle from './SegToggle.astro';
+import { API526 } from '../lib/calc/psvl';
+import { TABLE526 } from '../lib/calc/psvl-api526';
+import { PSV_UNITS, PSV_DEFAULT_UNITS, shortUnit, type PsvCat } from '../lib/calc/psv-units';
+import { mathHtml } from '../lib/calc/types';
+
+const id = (k: string) => `psv-${k}`;
+const unitSel = (cat: PsvCat, label: string) =>
+  `<select data-cat="${cat}" aria-label="${label} unit">${PSV_UNITS[cat].map((u) => `<option value="${u.label}"${u.label === PSV_DEFAULT_UNITS[cat] ? ' selected' : ''}>${shortUnit(u.label)}</option>`).join('')}</select>`;
+const unitTxt = (cat: PsvCat) => `<span data-ut="${cat}">${shortUnit(PSV_DEFAULT_UNITS[cat])}</span>`;
+interface DRow { k: string; name: string; sym: string; v: string; cat?: PsvCat; unit?: string; show?: string; soft?: boolean }
+const drow = (r: DRow) => `<tr data-show-row="${r.show ?? ''}"><th scope="row"><label for="${id(r.k)}"><span class="lb">${r.name}</span> <span class="eq">${mathHtml(r.sym)}</span></label></th>`
+  + `<td class="v"><input id="${id(r.k)}" data-d="${r.k}" value="${r.v}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"${r.soft ? ' data-soft' : ''} /></td>`
+  + `<td class="u">${r.cat ? unitSel(r.cat, r.name) : `<span>${r.unit ?? '–'}</span>`}</td></tr>`;
+const DESIGN: DRow[] = [
+  { k: 'Ps', name: 'Set pressure', sym: 'P_set', v: '27.7', cat: 'p' },
+  { k: 'MAWP', name: 'Maximum allowable working pressure', sym: 'P_MAWP', v: '', cat: 'p', soft: true },
+  { k: 'n', name: 'Operating valves', sym: 'n', v: '1' },
+  { k: 'Kc', name: 'Combination factor (disk upstream)', sym: 'K_c', v: '0.9', show: 'combo' },
+  { k: 'dout', name: 'Outlet inside diameter (open discharge, optional)', sym: 'd_out', v: '', cat: 'len' },
+];
+---
+<DrawingFrame>
+<div class="calc psv" data-psv>
+  <div class="bar">
+    <p>Pressure relief valve sizing per API 520 Part I for several relief cases at once; the case needing the largest area governs one valve (API 526). One unit per kind of quantity: pick it in any unit column; typed values are converted. Your cases are kept in this browser.</p>
+    <div class="btns">
+      <button type="button" class="reset" data-restore>Restore example</button>
+      <button type="button" class="reset" data-reset>Clear all inputs</button>
+    </div>
+  </div>
+
+  <section class="grp" aria-labelledby={id('s1')}>
+    <h2 id={id('s1')}><span class="no">1</span> Protected equipment and device</h2>
+    <div class="switches">
+      <SegToggle label="Device" name="device" value="valve" options={[{ value: 'valve', label: 'Valve' }, { value: 'combo', label: 'Valve + rupture disk', short: 'Valve + disk' }, { value: 'disk', label: 'Rupture disk only', short: 'Disk only' }]} />
+      <div data-show="valve"><SegToggle label="Valve" name="valve" value="bellows" options={[{ value: 'conventional', label: 'Conventional' }, { value: 'bellows', label: 'Balanced bellows', short: 'Bellows' }, { value: 'pilot', label: 'Pilot-operated', short: 'Pilot' }]} /></div>
+      <div data-show="valve"><SegToggle label="Liquid capacity" name="cert" value="yes" options={[{ value: 'yes', label: 'Certified' }, { value: 'no', label: 'Not certified' }]} /></div>
+    </div>
+    <table class="io">
+      <tbody set:html={DESIGN.map(drow).join('')} />
+    </table>
+    <p class="note">MAWP: leave it green to use the set pressure (as the original sheet). The allowable accumulation of each case is counted above the MAWP; with several operating valves the non-fire cases start at 16 %. The outlet diameter is needed only for the reaction force of vapour cases discharging to atmosphere.</p>
+    <ul class="warn" data-warn="1" aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s2')}>
+    <h2 id={id('s2')}><span class="no">2</span> Relief cases</h2>
+    <div class="tools">
+      <div class="chips" data-chips role="group" aria-label="Cases shown"></div>
+      <div class="exp">
+        <button type="button" class="tbtn" data-add>+ Add case</button>
+        <button type="button" class="tbtn" data-copy>Copy table</button>
+        <button type="button" class="tbtn" data-csv>CSV</button>
+      </div>
+    </div>
+    <p class="note" data-fitnote></p>
+    <div class="ctwrap" data-ctwrap><table class="ct" data-ct></table></div>
+    <p class="gov" data-gov aria-live="polite"></p>
+    <ul class="warn" data-warn="2" aria-live="polite"></ul>
+  </section>
+
+  <section class="grp" aria-labelledby={id('s3')}>
+    <h2 id={id('s3')}><span class="no">3</span> Valve (API 526)</h2>
+    <div class="switches">
+      <SegToggle label="Body material" name="mat" value="cs" options={[{ value: 'cs', label: 'Carbon steel' }, { value: 'crmo', label: 'Cr-Mo steel', short: 'Cr-Mo' }, { value: 'ss', label: 'Stainless steel', short: 'Stainless' }]} />
+    </div>
+    <table class="sum" data-sum></table>
+    <table class="io res">
+      <tbody>
+        <tr class="pick"><th scope="row"><span class="lb">Orifice</span> <span class="eq">smallest API 526 letter with area ≥ <i>A</i>/<i>n</i> of the governing case</span></th><td class="v wide" colspan="2"><output data-o="orif" /></td></tr>
+        <tr><th scope="row"><span class="lb">Valve</span></th><td class="v wide" colspan="2"><output data-o="vtype" /></td></tr>
+        <tr><th scope="row"><span class="lb">Temperature range used</span> <span class="eq">highest <i>T</i> of the cases; between ranges the next hotter</span></th><td class="v wide" colspan="2"><output data-o="trange" /></td></tr>
+        <tr class="pick"><th scope="row"><span class="lb">Valve body</span> <span class="eq">inlet × orifice × outlet</span></th><td class="v wide" colspan="2"><output data-o="body" /></td></tr>
+        <tr><th scope="row"><span class="lb">Flange classes</span> <span class="eq">inlet × outlet (ASME B16.5)</span></th><td class="v wide" colspan="2"><output data-o="cls" /></td></tr>
+        <tr><th scope="row"><span class="lb">Set-pressure limit of this valve</span> <span class="eq" set:html={mathHtml('P_set,max ≥ P_set')} /></th><td class="v"><output data-o="plim" /></td><td class="u" set:html={unitTxt('p')} /></tr>
+        <tr><th scope="row"><span class="lb">Outlet pressure limit (at 100 °F)</span> <span class="eq">≥ highest <i>P</i><sub>b</sub></span></th><td class="v"><output data-o="olim" /></td><td class="u" set:html={unitTxt('p')} /></tr>
+      </tbody>
+    </table>
+    <ul class="warn" data-warn="3" aria-live="polite"></ul>
+    <details class="basis o526">
+      <summary data-b526cap>API 526 bodies for this orifice and material</summary>
+      <table class="t526 b526">
+        <thead><tr><th scope="col">Body</th><th scope="col">Classes</th><th scope="col">Set-pressure limit <span class="hu" set:html={unitTxt('p')} /></th><th scope="col">Outlet limit <span class="hu" set:html={unitTxt('p')} /></th><th scope="col">Fits</th></tr></thead>
+        <tbody data-b526></tbody>
+      </table>
+      <p class="note">The lowest inlet flange class that holds the set pressure at the highest relieving temperature of the cases is chosen, then the smallest body; the outlet limit must hold the highest back pressure (conventional and bellows valves have different outlet limits). Outlet limits are for 100 °F; above it the outlet flange rating of ASME B16.34 governs.</p>
+    </details>
+    <details class="basis o526">
+      <summary>API 526 orifice letters</summary>
+      <table class="t526">
+        <thead><tr><th scope="col">Orifice</th><th scope="col">Effective area <span class="hu" set:html={unitTxt('orif')} /></th><th scope="col">Spring-loaded</th><th scope="col">Pilot-operated</th></tr></thead>
+        <tbody>{API526.map((o, i) => (
+          <tr data-o526={i}><th scope="row">{o.d}</th><td class="num" data-o526a={i} /><td>Table {TABLE526[o.d].s}</td><td>Table {TABLE526[o.d].p}</td></tr>
+        ))}</tbody>
+      </table>
+      <p class="note">Effective areas (API 526, 5th ed. 2002, Table 1), valid only with the API 520 equations.</p>
+    </details>
+  </section>
+
+  <section class="grp" aria-labelledby={id('basis-h')}>
+    <h2 id={id('basis-h')}>Calculation basis</h2>
+    <details class="basis" open>
+      <summary>Equations</summary>
+      <ol class="eqs">
+        <li><b>Relieving pressure</b>: <i>P</i><sub>1</sub> = MAWP·(1 + accumulation) + atmospheric pressure (gauge MAWP). Allowable accumulation (API 520 Part I, ASME VIII): 10 % for a single valve, 16 % with several valves, 21 % in a fire. With MAWP = <i>P</i><sub>set</sub> this is the original sheet's <i>P</i><sub>set</sub>·(1 + overpressure).</li>
+        <li><b>Vapour, critical flow</b> (API 520 Part I, SI; <i>W</i> kg/h, <i>P</i> kPa abs, <i>T</i> K, <i>A</i> mm²): <i>A</i> = <i>W</i>/(<i>C</i>·<i>K</i><sub>d</sub>·<i>P</i><sub>1</sub>·<i>K</i><sub>b</sub>·<i>K</i><sub>c</sub>)·√(<i>T</i>·<i>Z</i>/<i>M</i>), <i>C</i> = 0.03948·√(<i>k</i>·(2/(<i>k</i> + 1))<sup>(<i>k</i>+1)/(<i>k</i>−1)</sup>) (0.02395 at <i>k</i> = 1); critical when <i>P</i><sub>b</sub> ≤ <i>P</i><sub>cf</sub> = <i>P</i><sub>1</sub>·(2/(<i>k</i> + 1))<sup><i>k</i>/(<i>k</i>−1)</sup>. Balanced bellows use this equation with <i>K</i><sub>b</sub> also below the critical pressure.</li>
+        <li><b>Vapour, subcritical</b> (conventional and pilot-operated): <i>A</i> = 17.9·<i>W</i>/(<i>F</i><sub>2</sub>·<i>K</i><sub>d</sub>·<i>K</i><sub>c</sub>)·√(<i>T</i>·<i>Z</i>/(<i>M</i>·<i>P</i><sub>1</sub>·(<i>P</i><sub>1</sub> − <i>P</i><sub>b</sub>))), <i>F</i><sub>2</sub> = √((<i>k</i>/(<i>k</i> − 1))·<i>r</i><sup>2/<i>k</i></sup>·(1 − <i>r</i><sup>(<i>k</i>−1)/<i>k</i></sup>)/(1 − <i>r</i>)), <i>r</i> = <i>P</i><sub>b</sub>/<i>P</i><sub>1</sub>.</li>
+        <li><b>Steam</b> (Napier, API 520 Part I; GPSA Eq. 5-6): <i>A</i> = 190.4·<i>W</i>/(<i>P</i><sub>1</sub>·<i>K</i><sub>d</sub>·<i>K</i><sub>b</sub>·<i>K</i><sub>c</sub>·<i>K</i><sub>N</sub>·<i>K</i><sub>SH</sub>); <i>K</i><sub>N</sub> = 1 up to 10 339 kPa a, above (0.02764·<i>P</i><sub>1</sub> − 1 000)/(0.03324·<i>P</i><sub>1</sub> − 1 061) up to 22 057 kPa a; <i>K</i><sub>SH</sub> = 1 for saturated steam (temperature blank or at saturation, IAPWS-IF97), superheated from GPSA Fig. 5-13 (set pressure and temperature, interpolated). Critical flow only.</li>
+        <li><b>Liquid, certified</b> (<i>Q</i> L/min, <i>G</i> = <i>ρ</i>/999 kg/m³): <i>A</i> = 11.78·<i>Q</i>/(<i>K</i><sub>d</sub>·<i>K</i><sub>w</sub>·<i>K</i><sub>c</sub>·<i>K</i><sub>v</sub>)·√(<i>G</i>/(<i>P</i><sub>1</sub> − <i>P</i><sub>b</sub>)), <i>K</i><sub>d</sub> = 0.65. <b>Not certified</b>: <i>A</i> = 11.78·<i>Q</i>/(<i>K</i><sub>d</sub>·<i>K</i><sub>w</sub>·<i>K</i><sub>c</sub>·<i>K</i><sub>v</sub>·<i>K</i><sub>p</sub>)·√(<i>G</i>/(1.25·<i>P</i><sub>set</sub> − <i>P</i><sub>b</sub>)) (gauge), <i>K</i><sub>d</sub> = 0.62, <i>K</i><sub>p</sub> from the overpressure.</li>
+        <li><b>Viscosity</b>: <i>Re</i> = <i>Q</i>·18 800·<i>G</i>/(<i>μ</i>·√<i>A</i>′) per valve (<i>Q</i> L/min, <i>μ</i> cP, <i>A</i>′ mm² of the next larger API 526 orifice), <i>K</i><sub>v</sub> = (1 + 170/<i>Re</i>)<sup>−0.5</sup> (API 520 Part I, 10th ed. 2020, valid for <i>Re</i> &gt; 80; it replaces the 2000 curve (0.9935 + 2.878/<i>Re</i><sup>0.5</sup> + 342.75/<i>Re</i><sup>1.5</sup>)<sup>−1</sup> used by the original sheet); repeated with the next orifice until the area fits. Always computed, also below 100 cP, where the 10th edition allows <i>K</i><sub>v</sub> = 1.</li>
+        <li><b>Two-phase</b> (omega method, Leung; Perry 7th ed. Eq. 26-90 to 26-97; API 520 Part I Appendix D): <i>v</i><sub>0</sub> = <i>x</i>·<i>Z</i>·<i>R</i>·<i>T</i>/(<i>M</i>·<i>P</i><sub>1</sub>) + (1 − <i>x</i>)/<i>ρ</i><sub>L</sub>; <i>ω</i> = 9·(<i>v</i><sub>9</sub>/<i>v</i><sub>0</sub> − 1) (flashing, <i>v</i><sub>9</sub> at 0.9·<i>P</i><sub>1</sub> from a flash calculation), or <i>ω</i> = <i>x</i>·<i>v</i><sub>g</sub>/(<i>v</i><sub>0</sub>·<i>k</i>) (non-flashing gas and liquid), or typed. Critical ratio <i>η</i><sub>c</sub><sup>2</sup> + (<i>ω</i><sup>2</sup> − 2<i>ω</i>)(1 − <i>η</i><sub>c</sub>)<sup>2</sup> + 2<i>ω</i><sup>2</sup>·ln <i>η</i><sub>c</sub> + 2<i>ω</i><sup>2</sup>(1 − <i>η</i><sub>c</sub>) = 0; mass flux <i>G</i> = <i>η</i><sub>c</sub>·√(<i>P</i><sub>1</sub>/(<i>v</i><sub>0</sub>·<i>ω</i>)) (critical) or √(−2[<i>ω</i>·ln <i>η</i><sub>b</sub> + (<i>ω</i> − 1)(1 − <i>η</i><sub>b</sub>)])·√(<i>P</i><sub>1</sub>/<i>v</i><sub>0</sub>)/(<i>ω</i>(1/<i>η</i><sub>b</sub> − 1) + 1); <i>A</i> = <i>W</i>/(<i>K</i><sub>d</sub>·<i>K</i><sub>b</sub>·<i>K</i><sub>c</sub>·<i>G</i>), <i>K</i><sub>d</sub> = 0.85. For comparison, the original sheet's sum of a vapour area for <i>x</i>·<i>W</i> and a liquid area for (1 − <i>x</i>)·<i>W</i>.</li>
+        <li><b>Rated flow</b> of one valve in each case: (<i>W</i>/<i>n</i>)·<i>A</i><sub>o</sub>/(<i>A</i>/<i>n</i>), <i>A</i><sub>o</sub> = effective area of the chosen orifice.</li>
+        <li><b>Reaction force</b> of an open discharge to atmosphere (API 520 Part II, 1994, 2.4.1): <i>F</i> = 129·<i>W</i>·√(<i>k</i>·<i>T</i>/((<i>k</i> + 1)·<i>M</i>)) + 0.1·<i>A</i>·<i>P</i> (N, <i>W</i> kg/s, <i>A</i> mm², <i>P</i> bar g), 129 = √(2<i>R</i>); <i>P</i> = static pressure in the outlet, here for a choked exit (ideal gas): <i>P</i> = (<i>W</i>/<i>A</i>)·√(<i>R</i>·<i>T</i><sub>e</sub>/(<i>k</i>·<i>M</i>)), <i>T</i><sub>e</sub> = 2<i>T</i>/(<i>k</i> + 1), not below atmospheric.</li>
+      </ol>
+    </details>
+    <details class="basis">
+      <summary>Coefficients and notes</summary>
+      <ol>
+        <li><i>K</i><sub>d</sub> for preliminary sizing: 0.975 vapour and steam, 0.65 liquid (certified), 0.62 liquid (not certified), 0.85 two-phase; 0.62 for a rupture disk alone (any phase). <i>K</i><sub>c</sub> = 0.9 for a rupture disk upstream of the valve without a certified combination factor, otherwise 1 (also for a disk alone). Use the manufacturer's certified values when known: <i>K</i><sub>d</sub>, <i>K</i><sub>b</sub> and <i>K</i><sub>w</sub> can be typed per case (the green value is the default).</li>
+        <li><i>K</i><sub>b</sub> (balanced bellows, vapour; API 520 Part I Fig. 30, set pressures from 3.45 bar g (50 psig), critical flow): 1 up to 30 % back pressure at 10 % overpressure, then a cubic fitted to the chart digitized at 300 dpi (within 0.002); 16 % overpressure: 1.285 − 0.76·<i>P</i><sub>b</sub>/<i>P</i><sub>set</sub>; 21 %: 1 up to 50 %; other overpressures interpolated. Conventional and pilot-operated valves: <i>K</i><sub>b</sub> = 1 (the subcritical equation takes the back pressure).</li>
+        <li><i>K</i><sub>w</sub> (balanced bellows, liquid; Fig. 31): 1 up to 15 %, 1.075 − 0.5·<i>x</i> to 20 %, 1.175 − <i>x</i> above (<i>x</i> = <i>P</i><sub>b</sub>/<i>P</i><sub>set</sub>, gauge), within 0.005 of the chart. <i>K</i><sub>p</sub> (not certified, Fig. 37): fitted to the chart within 0.003; 0.6 at 10 %, 1.0 at 25 %. Below 10 % overpressure such valves tend to chatter.</li>
+        <li>Back pressure: the total (superimposed + built-up). For a conventional valve the built-up back pressure should not exceed the allowable overpressure; superimposed back pressure changes the set pressure (cold differential test pressure). Balanced bellows: API's charts end at 50 %; the bellows limit comes from the manufacturer.</li>
+        <li>Steam by the Napier equation applies to critical flow; for superheated steam the API 520 10th edition recommends the general vapour equation with real-gas properties, which the vapour phase allows.</li>
+        <li>Two-phase: use the omega method within its assumptions (homogeneous equilibrium, flashing systems far from the critical point, boiling range below about 83 °C (150 °F) for the two-point <i>ω</i>); no relief valve is capacity-certified for two-phase flow. The sum of separate areas is not an API method and can undersize flashing flow.</li>
+      </ol>
+    </details>
+  </section>
+  <p class="sr" aria-live="polite" data-status></p>
+</div>
+</DrawingFrame>
+
+<script>
+  import { sizeCase, presetAccum, relievingP, ratedFlow, reactionForce, kdDefault, kcDefault, SCENARIOS, PATM, type Phase, type OmegaMode, type Design, type CaseIn, type CaseOut, type Device, type Valve } from '../lib/calc/psv';
+  import { pickOrifice, pickBody, toF, PSI, API526, IN2 } from '../lib/calc/psvl';
+  import { TABLE526, type Mat526 } from '../lib/calc/psvl-api526';
+  import { PSV_UNITS, PSV_DEFAULT_UNITS, shortUnit, type PsvCat } from '../lib/calc/psv-units';
+  import { saturated } from '../lib/calc/steam';
+  import { toSI, fromSI, formatSig } from '../lib/calc/units';
+  import { parseNumber, mathHtml } from '../lib/calc/types';
+  import { segInit, segSet } from '../lib/ui/seg';
+
+  const fmt = (x: number) => formatSig(x, 6, false);
+  const fmtIn = (x: number) => fmt(x).replace('−', '-');
+  const MAXC = 8, STORE = 'cheming.psv.v1';
+  const PH: { v: Phase; l: string }[] = [{ v: 'vapour', l: 'Vapour / gas' }, { v: 'liquid', l: 'Liquid' }, { v: 'steam', l: 'Steam' }, { v: 'twophase', l: 'Two-phase' }];
+  const OMM: { v: OmegaMode; l: string }[] = [{ v: 'v9', l: 'v₉ (flashing)' }, { v: 'frozen', l: 'Non-flashing' }, { v: 'typed', l: 'Typed ω' }];
+
+  // ── rows of the case table ──
+  type Kind = 'in' | 'soft' | 'out' | 'sel';
+  type Grp = 'in' | 'res' | 'coef' | 'rf';
+  interface Row { k: string; name: string; sym: string; kind: Kind; grp: Grp; cat?: PsvCat; unit?: string; ph?: Phase[]; when?: (c: Case, o?: CaseOut) => boolean; info?: string }
+  const V: Phase[] = ['vapour'], L: Phase[] = ['liquid'], S: Phase[] = ['steam'], T2: Phase[] = ['twophase'];
+  const ROWS: Row[] = [
+    { k: 'scen', name: 'Scenario', sym: '', kind: 'sel', grp: 'in', info: 'Cause of overpressure (API RP 521). The scenario presets the allowable accumulation: 21 % for an external fire, otherwise 10 % (16 % with several operating valves). The case name in the column header starts as the scenario and can be edited.' },
+    { k: 'phase', name: 'Phase at the valve inlet', sym: '', kind: 'sel', grp: 'in', info: 'Vapour or gas (API 520 Part I gas equations), liquid, steam (Napier equation) or two-phase (omega method). Rows that do not apply to a case show —.' },
+    { k: 'W', name: 'Relief rate', sym: 'W', kind: 'in', grp: 'in', cat: 'mflow', info: 'Required relief load of this case, total for all operating valves.' },
+    { k: 'acc', name: 'Allowable accumulation over MAWP', sym: 'Δ', kind: 'soft', grp: 'in', unit: '%', info: 'Pressure rise above the MAWP allowed while relieving: 10 % (one valve), 16 % (several valves), 21 % (fire). Green = preset from the scenario; type another value (e.g. a supplementary valve) to override, clear to return to the preset.' },
+    { k: 'Pb', name: 'Total back pressure', sym: 'P_b', kind: 'in', grp: 'in', cat: 'p', info: 'Superimposed + built-up back pressure at the valve outlet. If the built-up part is not yet known, the allowable built-up pressure (overpressure × set pressure, gauge) can be used.' },
+    { k: 'T', name: 'Relieving temperature', sym: 'T', kind: 'in', grp: 'in', cat: 'temp', info: 'Vapour and two-phase: temperature at the valve inlet at relieving conditions. Steam: blank = saturated; a temperature above saturation applies K<sub>SH</sub>. Liquid: used only to choose the valve body (step 3).' },
+    { k: 'M', name: 'Molar mass of the vapour', sym: 'M', kind: 'in', grp: 'in', unit: 'kg/kmol', ph: [...V, ...T2], info: 'Molecular weight of the vapour or gas at relieving conditions.' },
+    { k: 'Z', name: 'Compressibility factor', sym: 'Z', kind: 'in', grp: 'in', ph: [...V, ...T2], info: 'At the relieving pressure and temperature; 1 for an ideal gas (conservative when Z &lt; 1 is not known).' },
+    { k: 'k', name: 'Ratio of specific heats', sym: 'k = c_p/c_v', kind: 'in', grp: 'in', ph: [...V, ...T2], info: 'Ideal-gas ratio of specific heats at the relieving temperature (API). When unknown, k = 1.001 gives C ≈ 0.0240 (US 315), a conservative value.' },
+    { k: 'rho', name: 'Liquid density', sym: 'ρ_L', kind: 'in', grp: 'in', cat: 'dens', ph: [...L, ...T2], info: 'At the flowing temperature. The specific gravity G = ρ/999 kg/m³ (water at 15.6 °C) is used in the API liquid equations.' },
+    { k: 'mu', name: 'Liquid viscosity', sym: 'μ_L', kind: 'in', grp: 'in', cat: 'mu', ph: [...L, ...T2], info: 'Dynamic viscosity at the flowing temperature, for K<sub>v</sub>. Two-phase: used only for the sum-of-areas comparison.' },
+    { k: 'x', name: 'Vapour mass fraction at the inlet', sym: 'x_0', kind: 'in', grp: 'in', unit: '%', ph: T2, info: 'Quality: vapour (and gas) mass over total mass at the valve inlet.' },
+    { k: 'omm', name: 'Omega parameter from', sym: 'ω', kind: 'sel', grp: 'in', ph: T2, info: 'Flashing systems: from the specific volume at 90 % of P<sub>1</sub> (two-point method, API Eq. D.3; any boiling range). Non-flashing (gas + subcooled liquid): ω = x·v<sub>g</sub>/(v<sub>0</sub>·k) (API Eq. D.4). Or type ω from another method.' },
+    { k: 'v9', name: 'Specific volume at 0.9·P₁', sym: 'v_9', kind: 'in', grp: 'in', cat: 'svol', ph: T2, when: (c) => c.omm === 'v9', info: 'Two-phase specific volume after an isentropic flash to 90 % of the relieving pressure (an isenthalpic flash is sufficient), e.g. from a process simulator.' },
+    { k: 'om', name: 'Omega parameter', sym: 'ω', kind: 'in', grp: 'in', ph: T2, when: (c) => c.omm === 'typed', info: 'Typed ω.' },
+    // results
+    { k: 'P1', name: 'Relieving pressure', sym: 'P_1 = P_MAWP·(1 + Δ)', kind: 'out', grp: 'res', cat: 'p', info: 'Inlet pressure while relieving: MAWP plus the allowable accumulation (gauge), plus atmospheric pressure in the equations.' },
+    { k: 'op', name: 'Overpressure above set', sym: '(P_1 − P_set)/P_set', kind: 'out', grp: 'res', unit: '%', info: 'Gauge. Selects the K<sub>b</sub> curve and K<sub>p</sub>.' },
+    { k: 'regime', name: 'Flow', sym: 'P_b vs P_cf', kind: 'out', grp: 'res', info: 'Vapour and steam: critical when the back pressure is at or below the critical flow pressure. Two-phase: against η<sub>c</sub>·P<sub>1</sub>.' },
+    { k: 'A', name: 'Required effective area', sym: 'A', kind: 'out', grp: 'res', cat: 'orif', info: 'Total for all operating valves. The case with the largest area governs the orifice (★).' },
+    { k: 'An', name: 'Required area per valve', sym: 'A/n', kind: 'out', grp: 'res', cat: 'orif', when: () => nValves() > 1 },
+    { k: 'Asum', name: 'Sum of vapour and liquid areas (original sheet)', sym: 'A_V + A_L', kind: 'out', grp: 'res', cat: 'orif', ph: T2, info: 'Comparison only: vapour area for x·W plus liquid area for (1 − x)·W, as the original sheet sized two-phase cases. Not an API method; it can undersize flashing flow.' },
+    { k: 'share', name: 'Share of the installed area', sym: 'A/(n·A_o)', kind: 'out', grp: 'res', unit: '%', info: 'Required area of the case over the effective area of the chosen valves.' },
+    { k: 'Wr', name: 'Rated flow per valve', sym: 'W_r = (W/n)·A_o/(A/n)', kind: 'out', grp: 'res', cat: 'mflow', info: 'What one installed valve passes in this case (all factors as in the sizing). The original sheet computed it for liquid too; often it is used for vapour only.' },
+    // coefficients (collapsed)
+    { k: 'Kd', name: 'Coefficient of discharge', sym: 'K_d', kind: 'soft', grp: 'coef', info: 'Preliminary values (API 520 Part I): vapour and steam 0.975, liquid 0.65 (certified) or 0.62 (not certified), two-phase 0.85; rupture disk alone 0.62. Type the manufacturer\'s certified value to override.' },
+    { k: 'Kc', name: 'Combination correction', sym: 'K_c', kind: 'out', grp: 'coef', info: 'Valve with a rupture disk upstream: 0.9 unless a certified combination factor is known (step 1). Otherwise 1, also for a disk alone.' },
+    { k: 'Kb', name: 'Back-pressure correction (vapour)', sym: 'K_b', kind: 'soft', grp: 'coef', ph: [...V, ...S, ...T2], info: 'Balanced bellows: from API Fig. 30 (refitted to the chart, see Calculation basis), valid for set pressures from 3.45 bar g and critical flow; type the manufacturer\'s value to override. Conventional and pilot-operated valves: 1. Two-phase: 1 unless typed.' },
+    { k: 'Kw', name: 'Back-pressure correction (liquid)', sym: 'K_w', kind: 'soft', grp: 'coef', ph: L, info: 'Balanced bellows: API Fig. 31; conventional and pilot-operated valves: 1.' },
+    { k: 'Kp', name: 'Overpressure correction', sym: 'K_p', kind: 'out', grp: 'coef', ph: L, when: () => !st.cert, info: 'Liquid valves without capacity certification (API Fig. 37, refitted): 0.6 at 10 %, 1.0 at 25 % overpressure.' },
+    { k: 'Q', name: 'Volume flow per valve', sym: 'Q', kind: 'out', grp: 'coef', unit: 'L/min', ph: L },
+    { k: 'Re', name: 'Reynolds number', sym: 'Re = Q·18 800·G/(μ·√A′)', kind: 'out', grp: 'coef', ph: L, info: 'Per valve, with the next larger API 526 orifice A′ (mm²), Q in L/min, μ in cP; repeated with the next orifice until the area fits.' },
+    { k: 'Kv', name: 'Viscosity correction', sym: 'K_v = (1 + 170/Re)^(−0.5)', kind: 'out', grp: 'coef', ph: L, info: 'API 520 Part I, 10th edition (2020), valid for Re &gt; 80. It replaces the earlier curve (0.9935 + 2.878/Re<sup>0.5</sup> + 342.75/Re<sup>1.5</sup>)<sup>−1</sup> of the original sheet (2000 edition): the area differs by up to +3 % at Re 100–500 and −2 % at Re 1 000–30 000. The 10th edition allows K<sub>v</sub> = 1 for liquids up to 100 cP; here K<sub>v</sub> is always computed (slightly conservative).' },
+    { k: 'Pcf', name: 'Critical flow pressure', sym: 'P_cf = P_1·(2/(k + 1))^(k/(k − 1))', kind: 'out', grp: 'coef', cat: 'p', ph: V },
+    { k: 'C', name: 'Gas coefficient', sym: 'C = 0.03948·√(k·(2/(k + 1))^((k + 1)/(k − 1)))', kind: 'out', grp: 'coef', ph: V, info: 'SI form (US units: C = 520·√(…)); 0.02395 at k = 1.' },
+    { k: 'F2', name: 'Subcritical flow coefficient', sym: 'F_2', kind: 'out', grp: 'coef', ph: V, info: 'Conventional and pilot-operated valves below the critical pressure.' },
+    { k: 'Kn', name: 'Napier correction', sym: 'K_N', kind: 'out', grp: 'coef', ph: S },
+    { k: 'Ksh', name: 'Superheat correction', sym: 'K_SH', kind: 'out', grp: 'coef', ph: S, info: 'GPSA Fig. 5-13 (adapted from API 520): by set pressure (kPa g) and steam temperature, interpolated; 1 for saturated steam.' },
+    { k: 'v0', name: 'Specific volume at the inlet', sym: 'v_0', kind: 'out', grp: 'coef', cat: 'svol', ph: T2 },
+    { k: 'omega', name: 'Omega parameter', sym: 'ω', kind: 'out', grp: 'coef', ph: T2, when: (c) => c.omm !== 'typed' },
+    { k: 'etac', name: 'Critical pressure ratio', sym: 'η_c', kind: 'out', grp: 'coef', ph: T2 },
+    { k: 'G', name: 'Mass flux', sym: 'G', kind: 'out', grp: 'coef', unit: 'kg/(m²·s)', ph: T2 },
+    // reaction force (vapour, open discharge)
+    { k: 'Pex', name: 'Static pressure at the outlet', sym: 'P_e', kind: 'out', grp: 'rf', cat: 'p', ph: V, info: 'Choked exit of the outlet pipe (ideal gas); atmospheric when the exit is not choked.' },
+    { k: 'F', name: 'Reaction force', sym: 'F', kind: 'out', grp: 'rf', cat: 'force', ph: V, info: 'Open discharge to atmosphere through an elbow and a vertical pipe (API 520 Part II): momentum at sonic velocity plus the exit pressure on the outlet area. Closed systems need a dynamic analysis.' },
+  ];
+
+  interface Case { name: string; nameAuto: boolean; scen: string; phase: Phase; omm: OmegaMode; v: Record<string, string>; typed: Record<string, boolean> }
+  const st = { device: 'valve' as Device, valve: 'bellows' as Valve, cert: true, mat: 'cs' as Mat526, coefOpen: false,
+    units: { ...PSV_DEFAULT_UNITS } as Record<PsvCat, string>, cases: [] as Case[], shown: [] as number[], info: {} as Record<string, boolean> };
+  const scenLabel = (s: string) => SCENARIOS.find((x) => x.id === s)?.label ?? s;
+  const example = (): Case[] => [
+    { name: 'External fire', nameAuto: true, scen: 'fire', phase: 'vapour', omm: 'v9', v: { W: '35000', Pb: '0', T: '326', M: '106.1', Z: '1', k: '1.1' }, typed: {} },
+    { name: 'Blocked outlet', nameAuto: true, scen: 'blocked', phase: 'liquid', omm: 'v9', v: { W: '15000', Pb: '0', rho: '997', mu: '1.5' }, typed: {} },
+  ];
+  const EX_DESIGN: Record<string, string> = { Ps: '27.7', MAWP: '', n: '1', Kc: '0.9', dout: '' };
+
+  let nValves = () => 1;
+  for (const root of document.querySelectorAll<HTMLElement>('[data-psv]')) {
+    const $ = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const din = (k: string) => $<HTMLInputElement>(`input[data-d="${k}"]`);
+    const unit = (c: PsvCat) => PSV_UNITS[c].find((u) => u.label === st.units[c])!;
+    const status = (s: string) => { $('[data-status]').textContent = s; };
+    const vis = (key: string, on: boolean) => { for (const el of root.querySelectorAll<HTMLElement>(`[data-show="${key}"]`)) el.hidden = !on; };
+    let mawpTyped = false;
+    let last: { outs: (CaseOut | undefined)[]; gov: number; orif?: { i: number; n: number }; Aorif: number } = { outs: [], gov: -1, Aorif: NaN };
+
+    // ── persistence (this browser only) ──
+    const save = () => {
+      try {
+        const design: Record<string, string> = {};
+        for (const k of Object.keys(EX_DESIGN)) design[k] = din(k).value;
+        localStorage.setItem(STORE, JSON.stringify({ v: 1, device: st.device, valve: st.valve, cert: st.cert, mat: st.mat, coefOpen: st.coefOpen, units: st.units, cases: st.cases, design, mawpTyped }));
+      } catch { /* storage unavailable: nothing kept */ }
+    };
+    const setDesign = (d: Record<string, string>) => { for (const [k, v] of Object.entries(d)) { const el = root.querySelector<HTMLInputElement>(`input[data-d="${k}"]`); if (el) el.value = v; } };
+    const restoreExample = () => {
+      st.device = 'valve'; st.valve = 'bellows'; st.cert = true; st.mat = 'cs';
+      st.units = { ...PSV_DEFAULT_UNITS }; st.cases = example(); st.shown = []; mawpTyped = false;
+      setDesign(EX_DESIGN);
+    };
+    const load = () => {
+      try {
+        const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
+        if (!s || s.v !== 1 || !Array.isArray(s.cases) || !s.cases.length) return false;
+        st.device = s.device; st.valve = s.valve; st.cert = !!s.cert; st.mat = s.mat; st.coefOpen = !!s.coefOpen;
+        st.units = { ...PSV_DEFAULT_UNITS, ...s.units }; st.cases = s.cases.slice(0, MAXC); mawpTyped = !!s.mawpTyped;
+        setDesign(s.design ?? {});
+        return true;
+      } catch { return false; }
+    };
+    const syncControls = () => {
+      segSet(root, 'device', st.device); segSet(root, 'valve', st.valve); segSet(root, 'cert', st.cert ? 'yes' : 'no'); segSet(root, 'mat', st.mat);
+      for (const s of root.querySelectorAll<HTMLSelectElement>('select[data-cat]')) s.value = st.units[s.dataset.cat as PsvCat];
+      for (const s of root.querySelectorAll<HTMLElement>('[data-ut]')) s.textContent = shortUnit(st.units[s.dataset.ut as PsvCat]);
+    };
+
+    // ── reading values ──
+    const num = (s: string | undefined) => (s === undefined || s.trim() === '' ? NaN : parseNumber(s));
+    const readD = (k: string, ok: (x: number) => boolean, cat?: PsvCat) => {
+      const el = din(k), blank = el.value.trim() === '';
+      const raw = parseNumber(el.value), x = blank ? NaN : cat ? toSI(unit(cat), raw) : raw;
+      const bad = !blank && !(Number.isFinite(x) && ok(x));
+      el.toggleAttribute('aria-invalid', bad);
+      return bad ? NaN : x;
+    };
+    const CAT: Record<string, PsvCat> = {};
+    for (const r of ROWS) if (r.cat && (r.kind === 'in' || r.kind === 'soft')) CAT[r.k] = r.cat;
+    const caseVal = (c: Case, k: string) => { const x = num(c.v[k]); return CAT[k] ? (Number.isFinite(x) ? toSI(unit(CAT[k]), x) : NaN) : x; };
+    nValves = () => { const n = num(din('n').value); return Number.isInteger(n) && n >= 1 ? n : 1; };
+
+    // ── layout: how many case columns fit ──
+    const fitCols = () => {
+      const w = $<HTMLElement>('[data-ctwrap]').clientWidth || root.clientWidth || 360;
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const narrow = w < 48 * rem;
+      const label = narrow ? 0.32 * w : (st.cases.length > 5 ? 14 : 17) * rem, unitW = narrow ? 4 * rem : 6 * rem, col = narrow ? 4.5 * rem : 6.25 * rem;
+      return Math.max(1, Math.floor((w - label - unitW) / col));
+    };
+    const shownList = () => {
+      const n = st.cases.length, fit = fitCols();
+      st.shown = st.shown.filter((i) => i < n);
+      if (fit >= n) return [...Array(n).keys()];
+      for (let i = 0; st.shown.length < fit && i < n; i++) if (!st.shown.includes(i)) st.shown.push(i);
+      st.shown = st.shown.slice(-fit);
+      return [...st.shown].sort((a, b) => a - b);
+    };
+
+    // ── building the table ──
+    const applies = (r: Row, c: Case) => (!r.ph || r.ph.includes(c.phase)) && (!r.when || r.when(c));
+    const rowUsed = (r: Row) => {
+      if (r.grp === 'rf' && !(num(din('dout').value) > 0)) return false;
+      if (r.k === 'An') return nValves() > 1;
+      if (r.k === 'Kp' && st.cert) return false;
+      return st.cases.some((c) => applies(r, c));
+    };
+    const labelHtml = (r: Row) => `<span class="lb">${r.name}</span>${r.sym ? ` <span class="eq">${mathHtml(r.sym)}</span>` : ''}`;
+    const unitCell = (r: Row) => (r.cat ? `<td class="cu">${`<select data-cat="${r.cat}" aria-label="${r.name} unit">${PSV_UNITS[r.cat].map((u) => `<option value="${u.label}"${u.label === st.units[r.cat!] ? ' selected' : ''}>${shortUnit(u.label)}</option>`).join('')}</select>`}</td>` : `<td class="cu">${r.unit ?? ''}</td>`);
+    const cellHtml = (r: Row, c: Case, i: number) => {
+      if (!applies(r, c)) return `<td class="na" aria-label="not applicable">—</td>`;
+      const lab = `${r.name}, ${c.name || `case ${i + 1}`}`.replace(/"/g, '&quot;');
+      if (r.kind === 'sel') {
+        const opts = r.k === 'scen' ? SCENARIOS.map((s) => [s.id, s.label]) : r.k === 'phase' ? PH.map((p) => [p.v, p.l]) : OMM.map((p) => [p.v, p.l]);
+        const cur = r.k === 'scen' ? c.scen : r.k === 'phase' ? c.phase : c.omm;
+        return `<td><select data-i="${i}" data-k="${r.k}" aria-label="${lab}">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></td>`;
+      }
+      if (r.kind === 'out') return `<td><output data-i="${i}" data-k="${r.k}"></output></td>`;
+      const val = (c.v[r.k] ?? '').replace(/"/g, '&quot;');
+      return `<td><input data-i="${i}" data-k="${r.k}" value="${r.kind === 'soft' && !c.typed[r.k] ? '' : val}" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${lab}"${r.kind === 'soft' ? ' data-soft' : ''} /></td>`;
+    };
+    const build = () => {
+      const shown = shownList();
+      const ncol = shown.length + 2;
+      const head = `<thead><tr><th scope="col" class="cl"><span class="sr">Quantity</span></th>${shown.map((i) => {
+        const c = st.cases[i];
+        return `<th scope="col" class="ch"><div class="chd"><span class="cno">${i + 1}<span class="star" data-star="${i}"></span></span>`
+          + `<button type="button" class="ib" data-dup="${i}" title="Duplicate case ${i + 1}" aria-label="Duplicate case ${i + 1}"${st.cases.length >= MAXC ? ' disabled' : ''}>⧉</button>`
+          + `<button type="button" class="ib" data-del="${i}" title="Remove case ${i + 1}" aria-label="Remove case ${i + 1}"${st.cases.length <= 1 ? ' disabled' : ''}>✕</button></div>`
+          + `<input class="nm-in" data-name="${i}" value="${c.name.replace(/"/g, '&quot;')}" aria-label="Name of case ${i + 1}" autocomplete="off" spellcheck="false" /></th>`;
+      }).join('')}<th scope="col" class="cu"><span class="sr">Unit</span></th></tr></thead>`;
+      const body: string[] = [];
+      const grpHead = (t: string, toggle = false) => `<tr class="gh"><th colspan="${ncol}" scope="colgroup">${toggle
+        ? `<button type="button" class="coefbtn" data-coef aria-expanded="${st.coefOpen}"><span aria-hidden="true">${st.coefOpen ? '▾' : '▸'}</span> ${t}</button>` : t}</th></tr>`;
+      let g: Grp | '' = '';
+      for (const r of ROWS) {
+        if (!rowUsed(r)) continue;
+        if (r.grp !== g) {
+          g = r.grp;
+          body.push(grpHead({ in: 'Case data', res: 'Results', coef: 'Coefficients', rf: 'Reaction force, open discharge' }[g], g === 'coef'));
+        }
+        const hid = r.grp === 'coef' && !st.coefOpen;
+        const info = r.info ? `<button type="button" class="ib inf" data-info="${r.k}" aria-expanded="${!!st.info[r.k]}" aria-label="About: ${r.name}" title="About this row">ⓘ</button>` : '';
+        body.push(`<tr data-r="${r.k}" class="${r.grp}"${hid ? ' hidden' : ''}><th scope="row"><span class="lab">${labelHtml(r)}${info}</span></th>${shown.map((i) => cellHtml(r, st.cases[i], i)).join('')}${unitCell(r)}</tr>`);
+        if (r.info) body.push(`<tr class="infor" data-infor="${r.k}"${hid || !st.info[r.k] ? ' hidden' : ''}><td colspan="${ncol}"><div class="infobox">${r.info}</div></td></tr>`);
+      }
+      $('[data-ct]').innerHTML = head + `<tbody>${body.join('')}</tbody>`;
+      $('[data-ct]').style.setProperty('--nc', String(shown.length));
+      $('[data-ct]').classList.toggle('many', st.cases.length > 5);
+      lastShown = shown;
+      chips();
+      const all = shown.length === st.cases.length;
+      $('[data-fitnote]').textContent = all ? '' : `${shown.length} of ${st.cases.length} cases shown side by side on this screen: tap a case above to show it. All cases count for the valve.`;
+      $<HTMLButtonElement>('[data-add]').disabled = st.cases.length >= MAXC;
+    };
+    let lastShown: number[] = [];
+    // chips: only when not all cases fit
+    const chips = () => {
+      const all = lastShown.length === st.cases.length;
+      $('[data-chips]').innerHTML = all ? '' : st.cases.map((c, i) => `<button type="button" class="chip" data-chip="${i}" aria-pressed="${lastShown.includes(i)}"><b>${i + 1}</b> ${esc(c.name || `Case ${i + 1}`)}<span class="star" data-star="${i}">${i === last.gov ? ' ★' : ''}</span></button>`).join('');
+    };
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+    // ── calculation ──
+    const update = () => {
+      const w1: string[] = [], w2: string[] = [], w3: string[] = [];
+      vis('valve', st.device !== 'disk'); vis('combo', st.device === 'combo');
+      for (const tr of root.querySelectorAll<HTMLElement>('[data-show-row]')) { const s = tr.dataset.showRow; tr.hidden = s === 'combo' ? st.device !== 'combo' : false; }
+      const Ps = readD('Ps', (x) => x > PATM, 'p');
+      const mel = din('MAWP');
+      if (!mawpTyped) { if (document.activeElement !== mel) mel.value = Number.isFinite(Ps) ? fmtIn(fromSI(unit('p'), Ps)) : ''; mel.classList.add('calc-out'); mel.removeAttribute('aria-invalid'); }
+      else mel.classList.remove('calc-out');
+      const MAWP = mawpTyped ? readD('MAWP', (x) => x > PATM, 'p') : Ps;
+      const nRaw = num(din('n').value), n = nValves();
+      din('n').toggleAttribute('aria-invalid', din('n').value.trim() !== '' && !(Number.isInteger(nRaw) && nRaw >= 1));
+      const KcTyped = st.device === 'combo' ? readD('Kc', (x) => x > 0 && x <= 1) : 1;
+      const dout = readD('dout', (x) => x > 0, 'len');
+      if (Ps > MAWP * (1 + 1e-12)) w1.push('Set pressure above the MAWP: allowed only for supplementary valves in fire cases (up to 105 % of MAWP, API 520 Part I); check the accumulation of each case.');
+      if (Ps > PATM && Ps - PATM < 3.45e5 && st.valve === 'bellows' && st.device !== 'disk') w1.push('Set pressure below 3.45 bar g (50 psig): API\'s K<sub>b</sub> curves do not apply; take K<sub>b</sub> from the manufacturer.');
+      const valve: Valve = st.device === 'disk' ? 'conventional' : st.valve;
+      const d: Design = { device: st.device, valve, certified: st.cert, n, Pset: Ps, Kc: Number.isFinite(KcTyped) ? KcTyped : undefined };
+
+      const outs: (CaseOut | undefined)[] = [];
+      const P1s: number[] = [];
+      st.cases.forEach((c, i) => {
+        const accPre = presetAccum(c.scen, n);
+        const acc = c.typed.acc ? num(c.v.acc) : accPre;
+        const P1 = Number.isFinite(MAWP) && acc >= 0 ? relievingP(MAWP, acc) : NaN;
+        P1s.push(P1);
+        const T = caseVal(c, 'T');
+        let Tsat: number | undefined;
+        if (c.phase === 'steam' && P1 > PATM) { try { Tsat = saturated('p', P1).T; } catch { w2.push(`${cn(i)}: relieving pressure above the critical pressure of water.`); } }
+        const ci: CaseIn = { phase: c.phase, W: caseVal(c, 'W'), P1, Pb: caseVal(c, 'Pb'), T, M: caseVal(c, 'M'), Z: caseVal(c, 'Z'), k: caseVal(c, 'k'),
+          rho: caseVal(c, 'rho'), mu: caseVal(c, 'mu'), x: caseVal(c, 'x') / 100, omegaMode: c.omm, v9: caseVal(c, 'v9'), omega: caseVal(c, 'om'),
+          Kd: c.typed.Kd ? num(c.v.Kd) : NaN, Kb: c.typed.Kb ? num(c.v.Kb) : NaN, Kw: c.typed.Kw ? num(c.v.Kw) : NaN, Tsat };
+        if (c.phase === 'steam' && Number.isFinite(T) && Tsat !== undefined && T < Tsat - 0.5) w2.push(`${cn(i)}: temperature below saturation at P<sub>1</sub> (${fmt(fromSI(unit('temp'), Tsat))} ${shortUnit(st.units.temp)}): treated as saturated steam.`);
+        const o = Number.isFinite(Ps) ? sizeCase(d, ci) : undefined;
+        outs.push(o);
+        o?.warn.forEach((m) => w2.push(`${cn(i)}: ${m}`));
+        if (o?.ok && valve === 'conventional' && st.device !== 'disk' && o.pbPct > Math.max(10, acc) + 1e-9) w2.push(`${cn(i)}: back pressure ${fmt(o.pbPct)} % of the set pressure. If it is built-up back pressure, API limits it for conventional valves to the allowable overpressure (${fmt(acc)} %); superimposed back pressure changes the set pressure. Consider a balanced bellows or pilot-operated valve.`);
+        if (o?.ok && valve === 'pilot' && o.pbPct > 0) w2.push(`${cn(i)}: pilot-operated valve with back pressure: check the pilot venting and back-pressure limits with the manufacturer.`);
+        if (c.typed.acc && !(acc >= 0)) w2.push(`${cn(i)}: accumulation must be 0 % or more.`);
+      });
+      // governing case
+      let gov = -1;
+      outs.forEach((o, i) => { if (o?.ok && (gov < 0 || o.A > outs[gov]!.A)) gov = i; });
+      const orif = gov >= 0 ? pickOrifice(outs[gov]!.A / n) : undefined;
+      const Aorif = orif ? API526[orif.i].a * IN2 : NaN;
+      last = { outs, gov, orif, Aorif };
+
+      // fill the table
+      const put = (i: number, k: string, x: number | string | undefined, c?: PsvCat) => {
+        const o = root.querySelector<HTMLOutputElement>(`output[data-i="${i}"][data-k="${k}"]`);
+        if (o) o.textContent = x === undefined ? '' : typeof x === 'string' ? x : !Number.isFinite(x) ? '' : fmt(c ? fromSI(unit(c), x) : x);
+      };
+      const soft = (i: number, k: string, x: number | undefined) => {
+        const el = root.querySelector<HTMLInputElement>(`input[data-i="${i}"][data-k="${k}"]`);
+        if (!el) return;
+        const c = st.cases[i];
+        el.classList.toggle('calc-out', !c.typed[k]);
+        if (!c.typed[k] && document.activeElement !== el) el.value = x === undefined || !Number.isFinite(x) ? '' : fmtIn(x);
+      };
+      st.cases.forEach((c, i) => {
+        const o = outs[i];
+        for (const k of Object.keys(CAT).concat(['M', 'Z', 'k', 'x', 'om'])) {
+          const el = root.querySelector<HTMLInputElement>(`input[data-i="${i}"][data-k="${k}"]`);
+          if (!el || el.hasAttribute('data-soft')) continue;
+          const x = caseVal(c, k), blank = (c.v[k] ?? '').trim() === '';
+          const ok = k === 'Pb' ? x >= 0 : k === 'T' ? x > 0 : k === 'x' ? x >= 0 && x <= 100 : x > 0;
+          el.toggleAttribute('aria-invalid', !blank && !(Number.isFinite(x) && ok));
+        }
+        soft(i, 'acc', presetAccum(c.scen, n));
+        soft(i, 'Kd', o?.Kd ?? kdDefault(c.phase, st.device, st.cert));
+        soft(i, 'Kb', o?.Kb);
+        soft(i, 'Kw', o?.Kw);
+        put(i, 'P1', P1s[i] > PATM ? P1s[i] : undefined, 'p');
+        put(i, 'op', o?.ok ? o.op : undefined);
+        put(i, 'regime', o?.regime);
+        put(i, 'A', o?.ok ? o.A : undefined, 'orif');
+        put(i, 'An', o?.ok ? o.A / n : undefined, 'orif');
+        put(i, 'Asum', o?.Asum, 'orif');
+        put(i, 'share', o?.ok && orif ? o.A / (n * Aorif * orif.n) * 100 : undefined);
+        put(i, 'Wr', o?.ok && orif ? ratedFlow(caseVal(c, 'W'), o.A, n, Aorif * orif.n) : undefined, 'mflow');
+        put(i, 'Kc', o?.Kc ?? kcDefault(st.device));
+        put(i, 'Kp', o?.Kp); put(i, 'Q', o?.Q); put(i, 'Re', o?.Re); put(i, 'Kv', o?.Kv);
+        put(i, 'Pcf', o?.Pcf, 'p'); put(i, 'C', o?.C); put(i, 'F2', o?.F2 ?? (o?.ok && c.phase === 'vapour' ? '—' : undefined));
+        put(i, 'Kn', o?.Kn); put(i, 'Ksh', o?.Ksh);
+        put(i, 'v0', o?.v0, 'svol'); put(i, 'omega', o?.omega); put(i, 'etac', o?.etac); put(i, 'G', o?.G);
+        if (c.phase === 'vapour' && dout > 0 && o?.ok) {
+          const r = reactionForce(caseVal(c, 'W'), caseVal(c, 'T'), caseVal(c, 'M'), caseVal(c, 'k'), dout);
+          put(i, 'Pex', r.Pexit, 'p'); put(i, 'F', r.F, 'force');
+        } else { put(i, 'Pex', undefined); put(i, 'F', undefined); }
+        for (const s of root.querySelectorAll<HTMLElement>(`[data-star="${i}"]`)) s.textContent = i === gov ? ' ★' : '';
+        root.querySelector(`th.ch:has([data-star="${i}"])`)?.classList.toggle('govc', i === gov);
+      });
+      for (const td of root.querySelectorAll<HTMLElement>('[data-ct] td:has(output[data-k="A"])')) td.classList.toggle('govc', td.querySelector<HTMLElement>('output')!.dataset.i === String(gov));
+
+      // governing line
+      const ou = shortUnit(st.units.orif);
+      const gl = $('[data-gov]');
+      if (gov >= 0 && orif) {
+        const o = outs[gov]!, letter = API526[orif.i].d;
+        gl.innerHTML = `<span class="star">★</span> Governing: <b>case ${gov + 1}, ${esc(nm(gov))}</b>, <i>A</i>${n > 1 ? '/<i>n</i>' : ''} = ${fmt(fromSI(unit('orif'), o.A / n))} ${ou} → <b>${orif.n > 1 ? `${orif.n} × ` : ''}${letter}</b> (${fmt(fromSI(unit('orif'), Aorif))} ${ou})${n > 1 ? ` per valve, ${n} valves` : ''}<span data-govbody></span>`;
+        if (orif.n > 1) w2.push(`The governing case needs more than the largest API 526 orifice (T, 26 in²) per valve: ${orif.n} × T, or more operating valves (step 1), or a larger non-API 526 valve.`);
+      } else gl.textContent = st.cases.some((c) => (c.v.W ?? '').trim() !== '') ? 'Governing case: complete the inputs of at least one case.' : '';
+
+      // step 3: summary of all cases + body
+      const sum = $('[data-sum]');
+      sum.innerHTML = `<caption>All cases</caption><thead><tr><th scope="col">Case</th><th scope="col">Phase</th><th scope="col" class="num"><i>A</i> <span class="hu">${ou}</span></th><th scope="col" class="num">Share</th></tr></thead><tbody>${st.cases.map((c, i) => {
+        const o = outs[i];
+        return `<tr${i === gov ? ' class="sel"' : ''}><th scope="row">${i + 1}${i === gov ? ' ★' : ''} ${esc(nm(i))}</th><td>${PH.find((p) => p.v === c.phase)!.l}</td><td class="num">${o?.ok ? fmt(fromSI(unit('orif'), o.A)) : '–'}</td><td class="num">${o?.ok && orif ? `${fmt(o.A / (n * Aorif * orif.n) * 100)} %` : '–'}</td></tr>`;
+      }).join('')}</tbody>`;
+      const show = (k: string, x: number | string | undefined, c?: PsvCat) => { $<HTMLOutputElement>(`output[data-o="${k}"]`).textContent = x === undefined ? '' : typeof x === 'string' ? x : !Number.isFinite(x) ? '' : fmt(c ? fromSI(unit(c), x) : x); };
+      const letter = orif ? API526[orif.i].d : undefined;
+      show('orif', letter ? `${orif!.n > 1 ? `${orif!.n} × ` : ''}${letter}, ${fmt(fromSI(unit('orif'), Aorif))} ${ou}${n > 1 ? `, ${n} valves` : ''}` : undefined);
+      for (const tr of root.querySelectorAll<HTMLElement>('[data-o526]')) tr.classList.toggle('sel', !!orif && tr.dataset.o526 === String(orif.i));
+      for (const td of root.querySelectorAll<HTMLElement>('[data-o526a]')) td.textContent = fmt(fromSI(unit('orif'), API526[+td.dataset.o526a!].a * IN2));
+      const kind = valve === 'pilot' ? 'p' : 's';
+      const VT = { conventional: 'Spring-loaded, conventional', bellows: 'Spring-loaded, balanced bellows', pilot: 'Pilot-operated' };
+      if (st.device === 'disk') {
+        show('vtype', 'Rupture disk only: no valve body; the disk needs a net flow area of at least A (API 520 Part I 3.11).');
+        for (const k of ['trange', 'body', 'cls', 'plim', 'olim']) show(k, undefined);
+        $('[data-b526]').innerHTML = '';
+      } else {
+        show('vtype', letter ? `${VT[valve]} (API 526 Table ${TABLE526[letter][kind]})` : undefined);
+        const Ts = st.cases.map((c) => caseVal(c, 'T')).filter((t) => t > 0);
+        const Pbs = st.cases.map((c) => caseVal(c, 'Pb')).filter((p) => p >= 0);
+        const Tmax = Ts.length ? Math.max(...Ts) : NaN, Pbmax = Pbs.length ? Math.max(...Pbs) : PATM;
+        let bp: ReturnType<typeof pickBody> | undefined;
+        if (letter && Number.isFinite(Ps) && Number.isFinite(Tmax)) bp = pickBody(letter, kind, st.mat, Ps - PATM, Tmax, Pbmax - PATM, valve === 'bellows');
+        if (letter && !Number.isFinite(Tmax)) w3.push('Type the relieving temperature of at least one case to choose the valve body.');
+        const tCell = (F: number) => `${F} °F (${Math.round((F - 32) * 5 / 9)} °C)`;
+        show('trange', bp?.range ? `${tCell(bp.range[0])} to ${tCell(bp.range[1])}` : bp && bp.why !== 'material' ? `outside the tables (${Math.round(toF(Tmax))} °F)` : bp ? '–' : undefined);
+        const ch = bp?.chosen;
+        show('body', ch ? `${ch.r.b} (${ch.r.b.replace(/^(\d+½?)[A-Z](\d+½?)$/, '$1 in × $2 in')})` : bp ? 'none fits' : undefined);
+        show('cls', ch ? `${ch.r.ci} × ${ch.r.co}` : undefined);
+        const gauge = (psig: number) => psig * PSI + PATM;
+        show('plim', ch?.limit != null ? gauge(ch.limit) : undefined, 'p');
+        show('olim', ch ? gauge(ch.out) : undefined, 'p');
+        const pu = (psig: number | null) => (psig === null ? '–' : fmt(fromSI(unit('p'), gauge(psig))));
+        $('[data-b526]').innerHTML = bp ? bp.rows.map((x) => `<tr${x === ch ? ' class="sel"' : ''}><th scope="row">${x.r.b}</th><td>${x.r.ci} × ${x.r.co}</td><td class="num">${pu(x.limit)}</td><td class="num">${pu(x.out)}</td><td>${x.fits ? '✓' : ''}</td></tr>`).join('') : '';
+        $('[data-b526cap]').textContent = letter ? `API 526 bodies: ${letter} orifice, ${({ cs: 'carbon steel', crmo: 'chrome-molybdenum steel', ss: 'austenitic stainless steel' })[st.mat]}, ${kind === 's' ? 'spring-loaded' : 'pilot-operated'}` : 'API 526 bodies for this orifice and material';
+        const gb = root.querySelector('[data-govbody]');
+        if (gb && ch) gb.innerHTML = `, body <b>${ch.r.b}</b>`;
+        if (bp && !ch) w3.push({
+          material: st.mat === 'crmo' && kind === 'p' ? 'API 526 has no chrome-molybdenum pilot-operated valves: choose another material or a spring-loaded valve.' : 'No API 526 valve of this material for this orifice.',
+          temperature: `No API 526 ${st.mat === 'cs' ? 'carbon steel' : st.mat === 'crmo' ? 'Cr-Mo' : 'stainless'} ${kind === 's' ? 'spring-loaded' : 'pilot-operated'} valve at ${Math.round(toF(Tmax))} °F: ${st.mat === 'cs' ? 'carbon steel is listed from −20 to 800 °F (pilot: to 500 °F); above 800 °F use Cr-Mo or stainless steel.' : st.mat === 'crmo' ? 'Cr-Mo is listed for 801–1000 °F only.' : 'outside the listed range.'}`,
+          pressure: 'The set pressure is above the highest limit of this orifice at this temperature: choose another material, several smaller valves, or consult the manufacturer.',
+          outlet: 'The highest back pressure is above the outlet limit of every body that holds the set pressure: check a balanced or pilot-operated valve, or consult the manufacturer.',
+        }[bp.why!]);
+      }
+      const wl = (s: string, a: string[]) => { $(`[data-warn="${s}"]`).innerHTML = a.map((x) => `<li>${x}</li>`).join(''); };
+      wl('1', w1); wl('2', w2); wl('3', w3);
+      save();
+    };
+    const nm = (i: number) => st.cases[i].name.trim() || `Case ${i + 1}`;
+    const cn = (i: number) => `Case ${i + 1} (${esc(nm(i))})`;
+    const rebuild = () => { build(); update(); };
+
+    // ── export ──
+    const plain = (s: string) => s.replace(/<[^>]+>/g, '').replace(/_/g, '').replace(/\^/g, '');
+    const tableRows = (): string[][] => {
+      const out: string[][] = [['Quantity', ...st.cases.map((_, i) => `${i + 1} ${nm(i)}${i === last.gov ? ' (governing)' : ''}`), 'Unit']];
+      const designRow = (k: string, lab: string, cat?: PsvCat) => out.push([lab, din(k).value, ...Array(st.cases.length - 1).fill(''), cat ? shortUnit(st.units[cat]) : '']);
+      designRow('Ps', 'Set pressure', 'p'); designRow('MAWP', 'MAWP', 'p'); designRow('n', 'Operating valves');
+      out.push(['Device / valve / liquid capacity', `${st.device} / ${st.valve} / ${st.cert ? 'certified' : 'not certified'}`, ...Array(st.cases.length - 1).fill(''), '']);
+      for (const r of ROWS) {
+        if (!rowUsed(r)) continue;
+        const vals = st.cases.map((c, i) => {
+          if (!applies(r, c)) return '';
+          if (r.kind === 'sel') return r.k === 'scen' ? scenLabel(c.scen) : r.k === 'phase' ? PH.find((p) => p.v === c.phase)!.l : OMM.find((p) => p.v === c.omm)!.l;
+          const el = root.querySelector<HTMLInputElement | HTMLOutputElement>(`[data-i="${i}"][data-k="${r.k}"]`);
+          if (el) return (el as HTMLInputElement).value ?? el.textContent ?? '';
+          return r.kind === 'in' || r.kind === 'soft' ? (c.v[r.k] ?? '') : '';
+        });
+        out.push([`${r.name}${r.sym ? ` ${plain(r.sym)}` : ''}`, ...vals, r.cat ? shortUnit(st.units[r.cat]) : r.unit ?? '']);
+      }
+      out.push(['Orifice (API 526)', $<HTMLOutputElement>('output[data-o="orif"]').textContent ?? '', ...Array(st.cases.length - 1).fill(''), '']);
+      out.push(['Valve body', $<HTMLOutputElement>('output[data-o="body"]').textContent ?? '', ...Array(st.cases.length - 1).fill(''), '']);
+      return out;
+    };
+    // values of cases not shown on screen: compute them from the model through a full-width rebuild
+    const withAllShown = <T,>(f: () => T): T => {
+      const keep = st.shown, wrap = $<HTMLElement>('[data-ctwrap]');
+      wrap.style.width = '400rem'; build(); update();
+      const r = f();
+      wrap.style.width = ''; st.shown = keep; build(); update();
+      return r;
+    };
+    $('[data-copy]').addEventListener('click', async () => {
+      const tsv = withAllShown(() => tableRows().map((r) => r.join('\t')).join('\n'));
+      try { await navigator.clipboard.writeText(tsv); status('Table copied: paste it into a spreadsheet.'); $<HTMLButtonElement>('[data-copy]').textContent = 'Copied ✓'; setTimeout(() => { $<HTMLButtonElement>('[data-copy]').textContent = 'Copy table'; }, 1800); }
+      catch { status('Copying is not allowed in this browser; use CSV.'); }
+    });
+    $('[data-csv]').addEventListener('click', () => {
+      const q = (s: string) => (/[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+      const csv = withAllShown(() => tableRows().map((r) => r.map(q).join(',')).join('\r\n'));
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = 'psv-cases.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      status('CSV downloaded.');
+    });
+
+    // ── events ──
+    const ct = $('[data-ct]');
+    ct.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.dataset.name !== undefined) {
+        const c = st.cases[+t.dataset.name]; c.name = t.value; c.nameAuto = false;
+        update(); chips(); return;
+      }
+      if (t.dataset.i === undefined || t.tagName !== 'INPUT') return;
+      const c = st.cases[+t.dataset.i], k = t.dataset.k!;
+      c.v[k] = t.value;
+      if (t.hasAttribute('data-soft')) c.typed[k] = t.value.trim() !== '';
+      update();
+    });
+    ct.addEventListener('focusout', (e) => { if ((e.target as HTMLElement).hasAttribute?.('data-soft')) update(); });
+    ct.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      if (t.dataset.cat) return;   // unit selectors: handled on the root
+      if (t.tagName !== 'SELECT' || t.dataset.i === undefined) return;
+      const i = +t.dataset.i, c = st.cases[i];
+      if (t.dataset.k === 'scen') { c.scen = t.value; if (c.nameAuto) c.name = scenLabel(t.value); }
+      else if (t.dataset.k === 'phase') c.phase = t.value as Phase;
+      else if (t.dataset.k === 'omm') c.omm = t.value as OmegaMode;
+      rebuild();
+      root.querySelector<HTMLSelectElement>(`select[data-i="${i}"][data-k="${t.dataset.k}"]`)?.focus();
+    });
+    ct.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
+      if (!b) return;
+      if (b.dataset.info) {
+        const k = b.dataset.info; st.info[k] = !st.info[k];
+        b.setAttribute('aria-expanded', String(st.info[k]));
+        root.querySelector<HTMLElement>(`[data-infor="${k}"]`)!.hidden = !st.info[k];
+      } else if (b.hasAttribute('data-coef')) {
+        st.coefOpen = !st.coefOpen; rebuild(); $<HTMLButtonElement>('[data-coef]').focus();
+      } else if (b.dataset.dup) {
+        const i = +b.dataset.dup; if (st.cases.length >= MAXC) return;
+        const c = structuredClone(st.cases[i]); c.name = `${c.name} (copy)`; c.nameAuto = false;
+        st.cases.splice(i + 1, 0, c); st.shown = st.shown.map((x) => (x > i ? x + 1 : x)); st.shown.push(i + 1);
+        rebuild(); status(`Case ${i + 1} duplicated as case ${i + 2}.`);
+        root.querySelector<HTMLInputElement>(`input[data-name="${i + 1}"]`)?.focus();
+      } else if (b.dataset.del) {
+        const i = +b.dataset.del; if (st.cases.length <= 1) return;
+        st.cases.splice(i, 1); st.shown = st.shown.filter((x) => x !== i).map((x) => (x > i ? x - 1 : x));
+        rebuild(); status(`Case ${i + 1} removed.`);
+      }
+    });
+    $('[data-chips]').addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-chip]');
+      if (!b) return;
+      const i = +b.dataset.chip!;
+      if (st.shown.includes(i)) { if (st.shown.length > 1) st.shown = st.shown.filter((x) => x !== i); }
+      else st.shown.push(i);
+      rebuild();
+      root.querySelector<HTMLButtonElement>(`[data-chip="${i}"]`)?.focus();
+    });
+    $('[data-add]').addEventListener('click', () => {
+      if (st.cases.length >= MAXC) return;
+      st.cases.push({ name: scenLabel('blocked'), nameAuto: true, scen: 'blocked', phase: 'vapour', omm: 'v9', v: { Pb: '0' }, typed: {} });
+      st.shown.push(st.cases.length - 1);
+      rebuild(); status(`Case ${st.cases.length} added.`);
+      root.querySelector<HTMLSelectElement>(`select[data-i="${st.cases.length - 1}"][data-k="scen"]`)?.focus();
+    });
+    // design inputs
+    for (const el of root.querySelectorAll<HTMLInputElement>('input[data-d]')) {
+      el.addEventListener('input', () => {
+        if (el.dataset.d === 'MAWP') mawpTyped = el.value.trim() !== '';
+        if (el.dataset.d === 'n' || el.dataset.d === 'dout') { build(); }
+        update();
+      });
+      el.addEventListener('blur', () => update());
+    }
+    // one unit per category: every selector follows; typed values convert
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLSelectElement;
+      const cat = t.dataset.cat as PsvCat | undefined;
+      if (!cat) return;
+      const from = unit(cat); st.units[cat] = t.value; const to = unit(cat);
+      const conv = (s: string | undefined) => { const x = num(s); return Number.isFinite(x) ? fmtIn(fromSI(to, toSI(from, x))) : s ?? ''; };
+      for (const c of st.cases) for (const [k, kc] of Object.entries(CAT)) if (kc === cat && c.v[k] !== undefined && (c.v[k] ?? '').trim() !== '') c.v[k] = conv(c.v[k]);
+      for (const k of Object.keys(EX_DESIGN)) {
+        const el = din(k), kc = k === 'Ps' || k === 'MAWP' ? 'p' : k === 'dout' ? 'len' : undefined;
+        if (kc === cat && el.value.trim() !== '' && !(k === 'MAWP' && !mawpTyped)) el.value = conv(el.value);
+      }
+      syncControls(); rebuild();
+      status(`Unit changed to ${shortUnit(t.value)}; values converted.`);
+    });
+    segInit(root, 'device', (x) => { st.device = x as Device; rebuild(); });
+    segInit(root, 'valve', (x) => { st.valve = x as Valve; rebuild(); });
+    segInit(root, 'cert', (x) => { st.cert = x === 'yes'; rebuild(); });
+    segInit(root, 'mat', (x) => { st.mat = x as Mat526; update(); });
+    $('[data-reset]').addEventListener('click', () => {
+      for (const c of st.cases) { c.v = {}; c.typed = {}; }
+      for (const k of ['Ps', 'MAWP', 'n', 'dout']) din(k).value = '';
+      mawpTyped = false;
+      rebuild(); din('Ps').focus(); status('All input fields cleared.');
+    });
+    $('[data-restore]').addEventListener('click', () => { restoreExample(); syncControls(); rebuild(); status('Example restored (the original Zoho cases).'); });
+
+    if (!load()) restoreExample();
+    syncControls();
+    let rt = 0, lastFit = fitCols();
+    new ResizeObserver(() => { cancelAnimationFrame(rt); rt = requestAnimationFrame(() => { const f = fitCols(); if (f !== lastFit) { lastFit = f; rebuild(); } }); }).observe($('[data-ctwrap]'));
+    rebuild();
+  }
+</script>
+
+<style>
+  .calc { background: #fff; border: 1px solid var(--ink); padding: 1rem 1.25rem 1.5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+  .bar p { margin: 0; color: var(--muted); font-size: 0.9375rem; max-width: 46rem; }
+  .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .reset { height: 2.25rem; padding-inline: 0.875rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .reset:hover { background: var(--line); color: var(--paper); }
+  .grp { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+  .grp:last-of-type { border-bottom: 0; }
+  h2 { margin: 0 0 0.5rem; font-size: 1.0625rem; font-weight: 650; }
+  .no { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; margin-right: 0.5rem; border: 1.5px solid var(--ink); border-radius: 50%; font-size: 0.8125rem; }
+  .calc :global(sub), .calc :global(sup) { font-size: 0.75em; font-style: normal; line-height: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+  .calc :global(th), .calc :global(td) { padding: 0.125rem 0; text-align: left; vertical-align: middle; }
+  .calc :global(tbody th) { font-weight: 400; padding-right: 0.75rem; line-height: 1.35; }
+  .calc :global(.lb) { margin-right: 0.5rem; }
+  .calc :global(.eq) { display: inline-block; white-space: nowrap; }
+  .calc :global(.eq i), .note :global(i), .warn :global(i), .basis :global(i), .gov :global(i), .calc :global(.infobox i) { font-style: italic; padding-right: 0.05em; }
+  .io { max-width: 46rem; }
+  .io :global(.v) { width: 9.5rem; }
+  .io :global(.v.wide) { width: auto; }
+  .io :global(.v.wide output) { white-space: normal; height: auto; min-height: 1.875rem; line-height: 1.35; padding-block: 0.25rem; }
+  .io :global(.u) { width: 6.5rem; padding-left: 0.375rem; color: var(--muted); font-size: 0.875rem; }
+  .io :global(.u select) { max-width: 6.5rem; }
+  [hidden], .calc :global([hidden]) { display: none !important; }
+  .calc :global(input), .calc :global(output), .calc :global(select) { display: block; width: 100%; height: 1.875rem; border-radius: 0; color: var(--ink); font: inherit; }
+  .calc :global(input), .calc :global(output) { padding: 0 0.5rem; border: 1px solid transparent; font-variant-numeric: tabular-nums; line-height: 1.75rem; }
+  .calc :global(input) { background: var(--zoho-in); border-color: var(--muted); }
+  .calc :global(input.calc-out) { background: var(--zoho-out); border-color: var(--rule); }
+  .calc :global(input:focus) { outline: 2px solid var(--line); outline-offset: 1px; border-color: var(--line); }
+  .calc :global(input[aria-invalid]) { border-color: var(--markup); box-shadow: inset 0 0 0 1px var(--markup); }
+  .calc :global(output) { background: var(--zoho-out); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .calc :global(select) { padding: 0 0.25rem; border: 1px solid var(--rule); background: #fff; font-size: 0.875rem; cursor: pointer; }
+  .calc :global(select:focus) { outline: 2px solid var(--line); outline-offset: 1px; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+  .note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.8125rem; max-width: 50rem; }
+  .note:empty { display: none; }
+  .warn { margin: 0.5rem 0 0; padding: 0; list-style: none; max-width: 50rem; }
+  .warn :global(li) { padding: 0.5rem 0.75rem; margin-top: 0.375rem; border-left: 3px solid var(--markup); background: var(--wash); font-size: 0.875rem; }
+  .pick th .lb { font-weight: 600; }
+  .pick output { font-weight: 650; }
+  .tbtn { height: 2rem; padding-inline: 0.75rem; border: 1px solid var(--line); background: none; color: var(--line); font: 600 0.8125rem/1 var(--font-ui); cursor: pointer; }
+  .tbtn:hover:not(:disabled) { background: var(--line); color: var(--paper); }
+  .tbtn:disabled { opacity: 0.45; cursor: default; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0.5rem; }
+
+  /* case table: quantity | cases | unit */
+  .tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-bottom: 0.25rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+  .chips:empty { display: none; }
+  .exp { display: flex; gap: 0.375rem; flex-wrap: wrap; margin-left: auto; }
+  .chips :global(.chip) { min-height: 2rem; padding: 0.25rem 0.625rem; border: 1px solid var(--line); background: #fff; color: var(--line); font: 400 0.8125rem/1.2 var(--font-ui); cursor: pointer; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chips :global(.chip[aria-pressed='true']) { background: var(--line); color: var(--paper); }
+  .chips :global(.chip b) { font-weight: 700; }
+  .ctwrap { margin-top: 0.5rem; }
+  .calc :global(.ct) { table-layout: fixed; width: min(100%, calc(23rem + var(--nc, 2) * 11rem)); }
+  .calc :global(.ct .cl) { width: 17rem; }
+  .calc :global(.ct.many .cl) { width: 14rem; }
+  .calc :global(.ct thead .cu) { width: 6rem; }
+  .calc :global(.ct th.ch) { padding: 0 0.25rem 0.375rem 0; vertical-align: bottom; font-weight: 600; font-size: 0.8125rem; }
+  .calc :global(.ct .chd) { display: flex; align-items: center; gap: 0.125rem; margin-bottom: 0.125rem; }
+  .calc :global(.ct .cno) { margin-right: auto; font-weight: 700; }
+  .calc :global(.ct .star), .gov :global(.star) { color: var(--markup); }
+  .calc :global(.ct th.govc .nm-in) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .calc :global(.ct td) { padding: 0.125rem 0.25rem 0.125rem 0; }
+  .calc :global(.ct td.na) { color: var(--muted); text-align: center; }
+  .calc :global(.ct td.govc output) { font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .calc :global(.ct td.cu) { padding-left: 0.25rem; color: var(--muted); font-size: 0.8125rem; overflow: hidden; }
+  .calc :global(.ct td.cu select) { max-width: 6rem; }
+  .calc :global(.ct tbody th) { font-size: 0.875rem; }
+  .calc :global(.ct .lab) { display: block; }
+  .calc :global(.ct tr.gh th) { padding: 0.75rem 0 0.25rem; font-weight: 650; font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border-bottom: 1px solid var(--rule); }
+  .calc :global(.ct tr.res th .lb) { font-weight: 500; }
+  .calc :global(.ct tr[data-r='A'] th .lb) { font-weight: 650; }
+  .calc :global(.coefbtn) { padding: 0.25rem 0; border: 0; background: none; color: var(--line); font: inherit; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; }
+  .calc :global(.ib) { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; background: none; color: var(--line); font: 600 0.875rem/1 var(--font-ui); cursor: pointer; vertical-align: middle; }
+  .calc :global(.ib:hover:not(:disabled)), .calc :global(.ib[aria-expanded='true']) { background: var(--wash); }
+  .calc :global(.ib:disabled) { opacity: 0.35; cursor: default; }
+  .calc :global(.ib.inf) { width: 1.375rem; height: 1.375rem; font-weight: 400; font-size: 0.9375rem; }
+  .calc :global(.infor td) { padding: 0 0 0.375rem; }
+  .calc :global(.infobox) { padding: 0.5rem 0.75rem; border-left: 3px solid var(--line); background: var(--wash); font-size: 0.8125rem; line-height: 1.5; max-width: 50rem; }
+  .calc :global(input.nm-in) { background: #fff; border-color: var(--rule); font-weight: 600; font-size: 0.8125rem; height: 1.75rem; padding: 0 0.375rem; }
+  .gov { margin: 0.75rem 0 0; padding: 0.5rem 0.75rem; border: 1.5px solid var(--ink); font-size: 0.9375rem; max-width: 50rem; }
+  .gov:empty { display: none; }
+
+  .sum { max-width: 40rem; font-size: 0.875rem; margin: 0.25rem 0 0.75rem; }
+  .sum :global(caption) { text-align: left; font-weight: 600; padding-bottom: 0.25rem; }
+  .sum :global(th), .sum :global(td) { padding: 0.1875rem 0.5rem 0.1875rem 0; border-top: 1px solid var(--rule); }
+  .sum :global(thead th) { font-weight: 600; font-size: 0.8125rem; border-top: 0; }
+  .sum :global(tr.sel) { background: var(--zoho-out); font-weight: 600; }
+  .hu { font-weight: 400; color: var(--muted); }
+  .o526 { margin-top: 0.75rem; }
+  .t526 { max-width: 40rem; font-size: 0.875rem; }
+  .t526 th, .t526 td { padding: 0.1875rem 0.5rem 0.1875rem 0; border-top: 1px solid var(--rule); }
+  .t526 thead th { font-weight: 600; font-size: 0.8125rem; border-top: 0; vertical-align: bottom; }
+  .t526 tbody th { font-weight: 650; }
+  .t526 :global(tr.sel) { background: var(--zoho-out); }
+  .b526 :global(td:nth-child(2)) { white-space: nowrap; }
+  .basis { margin-top: 0.5rem; max-width: 52rem; font-size: 0.875rem; }
+  .basis summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+  .basis ol { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; }
+  .basis li { margin: 0.375rem 0; line-height: 1.55; }
+  .sr, .calc :global(.sr) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 48rem) {
+    .calc { border-inline: 0; padding-inline: var(--gutter); }
+    .calc :global(.eq) { white-space: normal; overflow-wrap: anywhere; }
+    .io :global(.v) { width: 7rem; }
+    .io :global(.u) { width: 5.5rem; }
+    .switches { flex-direction: column; gap: 0.625rem; }
+    .calc :global(.ct) { font-size: 0.75rem; }
+    .calc :global(.ct .cl), .calc :global(.ct.many .cl) { width: 32%; }
+    .calc :global(.ct thead .cu) { width: 4rem; }
+    .calc :global(.ct tbody th) { font-size: 0.75rem; padding-right: 0.375rem; }
+    .calc :global(.ct td.cu) { font-size: 0.6875rem; }
+    .calc :global(.ct td.cu select) { font-size: 0.6875rem; padding: 0; max-width: 4rem; }
+    .calc :global(.ct input), .calc :global(.ct output), .calc :global(.ct select) { padding: 0 0.1875rem; font-size: 0.75rem; }
+    .t526 { font-size: 0.75rem; }
+    .exp { margin-left: 0; }
+  }
+</style>

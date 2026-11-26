@@ -33,9 +33,10 @@ export const tools: Tool[] = [
     "tag": "PSV",
     "title": "PSV",
     "name": "Pressure Safety Valve",
-    "description": "Vapor and liquid relief sized by API RP 520-1 (2000).",
-    "standard": "API RP 520-1 (2000)",
+    "description": "Relief valve sizing for up to eight cases side by side (vapour, liquid, steam, two-phase by the omega method), MAWP and accumulation per case, the governing case picks the API 526 orifice and valve body; reaction force of an open discharge.",
+    "standard": "API 520 Part I (sizing) and Part II (reaction force); orifices and valves per API 526",
     "category": "relief",
+    "native": "psv",
     "zoho": "https://sheet.zohopublic.eu/sheet/publishedrange/8cc3425a2dec03483d70b75b03d5a0f4cfcb1098276383c3205d1553329a0aad?type=grid&mode=embed"
   },
   {
