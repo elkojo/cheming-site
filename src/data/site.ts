@@ -3,7 +3,7 @@ export const site = {
   tagline: 'Engineering calculation tools for oil & gas and petrochemical processes. Includes references and equations.',
   // Email is HTML-entity encoded (as on the WordPress site) to slow down simple scrapers.
   mailtoEncoded:
-    'mailto:&#099;h&#101;m&#105;ng&#046;&#115;&#105;te.8&#099;uw&#055;&#064;simp&#108;&#101;l&#111;&#103;i&#110;.c&#111;m',
+    'mailto:&#099;h&#101;m&#105;ng&#046;&#115;&#105;te&#064;p&#109;&#046;m&#101;',
   social: [
     { label: 'LinkedIn', url: 'https://www.linkedin.com/in/milan-seman/' },
     { label: 'Telegram', url: 'https://t.me/+16UGfxSxrK40OTI0' },
